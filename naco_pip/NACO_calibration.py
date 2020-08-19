@@ -1062,7 +1062,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             print( "The new number of frames in each SKY cube is: ", self.new_ndit_sky)
             print( "The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat)
         
-        angles = open_fits(self.inpath + "derot_angles_uncropped.fits")
+        #angles = open_fits(self.inpath + "derot_angles_uncropped.fits")
         
         # Actual cropping of the cubes to remove the first frames, and the last one (median) AND RESCALING IN FLUX
         for sc, fits_name in enumerate(sci_list):
@@ -1070,9 +1070,9 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp_tmp = np.zeros([int(real_ndit_sci[sc]),tmp.shape[1],tmp.shape[2]])
             for dd in range(nfr_rm,nfr_rm+int(real_ndit_sci[sc])):
                 tmp_tmp[dd-nfr_rm] = tmp[dd]*np.median(tmp_fluxes[sc])/tmp_fluxes[sc,dd]
-            angles_cropped = angles[dd-nfr_rm]
+            #angles_cropped = angles[dd-nfr_rm]
             write_fits(self.outpath + '3_rmfr_'+fits_name, tmp_tmp)
-            write_fits(self.outpath + 'derot_angles.fits',angles_cropped)
+            #write_fits(self.outpath + 'derot_angles.fits',angles_cropped)
             if remove:
                 os.system("rm "+self.outpath+'2_bpix_corr_'+fits_name)
                 os.system("rm "+self.outpath+'2_bpix_corr2_'+fits_name)
