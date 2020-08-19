@@ -23,12 +23,12 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         self.final_sz = final_sz 
         self.fwhm = fwhm #open_fits(self.inpath+'fwhm.fits') 
         
-    def recenter(self, method = '2dfit',model = '2gauss',nproc = 1, sigfactor = 4, subi_size = 21,verbose = True, debug = False, plot = False, coro = True):  
+    def recenter(self, method = 'speckle',model = 'gauss',nproc = 1, sigfactor = 4, subi_size = 21,verbose = True, debug = False, plot = False, coro = True):  
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined cube, and again by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined cube. 
         method: '2dfit' or 'speckle'
         model: '2gauss','gauss', 'moff'
-        nproc: number of CPU cores
+        nproc: number of CPUs
         sigfactor: float. If thresholding is performed, set the threshold in terms of gaussian sigma in the subimage (will depend on your cropping size)
         subi_size: int. Size of the square subimage sides in pixels.
         verbose: True for False, to provide extra information about the progress and results of the pipeline
@@ -48,8 +48,11 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
             for line in tmp:
                 self.sci_list.append(line.split('\n')[0])
         
+        self.sci_list.sort()
+        
         if verbose:
         	print(len(self.sci_list),'science cubes')
+        	print(self.sci_list)
         
         ncubes = len(self.sci_list)      
         
@@ -83,27 +86,27 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 				                      debug=debug, plot=plot)
                 sy = res[1]
                 sx = res[2]	                              
-	#	true_agpm_cen = (res[4][0],res[3][0])
-	#	true_fwhm_pos = (res[5][0],res[6][0])
-	#	true_fwhm_neg = (res[7][0],res[8][0])
-	#	true_theta_pos = res[9][0]
-	#	true_theta_neg = res[10][0]
-	#	amp_pos = res[11][0]
-	#	amp_neg = res[12][0]
-	#	true_neg_amp = amp_neg/amp_pos
-	#	params_2g = {'fwhm_neg': true_fwhm_neg, 'fwhm_pos': true_fwhm_pos, 
-	#		                 'theta_neg': true_theta_neg, 'theta_pos':true_theta_pos, 
-	#		                 'neg_amp': true_neg_amp}
-	#	# second: fixing params for neg gaussian - applied on individual frames. returns recentered array, and x-y shifts             
-	#	tmp_tmp, sy, sx = cube_recenter_2dfit(tmp_tmp, xy=true_agpm_cen, 
-	#		                                        fwhm=self.fwhm, subi_size=subi_size, 
-	#		                                        model=model, nproc=nproc, imlib='opencv', 
-	#		                                        interpolation='lanczos4',
-	#		                                        offset=None, negative=False, 
-	#		                                        threshold=True, sigfactor=sigfactor, 
-	#		                                        fix_neg=True, params_2g=params_2g,
-	#		                                        save_shifts=False, full_output=True, 
-	#		                                        verbose=verbose, debug=debug, plot=plot)		
+#                true_agpm_cen = (res[4][0],res[3][0])
+#                true_fwhm_pos = (res[5][0],res[6][0])
+#                true_fwhm_neg = (res[7][0],res[8][0])
+#                true_theta_pos = res[9][0]
+#                true_theta_neg = res[10][0]
+#                amp_pos = res[11][0]
+#                amp_neg = res[12][0]
+#                true_neg_amp = amp_neg/amp_pos
+#                params_2g = {'fwhm_neg': true_fwhm_neg, 'fwhm_pos': true_fwhm_pos, 
+#			                 'theta_neg': true_theta_neg, 'theta_pos':true_theta_pos, 
+#			                 'neg_amp': true_neg_amp}
+#		# second: fixing params for neg gaussian - applied on individual frames. returns recentered array, and x-y shifts             
+#                tmp_tmp, sy, sx = cube_recenter_2dfit(tmp_tmp, xy=true_agpm_cen, 
+#			                                        fwhm=self.fwhm, subi_size=subi_size, 
+#			                                        model=model, nproc=nproc, imlib='opencv', 
+#			                                        interpolation='lanczos4',
+#			                                        offset=None, negative=False, 
+#			                                        threshold=True, sigfactor=sigfactor, 
+#			                                        fix_neg=True, params_2g=params_2g,
+#			                                        save_shifts=False, full_output=True, 
+#			                                        verbose=verbose, debug=debug, plot=plot)		
    		
 	# Load original cubes, shift them, and create master cube
         tmp_tmp = np.zeros([int(self.ndit*ncubes),ny,nx]) #np.zeros makes an array full of zeros. we dont need our old tmp_tmp anymore		   
@@ -122,11 +125,15 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 		
         if verbose:
                 print('Shifts applied, master cube saved')	     
-        
-		
+     
     def bad_frame_removal(self, recenter_method, recenter_model, correlation_thres = 0.9, pxl_shift_thres = 0.5, crop_size = 31, verbose = True, debug = False, plot = False):	
         """
-       For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the recentered mastercubes and removes frames with a shift greater than a user defined pixel threshold in x or y above the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube. A threshold, also set by the user, removes all those cubes below the threshold from the mastercube and rotation file, then saves both as new files
+       For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the recentered mastercubes and removes frames with a shift greater than a user defined pixel threshold in x or y above the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube. A threshold, also set by the user, removes all those cubes below the threshold from the mastercube and rotation file, then saves both as new files for use in post processing
+        recenter_method: string, same as method used to recenter the frames
+        recenter_model: string, same as the model used to recenter the frames
+        correlation_thres: default is 0.9, can take any value between 0.0 and 1.0. Any frames below this correlation threshold will be excluded. Generally recommended to use a value between 0.90 and 0.95 (90-95% correlation to the median), however depends on crop_size
+        pxl_shift_thres: decimal, in units of pixels. Default is 0.5 pixels. Any shifts in the x or y direction greater than this threshold will cause the frame/s to be labelled as bad and thus removed 
+        crop_size: integer, must be odd. Default is 31. This sets the cropping during frame correlation to the median         
         """     
         
         if verbose:
@@ -151,7 +158,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
                 x_shifts_long[i*self.ndit:(i+1)*self.ndit] = x_shifts[i] # sets the average shifts of all frames in a cube 
                 y_shifts_long[i*self.ndit:(i+1)*self.ndit] = y_shifts[i]
 
-        if debug:
+        if verbose:
                 write_fits(self.outpath+'x_shifts_long_{}_{}.fits'.format(recenter_method,recenter_model),x_shifts_long) # saves shifts to file
                 write_fits(self.outpath+'y_shifts_long_{}_{}.fits'.format(recenter_method,recenter_model),y_shifts_long)   
         x_shifts = x_shifts_long
@@ -165,7 +172,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         bad = []
         good = []
 	    
-        # this system works, however it can let a couple of wild frames slip through at a 0.5 pixel threshold. may need a stricter threshold depending on the data
+        # this system works, however it can let a couple of wild frames slip through at a 0.5 pixel threshold. may need a stricter threshold depending on the data and crop size
         i = 0 
         shifts = list(zip(x_shifts,y_shifts))
         for sx,sy in shifts: #iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
@@ -186,7 +193,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         tmp_median = np.median(frames_pxl_threshold, axis=0)  #median frame of cube of remaining frames
 	
         if verbose:
-            print('Running frame correlation check...')    
+            print('Running frame correlation check...')
 	
         good_frames, bad_frames = cube_detect_badfr_correlation(frames_pxl_threshold,
 			                                                frame_ref = tmp_median,
@@ -212,4 +219,36 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'derot_angles_{}_{}.fits'.format(recenter_method,recenter_model), angle_threshold)  
         if verbose: 
                 print('Saved good frames and their respective rotations to file')	
+ 
+ 
+#    def median_binning(master_cube_name, binning_factor)
+#        """ 
+#        Median combines the frames within the master science cube as per the binning factor
+#        
+#        Parameters:
+#        ***********
+#        
+#        master_cube_name: str
+#            .fits file of master cube. Should be the same as the output from previous steps
+#        binning_factor: int
+#            Defines how many frames to median combine
+#                  
+#        Returns:
+#        ********
+#        master_cube_binned: the binned master cube
+#             
+#        """
+#        try:
+#            master_cube = open_fits(self.outpath + master_cube_name,verbose=verbose)
+#        except: 
+#            print("ERROR: Unable to find master cube. Please check path and file name")
+#        length_cube = master_cube.shape[0]
+#        
+#        
+#        
+#    
+#    
+#    
+    
+     
  
