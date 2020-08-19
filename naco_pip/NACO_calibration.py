@@ -25,7 +25,7 @@ mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle
 from vip_hci.metrics import detection, normalize_psf
 from vip_hci.conf import time_ini, time_fin, timing
 from hciplot import plot_frames
-import naco_pip.fits_info as fits_info
+from naco_pip import fits_info
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
 
@@ -182,7 +182,6 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:15]
 
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -220,7 +219,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             for line in tmp:
                 sci_dark_list.append(line.split('\n')[0])
                 
-        if os.path.isfile(self.inpath + sci_list[-1] + '.fits') == False:
+        if os.path.isfile(self.inpath + sci_list[-1]) == False:
             raise NameError('Missing .fits. Double check the contents of the input path') 
           
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
@@ -453,7 +452,6 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:15]
 
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -473,7 +471,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
         
-        if os.path.isfile(self.outpath + '1_crop_' + sci_list[-1] + '.fits') == False:
+        if os.path.isfile(self.outpath + '1_crop_' + sci_list[-1]) == False:
             raise NameError('Missing 1_crop_*.fits. Run: dark_subtract()')  
                 
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
@@ -617,7 +615,6 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:15]
 
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -631,7 +628,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
         
-        if os.path.isfile(self.outpath + '2_ff_' + sci_list[-1] + '.fits') == False:
+        if os.path.isfile(self.outpath + '2_ff_' + sci_list[-1]) == False:
             raise NameError('Missing 2_ff_*.fits. Run: flat_field_correction()')  
         
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
@@ -705,7 +702,6 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:15]
 
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -719,7 +715,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
                 
-        if os.path.isfile(self.outpath + '2_nan_corr_' + sci_list[-1] + '.fits') == False:
+        if os.path.isfile(self.outpath + '2_nan_corr_' + sci_list[-1]) == False:
             raise NameError('Missing 2_nan_corr_*.fits. Run: correct_nan_pixels()')  
             
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
@@ -943,14 +939,13 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         Corrects for the inconsistent DIT times within NACO cubes 
         The first few frames are removed and the rest rescaled such that the flux is constant.
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
-        remove options: True, Flase. Cleans file for unused fits
+        remove options: True, False. Cleans file for unused fits
         """
         sci_list = []
         with open(self.inpath +"sci_list.txt", "r") as f:
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:15]
         n_sci = len(sci_list)
         
         sky_list = []
@@ -966,8 +961,10 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
                 
-        if os.path.isfile(self.outpath + '2_bpix_corr2_' + sci_list[-1] + '.fits') == False:
-            raise NameError('Missing 2_bpix_corr2_*.fits. Run: correct_bad_pixels()')  
+        if os.path.isfile(self.outpath + '2_bpix_corr2_' + sci_list[-1]) == False:
+            raise NameError('Missing 2_bpix_corr2_*.fits. Run: correct_bad_pixels()')
+        
+        self.final_sz = int(open_fits(self.outpath + 'final_sz')[0])
                 
         com_sz = open_fits(self.outpath + '2_bpix_corr2_' +sci_list[0]).shape[2]
         #obtaining the real ndit values of the frames (not that of the headers)
@@ -990,12 +987,14 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             plot_frames(tmp[-1])
             
         min_ndit_sci = int(np.amin(real_ndit_sci))
-        write_fits(self.outpath +'real_ndit_sci_sky',np.array([real_ndit_sci,self.real_ndit_sky]))
+        
+        #write_fits(self.outpath +'real_ndit_sci', real_ndit_sci)
+        #write_fits(self.outpath + 'real_ndit_sky', self.real_ndit_sky)
+
         if verbose:
             print( "real_ndit_sky = ", self.real_ndit_sky)
             print( "real_ndit_sci = ", real_ndit_sci) 
             print( "Nominal ndit: {}, min ndit when skimming through cubes: {}".format(fits_info.ndit_sci,min_ndit_sci))
-        
         
         #update the final size and subsequesntly the mask
         mask_inner_rad = int(3.0/fits_info.pixel_scale) 
@@ -1063,13 +1062,17 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             print( "The new number of frames in each SKY cube is: ", self.new_ndit_sky)
             print( "The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat)
         
+        angles = open_fits(self.inpath + "derot_angles_uncropped.fits")
+        
         # Actual cropping of the cubes to remove the first frames, and the last one (median) AND RESCALING IN FLUX
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath+'2_bpix_corr2_'+fits_name, verbose=debug)
             tmp_tmp = np.zeros([int(real_ndit_sci[sc]),tmp.shape[1],tmp.shape[2]])
             for dd in range(nfr_rm,nfr_rm+int(real_ndit_sci[sc])):
                 tmp_tmp[dd-nfr_rm] = tmp[dd]*np.median(tmp_fluxes[sc])/tmp_fluxes[sc,dd]
-            write_fits(self.outpath+'3_rmfr_'+fits_name, tmp_tmp)
+            angles_cropped = angles[dd-nfr_rm]
+            write_fits(self.outpath + '3_rmfr_'+fits_name, tmp_tmp)
+            write_fits(self.outpath + 'derot_angles.fits',angles_cropped)
             if remove:
                 os.system("rm "+self.outpath+'2_bpix_corr_'+fits_name)
                 os.system("rm "+self.outpath+'2_bpix_corr2_'+fits_name)
@@ -1213,8 +1216,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
-                
-        if os.path.isfile(self.outpath + '3_rmfr_unsat' + unsat_list[-1] + '.fits') == False:
+        if os.path.isfile(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]) == False:
             raise NameError('Missing 3_rmfr_unsat*.fits. Run: first_frame_removal()')                
                 
     
@@ -1372,19 +1374,18 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        sci_list = sci_list[:2]
         n_sci = len(sci_list)
         
         if os.path.isfile(self.outpath + 'fwhm.fits') == False:
             raise NameError('FWHM of the star is not defined. Run: get_stellar_psf()')
-        if os.path.isfile(self.outpath + '3_rmfr_' + sci_list[-1] + '.fits') == False:
+        if os.path.isfile(self.outpath + '3_rmfr_' + sci_list[-1]) == False:
             raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')
         
         self.final_sz = int(open_fits(self.outpath + 'final_sz')[0])
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
         self.new_ndit_sci = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[0])
         self.new_ndit_sky = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat')[1])
-        self.real_ndit_sky = open_fits(self.outpath + 'real_ndit_sci_sky')[1]
+        self.real_ndit_sky = open_fits(self.outpath + 'real_ndit_sky')
     
         sky_list_mjd = []
         #get times of unsat cubes (modified jullian calander)
@@ -1786,7 +1787,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         """
         #be careful when using avoid removing PSF related fits
         os.system("rm "+self.outpath+'common_sz.fits')
-        os.system("rm "+self.outpath+'real_ndit_sci_sky.fits')
+        #os.system("rm "+self.outpath+'real_ndit_sky.fits')
+        #os.system("rm "+self.outpath+'real_ndit_sci.fits')
         os.system("rm "+self.outpath+'new_ndit_sci_sky_unsat.fits')
         os.system("rm "+self.outpath+'fwhm.fits')
         os.system("rm "+self.outpath+'final_sz.fits')
