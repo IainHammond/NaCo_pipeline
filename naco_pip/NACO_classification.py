@@ -18,7 +18,7 @@ from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
 from vip_hci.var import frame_filter_lowpass
-import naco_pip.fits_info as fits_info
+from naco_pip import fits_info
 import pdb
 
 #test = input_dataset('/home/lewis/Documents/Exoplanets/data_sets/HD179218/Tests/','/home/lewis/Documents/Exoplanets/data_sets/HD179218/Debug/')
@@ -58,7 +58,7 @@ class input_dataset():
     def bad_columns(self, verbose = True, debug = False):
         """
         In NACO data there are systematic bad columns in the lower left quadrant
-        This method will correct those bad colums with the median of the neighbouring pixels
+        This method will correct those bad columns with the median of the neighbouring pixels
         """
         #creating bad pixel map
         bcm = np.zeros((1026, 1024) ,dtype=np.float64)
@@ -106,7 +106,7 @@ class input_dataset():
 
     def mk_dico(self, coro = True, verbose = True, debug = False):
         if coro:
-           #creacting a dictionary
+           #creating a dictionary
            file_list = [f for f in listdir(self.outpath) if
                         isfile(join(self.outpath, f))]
            fits_list = []
@@ -273,5 +273,118 @@ class input_dataset():
                     f.write(sci+'\n')
        if verbose:
            print('done :)')
-
        
+####### Iain's addition to find the derotation angles of the data ########
+
+    def find_derot_angles(self, verbose=False):
+        """ 
+        Find the derotation angle vector to apply to a set of NACO cubes to align it with North up. Requires sci_list.txt to exist in the outpath.
+        IMPORTANT: the list of fits has to be in chronological order of acquisition.
+        
+        Parameters:
+        ***********                
+        inpath: str
+            Where the fits files are located
+        verbose: str
+            Whether to print the derotation angles as they are computed
+            
+        Returns:
+        ********
+        derot_angles: 2d numpy array (n_cubes x n_frames_max)
+            vector of n_frames derot angles for each cube
+            Important: n_frames may be different from one cube to the other!
+            For cubes where n_frames < n_frames_max the last values of the row are padded with zeros.
+        n_frames_vec: 1d numpy array
+            Vector with number of frames in each cube
+        """
+        #open the list of science images and add them to fits_list to be used in _derot_ang_ipag
+        fits_list = []
+        with open(self.outpath+"sci_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:    
+                fits_list.append(line.split('\n')[0])
+                
+        def _derot_ang_ipag(self,fits_list=fits_list,loc='st'): 
+            nsci = len(fits_list)
+            parang = np.zeros(nsci)
+            posang = np.zeros(nsci)
+            rot_pt_off = np.zeros(nsci)
+            n_frames_vec = np.ones(nsci, dtype=int)
+            
+            if loc == 'st':
+                kw_par = 'HIERARCH ESO TEL PARANG START'
+                kw_pos = 'HIERARCH ESO ADA POSANG'
+            elif loc == 'nd':
+                kw_par = 'HIERARCH ESO TEL PARANG END'
+                kw_pos = 'HIERARCH ESO ADA POSANG END'        
+            # FIRST COMPILE PARANG, POSANG and PUPILPOS 
+            for ff in range(len(fits_list)):
+                cube, header = open_fits(self.inpath+fits_list[ff], header=True, verbose=False)
+                n_frames_vec[sc] = cube.shape[0]-1 # "-1" is because the last frame is the median of all others
+                parang[ff] = header[kw_par]
+                posang[ff] = header[kw_pos]
+                pupilpos = 180.0 - parang[ff] + posang[ff]
+                rot_pt_off[ff] = 90 + 89.44 - pupilpos
+                if verbose:
+                    print("parang: {}, posang: {}, rot_pt_off: {}".format(parang[ff],posang[ff],rot_pt_off[ff]))
+               
+            # NEXT CHECK IF THE OBSERVATION WENT THROUGH TRANSIT (change of sign in parang OR stddev of rot_pt_off > 1.)       
+               
+            rot_pt_off_med = np.median(rot_pt_off)
+            rot_pt_off_std = np.std(rot_pt_off)    
+            
+            if np.min(parang)*np.max(parang) < 0. or rot_pt_off_std > 1.:
+                if verbose:
+                    print("The observation goes through transit and/or the pupil position was reset in the middle of the observation: ")
+                    if np.min(parang)*np.max(parang) < 0.:
+                        print("min/max parang: ", np.min(parang), np.max(parang))
+                    if rot_pt_off_std > 1.:
+                        print("the standard deviation of pupil positions is greater than 1: ", rot_pt_off_std)
+                # find index where the transit occurs (change of sign of parang OR big difference in pupil pos)
+                n_changes = 0
+                for ff in range(len(fits_list)-1):
+                    if parang[ff]*parang[ff+1] < 0. or np.abs(rot_pt_off[ff]-rot_pt_off[ff+1]) > 1.:
+                        idx_transit = ff+1
+                        n_changes+=1
+                # check that these conditions only detected one passage through transit
+                if n_changes != 1:
+                    print(" {} passages of transit were detected (instead of 1!). Check that the input fits list is given in chronological order.".format(n_changes))
+                    pdb.set_trace()
+            
+                rot_pt_off_med1 = np.median(rot_pt_off[:idx_transit])    
+                rot_pt_off_med2 = np.median(rot_pt_off[idx_transit:])
+                
+                final_derot_angs = rot_pt_off_med1 - parang
+                final_derot_angs[idx_transit:] = rot_pt_off_med2 - parang[idx_transit:]
+            
+            else:
+                final_derot_angs = rot_pt_off_med - parang
+        
+            # MAKE SURE ANGLES ARE IN THE RANGE (-180,180)deg
+            min_derot_angs = np.amin(final_derot_angs)
+            nrot_min = min_derot_angs/360.
+            if nrot_min < -0.5:
+                final_derot_angs[np.where(final_derot_angs<-180)] = final_derot_angs[np.where(final_derot_angs<-180)] + np.ceil(nrot_min)*360.
+            max_derot_angs = np.amax(final_derot_angs)
+            nrot_max = max_derot_angs/360.
+            if nrot_max > 0.5:
+                final_derot_angs[np.where(final_derot_angs>180)] = final_derot_angs[np.where(final_derot_angs>180)] - np.ceil(nrot_max)*360.
+                
+            return -1.*final_derot_angs, n_frames_vec
+
+        n_sci = len(fits_list)
+        derot_angles_st, _ = _derot_ang_ipag(self.inpath,fits_list,loc='st')
+        derot_angles_nd, n_frames_vec = _derot_ang_ipag(self.inpath,fits_list,loc='nd')
+        final_derot_angs = np.zeros([n_sci,int(np.amax(n_frames_vec))])
+        
+        for sc in range(n_sci):
+            n_frames = int(n_frames_vec[sc])
+            nfr_vec = np.arange(n_frames)
+            final_derot_angs[sc,:n_frames] = derot_angles_st[sc]+(((derot_angles_nd[sc]-derot_angles_st[sc])*nfr_vec/(n_frames-1)))
+        write_fits(self.outpath+"derot_angles_uncropped.fits",final_derot_angs)    
+        return final_derot_angs, n_frames_vec
+        
+        
+        
+        
+        
