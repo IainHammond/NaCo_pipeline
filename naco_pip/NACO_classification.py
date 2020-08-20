@@ -278,7 +278,7 @@ class input_dataset():
 
     def find_derot_angles(self, verbose=False):
         """ 
-        Find the derotation angle vector to apply to a set of NACO cubes to align it with North up. Requires sci_list.txt to exist in the outpath.
+        Find the derotation angle vector to apply to a set of NACO cubes to align it with North up. Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
         IMPORTANT: the list of fits has to be in chronological order of acquisition.
         
         Parameters:
@@ -303,7 +303,7 @@ class input_dataset():
             tmp = f.readlines()
             for line in tmp:    
                 fits_list.append(line.split('\n')[0])
-                
+        fits_list.sort()        
         def _derot_ang_ipag(self,fits_list=fits_list,loc='st'): 
             nsci = len(fits_list)
             parang = np.zeros(nsci)
@@ -320,7 +320,7 @@ class input_dataset():
             # FIRST COMPILE PARANG, POSANG and PUPILPOS 
             for ff in range(len(fits_list)):
                 cube, header = open_fits(self.inpath+fits_list[ff], header=True, verbose=False)
-                n_frames_vec[sc] = cube.shape[0]-1 # "-1" is because the last frame is the median of all others
+                n_frames_vec[ff] = cube.shape[0]-1 # "-1" is because the last frame is the median of all others
                 parang[ff] = header[kw_par]
                 posang[ff] = header[kw_pos]
                 pupilpos = 180.0 - parang[ff] + posang[ff]
@@ -373,8 +373,8 @@ class input_dataset():
             return -1.*final_derot_angs, n_frames_vec
 
         n_sci = len(fits_list)
-        derot_angles_st, _ = _derot_ang_ipag(self.inpath,fits_list,loc='st')
-        derot_angles_nd, n_frames_vec = _derot_ang_ipag(self.inpath,fits_list,loc='nd')
+        derot_angles_st, _ = _derot_ang_ipag(self,fits_list,loc='st')
+        derot_angles_nd, n_frames_vec = _derot_ang_ipag(self,fits_list,loc='nd')
         final_derot_angs = np.zeros([n_sci,int(np.amax(n_frames_vec))])
         
         for sc in range(n_sci):
