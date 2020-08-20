@@ -985,9 +985,18 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             self.real_ndit_sky.append(tmp_tmp.shape[0]-1)
         if plot == 'show':
             plot_frames(tmp[-1])
-            
+        
         min_ndit_sci = int(np.amin(real_ndit_sci))
         
+        #save the real_ndit_sci and sky lists to a text file instead of fits        
+        with open(self.outpath+"real_ndit_sci_list.txt", "w") as f:
+            for dimension in real_ndit_sci:
+                f.write(str(dimension)+'\n')
+                
+        with open(self.outpath+"real_ndit_sky_list.txt", "w") as f:
+            for dimension in self.real_ndit_sky:
+                f.write(str(dimension)+'\n') 
+                
         #write_fits(self.outpath +'real_ndit_sci', real_ndit_sci)
         #write_fits(self.outpath + 'real_ndit_sky', self.real_ndit_sky)
 
@@ -1385,7 +1394,11 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
         self.new_ndit_sci = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[0])
         self.new_ndit_sky = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat')[1])
-        self.real_ndit_sky = open_fits(self.outpath + 'real_ndit_sky')
+        self.real_ndit_sky = [] #new
+        with open(self.outpath+"real_ndit_sky_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:    
+                self.real_ndit_sky.append(int(line.split('\n')[0]))  
     
         sky_list_mjd = []
         #get times of unsat cubes (modified jullian calander)
