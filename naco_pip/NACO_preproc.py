@@ -107,21 +107,27 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 #			                                        fix_neg=True, params_2g=params_2g,
 #			                                        save_shifts=False, full_output=True, 
 #			                                        verbose=verbose, debug=debug, plot=plot)		
-   		
+   		# LOAD IN REAL_NDIT_SCI
 	# Load original cubes, shift them, and create master cube
-        tmp_tmp = np.zeros([int(self.ndit*ncubes),ny,nx]) #np.zeros makes an array full of zeros. we dont need our old tmp_tmp anymore		   
+        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #np.zeros makes an array full of zeros. we dont need our old tmp_tmp anymore		   
+
+    # make array of zeros with same length of tmp_tmp, then load derot_angles/call it, 
 
         for sc, fits_name in enumerate(self.sci_list):
-            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #opens original cube 
-            for dd in range(self.ndit):         
-                tmp_tmp[int(sc*self.ndit+dd)] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv')
-
+            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #opens original cube
+            dim = int(self.real_ndit_sci[sc])
+            for dd in range(dim):
+                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv')
+                # turn 2d rotation file into a vector here same as for the mastercube above
+                # sc*ndit+dd
         pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)     
         
 	# write all the shifts
         write_fits(self.outpath+'x_shifts_{}_{}.fits'.format(method,model), sx) # writes the x shifts to the file
         write_fits(self.outpath+'y_shifts_{}_{}.fits'.format(method,model), sy) # writes the y shifts to the file
         write_fits(self.outpath+"master_cube_{}_{}.fits".format(method,model),tmp_tmp) #makes the master cube
+        
+        #add code that turns 
 		
         if verbose:
                 print('Shifts applied, master cube saved')	     
