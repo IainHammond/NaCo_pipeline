@@ -969,11 +969,11 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         com_sz = open_fits(self.outpath + '2_bpix_corr2_' +sci_list[0]).shape[2]
         #obtaining the real ndit values of the frames (not that of the headers)
         tmp = np.zeros([n_sci,com_sz,com_sz])
-        real_ndit_sci = []
+        self.real_ndit_sci = [] #change all to self.
         for sc, fits_name in enumerate(sci_list):
             tmp_tmp = open_fits(self.outpath+'2_bpix_corr2_'+fits_name, verbose=debug)
             tmp[sc] = tmp_tmp[-1]
-            real_ndit_sci.append(tmp_tmp.shape[0]-1)
+            self.real_ndit_sci.append(tmp_tmp.shape[0]-1)
         if plot == 'show':
             plot_frames(tmp[-1])
             
@@ -986,23 +986,23 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         if plot == 'show':
             plot_frames(tmp[-1])
         
-        min_ndit_sci = int(np.amin(real_ndit_sci))
+        min_ndit_sci = int(np.amin(self.real_ndit_sci))
         
-        #save the real_ndit_sci and sky lists to a text file instead of fits        
-        with open(self.outpath+"real_ndit_sci_list.txt", "w") as f:
-            for dimension in real_ndit_sci:
-                f.write(str(dimension)+'\n')
-                
-        with open(self.outpath+"real_ndit_sky_list.txt", "w") as f:
-            for dimension in self.real_ndit_sky:
-                f.write(str(dimension)+'\n') 
-                
-        #write_fits(self.outpath +'real_ndit_sci', real_ndit_sci)
-        #write_fits(self.outpath + 'real_ndit_sky', self.real_ndit_sky)
+        #save the real_ndit_sci and sky lists to a text file     
+#        with open(self.outpath+"real_ndit_sci_list.txt", "w") as f:
+#            for dimension in self.real_ndit_sci:
+#                f.write(str(dimension)+'\n')
+#                
+#        with open(self.outpath+"real_ndit_sky_list.txt", "w") as f:
+#            for dimension in self.real_ndit_sky:
+#                f.write(str(dimension)+'\n') 
+#        write_fits(self.outpath +'real_ndit_sci', np.array(real_ndit_sci))
+#        write_fits(self.outpath + 'real_ndit_sky', np.array(self.real_ndit_sky))
+        write_fits(self.outpath +'real_ndit_sci_sky',np.array([self.real_ndit_sci,self.real_ndit_sky]))        
 
         if verbose:
             print( "real_ndit_sky = ", self.real_ndit_sky)
-            print( "real_ndit_sci = ", real_ndit_sci) 
+            print( "real_ndit_sci = ", self.real_ndit_sci) 
             print( "Nominal ndit: {}, min ndit when skimming through cubes: {}".format(fits_info.ndit_sci,min_ndit_sci))
         
         #update the final size and subsequesntly the mask
@@ -1054,8 +1054,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
 
             
         #update the range of frames that will be cut off.
-        for zz in range(len(real_ndit_sci)):
-            real_ndit_sci[zz] = min(real_ndit_sci[zz] - nfr_rm, min(fits_info.ndit_sci) - nfr_rm)
+        for zz in range(len(self.real_ndit_sci)):
+            self.real_ndit_sci[zz] = min(self.real_ndit_sci[zz] - nfr_rm, min(fits_info.ndit_sci) - nfr_rm)
         min_ndit_sky = min(self.real_ndit_sky)
         for zz in range(len(self.real_ndit_sky)):
             self.real_ndit_sky[zz] = min_ndit_sky  - nfr_rm
@@ -1071,17 +1071,19 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             print( "The new number of frames in each SKY cube is: ", self.new_ndit_sky)
             print( "The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat)
         
-        #angles = open_fits(self.inpath + "derot_angles_uncropped.fits")
+        angles = open_fits(self.inpath + "derot_angles_uncropped.fits")
+        angles_cropped = angles[:,nfr_rm:] #crops each cube of rotation angles file, by keeping all cubes but removing the number of frames at the start
+        write_fits(self.outpath + 'derot_angles_cropped.fits',angles_cropped) #need to make attribute 
         
         # Actual cropping of the cubes to remove the first frames, and the last one (median) AND RESCALING IN FLUX
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath+'2_bpix_corr2_'+fits_name, verbose=debug)
-            tmp_tmp = np.zeros([int(real_ndit_sci[sc]),tmp.shape[1],tmp.shape[2]])
-            for dd in range(nfr_rm,nfr_rm+int(real_ndit_sci[sc])):
+            tmp_tmp = np.zeros([int(self.real_ndit_sci[sc]),tmp.shape[1],tmp.shape[2]])
+            for dd in range(nfr_rm,nfr_rm+int(self.real_ndit_sci[sc])):
                 tmp_tmp[dd-nfr_rm] = tmp[dd]*np.median(tmp_fluxes[sc])/tmp_fluxes[sc,dd]
-            #angles_cropped = angles[dd-nfr_rm]
+                
             write_fits(self.outpath + '3_rmfr_'+fits_name, tmp_tmp)
-            #write_fits(self.outpath + 'derot_angles.fits',angles_cropped)
+            
             if remove:
                 os.system("rm "+self.outpath+'2_bpix_corr_'+fits_name)
                 os.system("rm "+self.outpath+'2_bpix_corr2_'+fits_name)
@@ -1369,7 +1371,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         remove options: True, Flase. Cleans file for unused fits
         """
         
-        #set up a check for nessacary files
+        #set up a check for necessary files
         
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -1394,11 +1396,11 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
         self.new_ndit_sci = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[0])
         self.new_ndit_sky = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat')[1])
-        self.real_ndit_sky = [] #new
-        with open(self.outpath+"real_ndit_sky_list.txt", "r") as f:
-            tmp = f.readlines()
-            for line in tmp:    
-                self.real_ndit_sky.append(int(line.split('\n')[0]))  
+        self.real_ndit_sky = int(open_fits(self.outpath + 'real_ndit_sky'))[1]
+        #        with open(self.outpath+"real_ndit_sky_list.txt", "r") as f:
+#            tmp = f.readlines()
+#            for line in tmp:    
+#                self.real_ndit_sky.append(int(line.split('\n')[0]))  
     
         sky_list_mjd = []
         #get times of unsat cubes (modified jullian calander)
@@ -1800,8 +1802,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         """
         #be careful when using avoid removing PSF related fits
         os.system("rm "+self.outpath+'common_sz.fits')
-        #os.system("rm "+self.outpath+'real_ndit_sky.fits')
-        #os.system("rm "+self.outpath+'real_ndit_sci.fits')
+        os.system("rm "+self.outpath+'real_ndit_sci_sky.fits')
         os.system("rm "+self.outpath+'new_ndit_sci_sky_unsat.fits')
         os.system("rm "+self.outpath+'fwhm.fits')
         os.system("rm "+self.outpath+'final_sz.fits')
