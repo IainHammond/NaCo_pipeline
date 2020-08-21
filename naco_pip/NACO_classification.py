@@ -278,13 +278,11 @@ class input_dataset():
 
     def find_derot_angles(self, verbose=False):
         """ 
-        Find the derotation angle vector to apply to a set of NACO cubes to align it with North up. Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
-        IMPORTANT: the list of fits has to be in chronological order of acquisition.
+        For datasets with signification rotation when the telescope derotator is switched off. 
+        Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
+        Finds the derotation angle vector to apply to a set of NACO cubes to align it with North up. 
+        IMPORTANT: The list of fits should be in chronological order of acquisition, however the code should sort them itself.
         
-        Parameters:
-        ***********                
-        inpath: str
-            Where the fits files are located
         verbose: str
             Whether to print the derotation angles as they are computed
             
@@ -297,6 +295,7 @@ class input_dataset():
         n_frames_vec: 1d numpy array
             Vector with number of frames in each cube
         """
+        
         #open the list of science images and add them to fits_list to be used in _derot_ang_ipag
         fits_list = []
         with open(self.outpath+"sci_list.txt", "r") as f:
@@ -304,6 +303,7 @@ class input_dataset():
             for line in tmp:    
                 fits_list.append(line.split('\n')[0])
         fits_list.sort()        
+        
         def _derot_ang_ipag(self,fits_list=fits_list,loc='st'): 
             nsci = len(fits_list)
             parang = np.zeros(nsci)
