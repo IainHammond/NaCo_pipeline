@@ -19,9 +19,9 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, final_sz, fwhm, coro = True):
         self.inpath = inpath
         self.outpath = outpath
-        #self.resel = resel #resolution element in pixels (lambda/D). may just use fwhm
         self.final_sz = final_sz 
-        self.fwhm = fwhm #open_fits(self.inpath+'fwhm.fits') 
+        self.fwhm = fwhm
+        self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits',verbose=verbose)
         
     def recenter(self, method = 'speckle',model = 'gauss',nproc = 1, sigfactor = 4, subi_size = 21,verbose = True, debug = False, plot = False, coro = True):  
         """
@@ -109,26 +109,22 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 #			                                        verbose=verbose, debug=debug, plot=plot)		
    		# LOAD IN REAL_NDIT_SCI
 	# Load original cubes, shift them, and create master cube
-        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #np.zeros makes an array full of zeros. we dont need our old tmp_tmp anymore		   
-
-    # make array of zeros with same length of tmp_tmp, then load derot_angles/call it, 
-
+        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore		   
+ 
         for sc, fits_name in enumerate(self.sci_list):
-            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #opens original cube
-            dim = int(self.real_ndit_sci[sc])
-            for dd in range(dim):
-                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv')
-                # turn 2d rotation file into a vector here same as for the mastercube above
-                # sc*ndit+dd
-        pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)     
+            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #opens science cube
+            dim = int(self.real_ndit_sci[sc]) #gets the integer dimensions of this science cube
+            for dd in range(dim): #dd goes from 0 to the largest dimension
+                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv') #this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
+                angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd] # turn 2d rotation file into a vector here same as for the mastercube above
+                # sc*ndit+dd i don't think this line works for variable sized cubes 
+        pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
         
 	# write all the shifts
         write_fits(self.outpath+'x_shifts_{}_{}.fits'.format(method,model), sx) # writes the x shifts to the file
         write_fits(self.outpath+'y_shifts_{}_{}.fits'.format(method,model), sy) # writes the y shifts to the file
         write_fits(self.outpath+"master_cube_{}_{}.fits".format(method,model),tmp_tmp) #makes the master cube
-        
-        #add code that turns 
-		
+		write_fits(self.outpath+'derot_angles_1d.fits',angles_1dvector) # writes the 1D array of derotation angles
         if verbose:
                 print('Shifts applied, master cube saved')	     
      
@@ -146,7 +142,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
             print('\n')
             print('Beginning bad frame removal...')
             print('\n')
-        angle_file = open_fits(self.inpath+'derot_angles.fits') #opens the rotation file
+        angle_file = open_fits(self.inpath+'derot_angles_1d.fits') #opens the rotation file
         recentered_cube = open_fits(self.outpath+"master_cube_{}_{}.fits".format(recenter_method,recenter_model)) # loads the master cube       
 	    
         #open x shifts file for the respective method
