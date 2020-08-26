@@ -28,6 +28,8 @@ from hciplot import plot_frames
 from naco_pip import fits_info
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
+from statistics import stdev
+from astropy.stats import sigma_clipped_stats
 
 #example on how to define the objects
 #test = raw_dataset('/home/lewis/Documents/Exoplanets/data_sets/HD179218/Tests/', '/home/lewis/Documents/Exoplanets/data_sets/HD179218/Debug/')
@@ -150,7 +152,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         
     def get_final_sz(self, final_sz = None, verbose = True, debug = False):
         """
-        Update the corpping size as you wish
+        Update the cropping size as you wish
         """
         if final_sz is None:
             final_sz_ori = min(2*self.agpm_pos[0]-1,2*self.agpm_pos[1]-1,2*\
@@ -440,6 +442,98 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         if plot == 'save':
             plot_frames((tmp_tmp_tmp,tmp,tmp_tmp), save = self.outpath + 'UNSAT_PCA_dark_subtract')
 
+    def fix_sporatic_columns(self, quadrant='topleft', xpixels_from_center = 7, interval = 8, verbose = True, debug = False):   
+        """ 
+        For correcting sporatic bad columns in science and sky cubes which can appear in NACO data, similar to the permanent bad columns in the bottom left quadrant. Position of columns should be confirmed with manual visual inspection.
+        
+        Parameters:
+        ***********        
+        quadrant: str
+            'topright' or 'bottomright'. Most common is topright
+        xpixels_from_center: int
+            how many pixels in x coordinate from the center of the frame found with frame_center the first bad column starts (center is 256 for a 511 frame). Usually 7.       
+        interval: int
+            number of pixels in the x coordinate until the next bad column. Usually 8.   
+        """
+        
+        sci_list = []
+        with open(self.inpath +"sci_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                sci_list.append(line.split('\n')[0])
+
+        sky_list = []
+        with open(self.inpath +"sky_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                sky_list.append(line.split('\n')[0])
+        
+        ncubes = len(sci_list) # gets the number of cubes
+        com_sz = open_fits(self.inpath+sci_list[0],verbose=False).shape[2] # gets the common dimensions for all frames
+        tmp_tmp = np.zeros([ncubes,com_sz,com_sz]) # make 3D array with length equal to number of cubes, and x and y equal to the common size                            
+
+        # create new image using the median of all frames in each cube
+        for sc, fits_name in enumerate(sci_list): # list of science cubes to fix provided by user            
+            tmp = open_fits(self.inpath+fits_name) # open the cube of interest            
+            tmp_tmp[sc] = np.median(tmp,axis=0) # fills the zeros array with the median of all frames in the cube
+                    
+        mask = np.zeros([com_sz,com_sz]) # makes empty array that is the same x and y dimensions as the frames
+        centery,centerx = frame_center(tmp_tmp)
+        median_pxl_val = []
+        stddev = []
+        
+        if quadrant == 'topright':  #works, makes top right mask based off input      
+            for a in range(int(centerx+xpixels_from_center),tmp_tmp.shape[2]-1,interval): #create mask where the bad columns are for NACO top right quadrant
+                mask[int((tmp_tmp.shape[1]-1)/2):tmp_tmp.shape[2]-1,a] = 1
+        
+        if quadrant == 'bottomright':  #works, makes bottom right mask based off input    
+            for a in range(int(centerx+xpixels_from_center),tmp_tmp.shape[2]-1,interval): #create mask where the bad columns are for NACO bottom right quadrant
+                mask[0:int((tmp_tmp.shape[1]-1)/2),a] = 1
+                
+        # works but the np.where is dodgy coding
+        # find standard deviation and median of the pixels in the bad quadrant that aren't in the bad column, excluding a pixel if it's 2.5 sigma difference
+
+        for counter,image in enumerate(tmp_tmp): #runs through all median combined images
+
+                #crops the data and mask to the quadrant we are checking. confirmed working
+                data_crop = image[int((tmp_tmp.shape[1]-1)/2):tmp_tmp.shape[2]-1, int(centerx+xpixels_from_center):tmp_tmp.shape[2]-1]
+                mask_crop = mask[int((tmp_tmp.shape[1]-1)/2):tmp_tmp.shape[2]-1, int(centerx+xpixels_from_center):tmp_tmp.shape[2]-1]
+
+                #good pixels are the 0 values in the mask
+                good_pixels = np.where(mask_crop == 0)
+
+                #create a data array that is just the good values
+                data = data_crop[good_pixels[0],good_pixels[1]]
+
+                mean,median,stdev = sigma_clipped_stats(data,sigma=2.5) #saves the value of the median for the good pixel values in the image
+                median_pxl_val.append(median) #adds that value to an array of median pixel values
+                stddev.append(stdev) #takes standard dev of values and adds it to array
+                
+        print('Mean standard deviation of effected columns for all frames:',np.mean(stddev))
+        print('Mean pixel value of effected columns for all frames:',np.mean(median_pxl_val))
+        
+        values = []
+        column = []
+        median_col_val = []
+
+        for idx,fits_name in enumerate(sci_list): #loops over all images
+            for pixel in range(int(centerx)+int(xpixels_from_center),com_sz,interval): #loop every 8th x pixel starting from first affected column
+
+                values.append(tmp_tmp[idx][int(centerx):com_sz,pixel]) #grabs pixel values of affected pixel column
+
+            mean,median,stdev = sigma_clipped_stats(values,sigma=2.5) #get stats of that column
+            median_col_val.append(median)
+            #empties the list for the next loop
+            values.clear()
+            column.clear()
+
+            if median_col_val[idx] < median_pxl_val[idx] - (1 * stddev[idx]): #if the median column values are 1 stddevs smaller, then correct them (good frames are consistent enough for 1 stddev to be safe)
+                print('*********Fixing bad column in frame {}*********'.format(sci_list[idx]))
+                cube_to_fix = open_fits(self.inpath+fits_name,verbose=False)
+                correct_cube = cube_fix_badpix_isolated(cube_to_fix,bpm_mask=mask,num_neig = 13,protect_mask = False,radius = 8,verbose = verbose, debug = debug)
+                write_fits(self.inpath+fits_name,correct_cube)
+                print('{} has been corrected and saved'.format(fits_name))
+        
 
     def flat_field_correction(self, verbose = True, debug = False, plot = None, remove = False):
         """
@@ -696,7 +790,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, Flase. Cleans file for unused fits
         """
-        
+        print('Running bad pixel correction...')
         sci_list = []
         with open(self.inpath +"sci_list.txt", "r") as f:
             tmp = f.readlines()
@@ -784,9 +878,9 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = open_fits(self.outpath+'2_crop_'+sci_list[0])[-1]
             tmp_tmp = open_fits(self.outpath+'2_crop_'+sci_list[1])[-1]
         if plot == 'show':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(16000,16000,16000,16000))
+            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),np.percentile(tmp_tmp[0],99.9)))
         if plot == 'save':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(16000,16000,16000,16000), save = self.outpath + 'Second_badpx_crop')
+            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),np.percentile(tmp_tmp[0],99.9)), save = self.outpath + 'Second_badpx_crop')
             
         # Crop the bpix map in a same way
         bpix_map = frame_crop(bpix_map,self.final_sz,cenxy=self.agpm_pos, force = True)
@@ -800,8 +894,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath +'2_crop_'+fits_name, verbose=debug)
             # first with the bp max defined from the flat field (without protecting radius)
-            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map)
-            write_fits(self.outpath+'2_bpix_corr_'+fits_name, tmp_tmp, verbose=debug)
+            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map,verbose=debug)
+            write_fits(self.outpath+'2_bpix_corr_'+fits_name, tmp_tmp,verbose=debug)
             timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, 
@@ -811,24 +905,24 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             #create a bpm for the 2nd correction
             tmp_tmp_tmp = tmp_tmp-tmp
             tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0 ,1,0)
-            write_fits(self.outpath+'2_bpix_corr2_'+fits_name, tmp_tmp)
-            write_fits(self.outpath+'2_bpix_corr2_map_'+fits_name,tmp_tmp_tmp)
+            write_fits(self.outpath+'2_bpix_corr2_'+fits_name, tmp_tmp,verbose=debug)
+            write_fits(self.outpath+'2_bpix_corr2_map_'+fits_name,tmp_tmp_tmp,verbose=debug)
             timing(t0)
             if remove:
                 os.system("rm "+self.outpath+'2_crop_'+fits_name)
         if verbose:
-            print('Bad pixels corrected in SCI cubes')
+            print('*************Bad pixels corrected in SCI cubes*************')
         if plot == 'show':
-            plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,16000,16000))
+            plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9)))
         if plot =='save':
-            plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,16000,16000), save = self.outpath + 'SCI_badpx_corr')
+            plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9)), save = self.outpath + 'SCI_badpx_corr')
                     
         bpix_map = open_fits(self.outpath+'master_bpix_map_2ndcrop.fits')
         t0 = time_ini()
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath+'2_crop_'+fits_name, verbose=debug)
             # first with the bp max defined from the flat field (without protecting radius)
-            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map)
+            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map,verbose=debug)
             write_fits(self.outpath+'2_bpix_corr_'+fits_name, tmp_tmp, verbose=debug)
             timing(t0)
             # second, residual hot pixels
@@ -839,13 +933,13 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             #create a bpm for the 2nd correction
             bpm = tmp_tmp-tmp
             bpm = np.where(bpm != 0 ,1,0)
-            write_fits(self.outpath+'2_bpix_corr2_'+fits_name, tmp_tmp)
-            write_fits(self.outpath+'2_bpix_corr2_map_'+fits_name, bpm)
+            write_fits(self.outpath+'2_bpix_corr2_'+fits_name, tmp_tmp,verbose=debug)
+            write_fits(self.outpath+'2_bpix_corr2_map_'+fits_name, bpm,verbose=debug)
             timing(t0)
             if remove:
                 os.system("rm "+self.outpath +'2_crop_'+fits_name)
         if verbose:
-            print('Bad pixels corrected in SKY cubes')
+            print('*************Bad pixels corrected in SKY cubes*************')
         if plot == 'show':
             plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,16000,16000))
         if plot == 'save':
@@ -857,8 +951,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         for un, fits_name in enumerate(unsat_list):
             tmp = open_fits(self.outpath+'2_nan_corr_unsat_'+fits_name, verbose=debug)
             # first with the bp max defined from the flat field (without protecting radius)
-            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat)
-            write_fits(self.outpath+'2_bpix_corr_unsat_'+fits_name, tmp_tmp)
+            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat,verbose=debug)
+            write_fits(self.outpath+'2_bpix_corr_unsat_'+fits_name, tmp_tmp,verbose=debug)
             timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, 
@@ -868,13 +962,13 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             #create a bpm for the 2nd correction
             bpm = tmp_tmp-tmp
             bpm = np.where(bpm != 0 ,1,0)
-            write_fits(self.outpath+'2_bpix_corr2_unsat_'+fits_name, tmp_tmp)
-            write_fits(self.outpath+'2_bpix_corr2_map_unsat_'+fits_name, bpm)
+            write_fits(self.outpath+'2_bpix_corr2_unsat_'+fits_name, tmp_tmp,verbose=debug)
+            write_fits(self.outpath+'2_bpix_corr2_map_unsat_'+fits_name, bpm,verbose=debug)
             timing(t0)
             if remove:
                 os.system("rm "+ self.outpath +'2_nan_corr_unsat_'+fits_name)
         if verbose:
-            print('Bad pixels corrected in UNSAT cubes')
+            print('*************Bad pixels corrected in UNSAT cubes*************')
         if plot == 'show': 
             plot_frames((tmp_tmp_tmp[0],tmp[0],tmp_tmp[0]),vmin=(0,0,0), vmax = (1,16000,16000))
         if plot == 'save':
