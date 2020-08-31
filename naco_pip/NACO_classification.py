@@ -29,9 +29,17 @@ def find_AGPM_list(self, file_list, verbose = True, debug = False):
         This method will find the location of the AGPM
         (roughly the location of the star) 
         """
-        cube = open_fits(self.outpath + file_list[0])
-        nz, ny, nx = cube.shape
-        median_frame = np.median(cube, axis = 0)
+        ##### added by iain to fix AGPM location bug
+        size_sci_sky_cube = open_fits(self.outpath + file_list[0]) # opens first sci/sky cube
+        nz,ny,nx = size_sci_sky_cube.shape # gets size of it 
+        median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
+        for sc,fits_name in enumerate(file_list): # loops over all images 
+            tmp = open_fits(self.outpath + fits_name) # opens the cube  
+            median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array        
+        ######
+        #cube = open_fits(self.outpath + file_list[0])
+        #nz, ny, nx = cube.shape
+        median_frame = np.median(median_all_cubes, axis = 0)
         median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
         median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
         ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
@@ -199,38 +207,39 @@ class input_dataset():
 
     def find_sky_in_sci_cube(self, nres = 3, coro = True, verbose = True, plot = None, debug = False):
        """
-       Empty SKY list could be caused by a misclasification of the header in NACO data
+       Empty SKY list could be caused by a misclassification of the header in NACO data
        This method will check the flux of the SCI cubes around the location of the AGPM 
        A SKY cube should be less bright at that location allowing the seperation of cubes
        
        """
-
+       
        flux_list = []
        fname_list = []
        sci_list = []
-       with open(self.outpath+"sci_list.txt", "r") as f:
+       with open(self.outpath+"sci_list.txt", "r") as f: 
             tmp = f.readlines()
             for line in tmp:    
                 sci_list.append(line.split('\n')[0])
 
        sky_list = []
-       with open(self.outpath+"sky_list.txt", "r") as f:
+       with open(self.outpath+"sky_list.txt", "r") as f: 
             tmp = f.readlines()
             for line in tmp:
                 sky_list.append(line.split('\n')[0])
-                
+        
        self.resel = (fits_info.wavelength*180*3600)/(fits_info.size_telescope *np.pi*
                                                  fits_info.pixel_scale)
                 
        agpm_pos = find_AGPM_list(self, sci_list)
        if verbose: 
-           print('The rougth location of the star is','y  = ', agpm_pos[0] , 'x =', agpm_pos[1])
+           print('The rough location of the star is','y  = ', agpm_pos[0] , 'x =', agpm_pos[1])
 
        #create the aperture
        circ_aper = CircularAperture((agpm_pos[1],agpm_pos[0]), round(nres*self.resel))
+
        #total flux through the aperture
        for fname in sci_list:
-           cube_fname = open_fits(self.outpath + fname, verbose = debug)
+           cube_fname = open_fits(self.outpath + fname, verbose = debug) 
            median_frame = np.median(cube_fname, axis = 0)
            circ_aper_phot = aperture_photometry(median_frame,
                                                     circ_aper, method='exact')
@@ -240,9 +249,10 @@ class input_dataset():
            fname_list.append(fname)
            if verbose: 
                print('centre flux has been measured for', fname)
-
+       
        median_flux = np.median(flux_list)
        sd_flux = np.std(flux_list)
+
        if verbose:
            print('Sorting Sky from Sci')
 
@@ -260,12 +270,13 @@ class input_dataset():
        if plot:         
            plt.title('Normalised flux around star')
            plt.ylabel('normalised flux')
+           plt.xlabel('cube')
            if plot == 'save':
                plt.savefig(self.outpath + 'flux_plot')
            if plot == 'show':
                plt.show()
                          
-       with open(self.outpath+"sci_list.txt", "w") as f:
+       with open(self.outpath+"sci_list.txt", "w") as f: 
                 for sci in sci_list:
                     f.write(sci+'\n')
        with open(self.outpath+"sky_list.txt", "w") as f:
