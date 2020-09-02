@@ -8,26 +8,44 @@ Created on Thurs July 30 2020
 __author__ = 'Iain Hammond'
 __all__ = ['calib_dataset']
 
-import glob
+import pdb
 import numpy as np
+import pyprind
 import os
 import pathlib
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import cube_shift, cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_derotate
+from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation
 
 class calib_dataset():  #this class is for pre-processing of the calibrated data
-    def __init__(self, inpath, outpath, final_sz, fwhm, recenter_method, recenter_model, coro = True):
+    def __init__(self, inpath, outpath, final_sz, recenter_method, recenter_model, calib_npcs, coro = True):
         self.inpath = inpath
         self.outpath = outpath
         self.final_sz = final_sz 
-        self.fwhm = fwhm
-        self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits',verbose=verbose)
+        fwhm = open_fits(self.inpath+'fwhm.fits',verbose=True)[0] # changed this to open the file as sometimes we wont run get_stellar_psf() or it may have already run. fwhm is first entry in the file
+        self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits',verbose=True)
         self.recenter_method = recenter_method
         self.recenter_model = recenter_model 
+        self.calib_npcs = calib_npcs
+        self.sci_list = []
+        #get all the science cubes into a list
+        with open(self.inpath +"sci_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                self.sci_list.append(line.split('\n')[0])
+        self.sci_list.sort() # make sure they are in order so derotation doesn't make a mess of the frames
+        self.real_ndit_sci = [] 
+        for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
+            tmp = open_fits(self.inpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(self.calib_npcs)+fits_name, verbose=False)
+            self.real_ndit_sci.append(tmp.shape[0]) # gets length of each cube for later use       
         
-    def recenter(self, nproc = 1, sigfactor = 4, subi_size = 21,verbose = True, debug = False, plot = False, coro = True):  
+        
+    def recenter(self, nproc = 1, sigfactor = 4, subi_size = 21, verbose = True, debug = False, plot = False, coro = True):  
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined cube, and again by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined cube. 
+        
+        Parameters:
+        ***********  
+        
         method: '2dfit' or 'speckle'
         model: '2gauss','gauss', 'moff'
         nproc: number of CPUs
@@ -36,51 +54,63 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         verbose: True for False, to provide extra information about the progress and results of the pipeline
         plot: True or False, set to False when running on M3
         coro: True for coronagraph data. False otherwise
+        
+        Writes fits to file:
+        ***********  
+        x_shifts_{recenter_method}_{recenter_model}.fits # writes the x shifts to the file
+        y_shifts_{recenter_method}_{recenter_model}.fits # writes the y shifts to the file
+        master_cube_{recenter_method}_{recenter_model}.fits # makes the master cube
+        derot_angles_1d.fits # makes a vector of derotation angles
         """  	
+        
         if coro == False:
             if self.recenter_method != '2dfit':
                 raise ValueError('Recentering method invalid')
             if self.recenter_model == '2gauss':
-                raise ValueError('2Gauss requires coronagraphic data')
-
-	#get all the science cubes into a list
-        self.sci_list = []
-        with open(self.inpath +"sci_list.txt", "r") as f:
-            tmp = f.readlines()
-            for line in tmp:
-                self.sci_list.append(line.split('\n')[0])
+                raise ValueError('2Gauss requires coronagraphic data') 
         
-        self.sci_list.sort()
+
         
         if verbose:
         	print(len(self.sci_list),'science cubes')
         	print(self.sci_list)
         
-        ncubes = len(self.sci_list)      
+        ncubes = len(self.sci_list)     
+         
+        fwhm_all = open_fits(self.inpath+'fwhm.fits',verbose=debug) # changed this to open the file as sometimes we wont run get_stellar_psf() or it may have already run   
+        fwhm = fwhm_all[0] # fwhm is the first entry in the file 
+        fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
+        if verbose:
+            print('fwhm:',fwhm,'of type',type(fwhm)) 
         
         # Creates a master science cube with just the median of each cube
+        if verbose:        
+            print('Creating master science cube (median of each science cube)....')            
+            
+        bar = pyprind.ProgBar(len(self.sci_list), stream=1)    
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
-            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #open cube as tmp
+            tmp = open_fits(self.inpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(self.calib_npcs)+fits_name, verbose=debug) #open cube as tmp            
             if sc == 0: 
                 self.ndit, ny, nx = tmp.shape #dimensions of cube
                 tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube. np.zeros is array filled with zeros
             tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp 
-          
+            bar.update()         
+    
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN		
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts, optimal inner radius value when you fit an annulus
                 tmp_tmp,cube_sci_lpf,cube_stret,sx, sy,opt_rad = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
 				                                                alignment_iter = 5, gammaval = 1,
 				                                                min_spat_freq = 0.5, max_spat_freq = 3,
-				                                                fwhm = self.fwhm, debug = debug,
+				                                                fwhm = fwhm, debug = debug,
 				                                                recenter_median = True, negative = coro,
 				                                                fit_type='gaus', crop=False,subframesize = final_sz, 
 				                                                imlib='opencv',interpolation='lanczos4',plot=plot,full_output=True)	
         elif self.recenter_method == '2dfit':	
                 # DOUBLE GAUSSIAN          	
-                params_2g = {'fwhm_neg': 0.8*self.fwhm, 'fwhm_pos': 2*self.fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
-                res = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=self.fwhm, subi_size=subi_size,
-				                      model=self.model, nproc=nproc, imlib='opencv', 
+                params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
+                res = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
+				                      model=self.recenter_model, nproc=nproc, imlib='opencv', 
 				                      interpolation='lanczos4', offset=None, 
 				                      negative=False, threshold=True, sigfactor=sigfactor, 
 				                      fix_neg=False, params_2g=params_2g,
@@ -109,12 +139,12 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 #			                                        fix_neg=True, params_2g=params_2g,
 #			                                        save_shifts=False, full_output=True, 
 #			                                        verbose=verbose, debug=debug, plot=plot)		
-   		# LOAD IN REAL_NDIT_SCI
-	# Load original cubes, shift them, and create master cube
+   		# LOAD IN REAL_NDIT_SCI   		
+	    # Load original cubes, shift them, and create master cube
         tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore		   
         angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))]) # makes empty array for derot angles, length of number of frames 
         for sc, fits_name in enumerate(self.sci_list):
-            tmp = open_fits(self.inpath+fits_name, verbose=verbose) #opens science cube
+            tmp = open_fits(self.inpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(self.calib_npcs)+fits_name, verbose=debug) #opens science cube
             dim = int(self.real_ndit_sci[sc]) #gets the integer dimensions of this science cube
             for dd in range(dim): #dd goes from 0 to the largest dimension
                 tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv') #this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
@@ -144,7 +174,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
             print('\n')
             print('Beginning bad frame removal...')
             print('\n')
-        angle_file = open_fits(self.inpath+'derot_angles_1d.fits') #opens the rotation file
+        angle_file = open_fits(self.outpath+'derot_angles_1d.fits') #opens the rotation file
         recentered_cube = open_fits(self.outpath+"master_cube_{}_{}.fits".format(self.recenter_method,self.recenter_model)) # loads the master cube       
 	    
         #open x shifts file for the respective method
@@ -155,23 +185,26 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         y_shifts = open_fits(self.outpath+"y_shifts_{}_{}.fits".format(self.recenter_method,self.recenter_model))
         median_sy = np.median(y_shifts) #median of y shifts    
 	    
-        x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
-        y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
+        #x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
+        #y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
+        x_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
+        y_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
 
-        for i in range(len(self.sci_list)):
-                x_shifts_long[i*self.ndit:(i+1)*self.ndit] = x_shifts[i] # sets the average shifts of all frames in a cube 
-                y_shifts_long[i*self.ndit:(i+1)*self.ndit] = y_shifts[i]
+        for i in range(len(self.sci_list)): # from 0 to the length of sci_list
+            ndit = self.real_ndit_sci[i] # gets the dimensions of the cube
+            x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i] # sets the average shifts of all frames in that cube 
+            y_shifts_long[i*ndit:(i+1)*ndit] = y_shifts[i]
 
         if verbose:
-                write_fits(self.outpath+'x_shifts_long_{}_{}.fits'.format(self.recenter_method,self.recenter_model),x_shifts_long) # saves shifts to file
-                write_fits(self.outpath+'y_shifts_long_{}_{}.fits'.format(self.recenter_method,self.recenter_model),y_shifts_long)   
+            write_fits(self.outpath+'x_shifts_long_{}_{}.fits'.format(self.recenter_method,self.recenter_model),x_shifts_long) # saves shifts to file
+            write_fits(self.outpath+'y_shifts_long_{}_{}.fits'.format(self.recenter_method,self.recenter_model),y_shifts_long)   
         x_shifts = x_shifts_long
         y_shifts = y_shifts_long 
 	    
         if verbose:
-                print("x shift median:",median_sx)
-                print("y shift median:",median_sy)
-                print('Running pixel shift check...')
+            print("x shift median:",median_sx)
+            print("y shift median:",median_sy)
+            print('Running pixel shift check...')
 		    
         bad = []
         good = []
@@ -180,11 +213,11 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         i = 0 
         shifts = list(zip(x_shifts,y_shifts))
         for sx,sy in shifts: #iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
-                if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
-                    good.append(i)
-                else:   		
-                    bad.append(i)
-                i=i+1    
+            if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
+                good.append(i)
+            else:   		
+                bad.append(i)
+            i=i+1    
 	    
         # only keeps the files that weren't shifted above the threshold
         frames_pxl_threshold = recentered_cube[good]
@@ -193,8 +226,11 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         # only keeps the corresponding derotation entry for the frames that were kept
         angle_pxl_threshold = angle_file[good]
 	    
-        #makes array of good and bad frames from the recentered mastercube		                                              
-        tmp_median = np.median(frames_pxl_threshold, axis=0)  #median frame of cube of remaining frames
+        if verbose:
+	        print('########### Median combining {} frames for correlation check... ###########'.format(len(frames_pxl_threshold)))
+	    
+        #makes array of good frames from the recentered mastercube		                                              
+        tmp_median = np.median(frames_pxl_threshold, axis=0)  #median frame of remaining frames
 	
         if verbose:
             print('Running frame correlation check...')
@@ -205,10 +241,7 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 			                                                dist='pearson',
 			                                                threshold=correlation_thres,                                                                    
 			                                                plot=plot,
-			                                                verbose=verbose)
-	    
-        if verbose:
-            print('Kept',len(good_frames),'frames out of',len(self.sci_list)*self.ndit)
+			                                                verbose=verbose)       
 	    
         #only keeps the files that were above the correlation threshold
         frames_threshold = frames_pxl_threshold[good_frames]
@@ -222,10 +255,10 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'master_cube_{}_{}_good_frames.fits'.format(self.recenter_method,self.recenter_model), frames_threshold)  
         write_fits(self.outpath+'derot_angles_{}_{}_good_frames.fits'.format(self.recenter_method,self.recenter_model), angle_threshold)  
         if verbose: 
-                print('Saved good frames and their respective rotations to file')	
+            print('Saved good frames and their respective rotations to file')	
  
  
-    def median_binning(self, binning_factor=1):
+    def median_binning(self, binning_factor=(1,10)):
         """ 
         Median combines the frames within the master science cube as per the binning factor, and makes the necessary changes to the derotation file
         
@@ -235,12 +268,17 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         binning_factor: int
             Defines how many frames to median combine. Default = 1
                   
-        Writes to file:
+        Writes to fits file:
         ********
         master_cube_binned: the binned master cube
         derot_angles_binned: the binned derotation angles
              
         """
+        # need to take a int or tuple so we can have multiple binning factors
+        # need to check if correct format
+        # if = 1, then skip binning and save the frames with new name
+        # if single integer, run what i already have. if a list or tuple then run the new code 
+        
         try:
             master_cube = open_fits(self.outpath+'master_cube_{}_{}_good_frames.fits'.format(self.recenter_method,self.recenter_model), verbose = verbose)
             derot_angles = open_fits(self.outpath+'derot_angles_{}_{}_good_frames.fits'.format(self.recenter_method,self.recenter_model), verbose = verbose)

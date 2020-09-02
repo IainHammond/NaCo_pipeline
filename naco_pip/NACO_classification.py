@@ -24,11 +24,18 @@ import pdb
 #test = input_dataset('/home/lewis/Documents/Exoplanets/data_sets/HD179218/Tests/','/home/lewis/Documents/Exoplanets/data_sets/HD179218/Debug/')
 
 
-def find_AGPM_list(self, file_list, verbose = True, debug = False):
+def find_AGPM_list(self, file_list, rel_AGPM_pos = (y,x), coro = True, verbose = True, debug = False):
         """
         This method will find the location of the AGPM
         (roughly the location of the star) 
         """
+        
+        # add code for finding AGPM when coro = True, using relative position
+        
+        # if coro: 
+            # find central pixel with frame_center from vip.var
+            # then the position will be that plus the relative shift in y and x 
+            
         ##### added by iain to fix AGPM location bug
         size_sci_sky_cube = open_fits(self.outpath + file_list[0]) # opens first sci/sky cube
         nz,ny,nx = size_sci_sky_cube.shape # gets size of it 
@@ -212,7 +219,8 @@ class input_dataset():
        A SKY cube should be less bright at that location allowing the seperation of cubes
        
        """
-       
+       if coro!=True:
+           
        flux_list = []
        fname_list = []
        sci_list = []

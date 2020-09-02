@@ -513,7 +513,6 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         print('Mean pixel value of effected columns for all frames:',np.mean(median_pxl_val))
         
         values = []
-        column = []
         median_col_val = []
 
         for idx,fits_name in enumerate(sci_list): #loops over all images
@@ -525,10 +524,9 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             median_col_val.append(median)
             #empties the list for the next loop
             values.clear()
-            column.clear()
 
             if median_col_val[idx] < median_pxl_val[idx] - (1 * stddev[idx]): #if the median column values are 1 stddevs smaller, then correct them (good frames are consistent enough for 1 stddev to be safe)
-                print('*********Fixing bad column in frame {}*********'.format(sci_list[idx]))
+                print('*********Fixing bad column in frame {}*********'.format(fits_name))
                 cube_to_fix = open_fits(self.inpath+fits_name,verbose=False)
                 correct_cube = cube_fix_badpix_isolated(cube_to_fix,bpm_mask=mask,num_neig = 13,protect_mask = False,radius = 8,verbose = verbose, debug = debug)
                 write_fits(self.inpath+fits_name,correct_cube)
@@ -1090,10 +1088,11 @@ class raw_dataset():  #potentially change dico to a path to the writen list
 #        with open(self.outpath+"real_ndit_sky_list.txt", "w") as f:
 #            for dimension in self.real_ndit_sky:
 #                f.write(str(dimension)+'\n') 
-#        write_fits(self.outpath +'real_ndit_sci', np.array(real_ndit_sci))
-#        write_fits(self.outpath + 'real_ndit_sky', np.array(self.real_ndit_sky))
-        write_fits(self.outpath +'real_ndit_sci_sky',np.array([self.real_ndit_sci,self.real_ndit_sky]))        
+#        write_fits(self.outpath +'real_ndit_sci_sky',np.array([self.real_ndit_sci,self.real_ndit_sky]))  
 
+        write_fits(self.outpath +'real_ndit_sci.fits', np.array(self.real_ndit_sci))
+        write_fits(self.outpath + 'real_ndit_sky.fits', np.array(self.real_ndit_sky))
+        
         if verbose:
             print( "real_ndit_sky = ", self.real_ndit_sky)
             print( "real_ndit_sci = ", self.real_ndit_sci) 
@@ -1114,7 +1113,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             bar.update()
         tmp_flux_med = np.median(tmp_fluxes, axis=0)
         if verbose: 
-            print('total Flux in SCI frames has been measured')  
+            print('total Flux in SCI frames has been measured')
  
         #create a plot of the median flux in the frames 
         med_flux = np.median(tmp_flux_med)
@@ -1159,7 +1158,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         self.new_ndit_unsat = min(fits_info.ndit_unsat) - nfr_rm
         
         write_fits(self.outpath + 'new_ndit_sci_sky_unsat', np.array([self.new_ndit_sci,self.new_ndit_sky,self.new_ndit_unsat]) )
-  
+        
         if verbose:
             print( "The new number of frames in each SCI cube is: ", self.new_ndit_sci)
             print( "The new number of frames in each SKY cube is: ", self.new_ndit_sky)
@@ -1481,21 +1480,32 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                 sci_list.append(line.split('\n')[0])
         n_sci = len(sci_list)
         
+        # save sci_list.txt to outpath to be used in preproc
+        with open(self.outpath+"sci_list.txt", "w") as f:
+            for sci in sci_list:
+                f.write(sci+'\n')
+        
         if os.path.isfile(self.outpath + 'fwhm.fits') == False:
             raise NameError('FWHM of the star is not defined. Run: get_stellar_psf()')
         if os.path.isfile(self.outpath + '3_rmfr_' + sci_list[-1]) == False:
-            raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')
+            raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')        
         
-        self.final_sz = int(open_fits(self.outpath + 'final_sz')[0])
-        self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
-        self.new_ndit_sci = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[0])
-        self.new_ndit_sky = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat')[1])
-        self.real_ndit_sky = int(open_fits(self.outpath + 'real_ndit_sky'))[1]
+        self.final_sz = int(open_fits(self.outpath + 'final_sz')[0]) # just a single integer in this file to set as final_sz
+        self.com_sz = int(open_fits(self.outpath + 'common_sz')[0]) # just a single integer in this file to set as com_sz
+        
+        self.real_ndit_sky = []
+        for sk, fits_name in enumerate(sky_list):
+            tmp_cube = open_fits(self.outpath+'3_rmfr_'+fits_name, verbose=debug)
+            self.real_ndit_sky.append(tmp_cube.shape[0])
+        
+        self.new_ndit_sci = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[0]) # the new dimension of the unsaturated sci cube is the first entry
+        self.new_ndit_sky = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat')[1]) # the new dimension of the unsaturated sky cube is the second entry
+        # self.real_ndit_sky = int(open_fits(self.outpath + 'real_ndit_sky.fits')[0]) # i have a feeling this line doesn't need to exist since it's all saved with self
         #        with open(self.outpath+"real_ndit_sky_list.txt", "r") as f:
 #            tmp = f.readlines()
 #            for line in tmp:    
 #                self.real_ndit_sky.append(int(line.split('\n')[0]))  
-    
+        #pdb.set_trace()
         sky_list_mjd = []
         #get times of unsat cubes (modified jullian calander)
         for fname in sky_list:
@@ -1619,9 +1629,12 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
         shifts_xy_sky = np.zeros([ndust, n_sky, self.new_ndit_sky, 2])
         crop_sz = int(3*self.resel_ori)
-        
+        # to ensure crop size is odd. if its even, +1 to crop_sz
+        if crop_sz%2==0:
+            crop_sz+=1
+                    
         t0 = time_ini()
-    
+        #pdb.set_trace()
         # SCI frames
         bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
         for sc, fits_name in enumerate(sci_list):
@@ -1827,7 +1840,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                     for nn, npc_tmp in enumerate(nnpc):
                         tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
                                                                     mask_AGPM, ref_cube=None, ncomp=npc_tmp)
-                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug)
+                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug) # this should be the most common output of the final calibrated cubes
                         # measure mean(std) in all apertures in tmp_tmp, and record for each npc
                         std = np.zeros(ndust_all)
                         for dd in range(ndust_all):
@@ -1898,7 +1911,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         os.system("rm "+self.outpath+'common_sz.fits')
         os.system("rm "+self.outpath+'real_ndit_sci_sky.fits')
         os.system("rm "+self.outpath+'new_ndit_sci_sky_unsat.fits')
-        os.system("rm "+self.outpath+'fwhm.fits')
+        #os.system("rm "+self.outpath+'fwhm.fits') # not removing this as sometimes we'll need to open the fwhm.fits file in preproc 
         os.system("rm "+self.outpath+'final_sz.fits')
         os.system("rm "+self.outpath+'flat_dark_cube.fits')
         os.system("rm "+self.outpath+'master_bpix_map.fits')
