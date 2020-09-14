@@ -6,7 +6,7 @@ Created on Mon Apr  6 16:01:17 2020
 @author: lewis
 """
 __author__ = 'Lewis Picker'
-__all__ = ['find_shadow_list', 'raw_dataset', 'find_nearest', 'find_AGPM_list']
+__all__ = ['find_shadow_list', 'raw_dataset', 'find_nearest', 'find_filtered_max']
 import pdb
 import numpy as np
 import pyprind
@@ -37,7 +37,7 @@ from astropy.stats import sigma_clipped_stats
 
 def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = False, plot = None):
         """
-        In coro NACO data there is a lyot stop causeing a shadow on the detector
+        In coro NACO data there is a lyot stop causing a shadow on the detector
         this method will return the radius and cetral position of the circular shadow
         """
 
@@ -46,7 +46,7 @@ def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = Fal
         median_frame = np.median(cube, axis = 0)
         median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
         median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)#location of AGPM
+        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape) #location of AGPM
         if debug: 
             write_fits(self.outpath + 'shadow_median_frame', median_frame)
 
@@ -75,11 +75,12 @@ def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = Fal
             
         return cy, cx, r
     
-def find_AGPM_list(self, path , verbose = True, debug = False):
+def find_filtered_max(self, path, verbose = True, debug = False):
         """
-        This method will find the location of the AGPM
-        it gives a rough approxiamtion of the stars location
+        This method will find the location of the max after low pass filtering
+        it gives a rough approximation of the stars location
         Need to supply the path to the cube
+        from iain: this should only be used for non-coronagraphic data as it can pick dust specks as the star when an AGPM is dimming it
         """
         cube = open_fits(path)
         nz, ny, nx = cube.shape
@@ -90,12 +91,74 @@ def find_AGPM_list(self, path , verbose = True, debug = False):
         #obtain location of the bright source
         ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
         if verbose:
-            print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)
+            print('The location of the star is','ycom =',ycom,'xcom =', xcom)
         if debug:
             pdb.set_trace
         return [ycom, xcom]
+        
+def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), verbose = True, debug = False):
+        """
+        added by Iain to prevent dust grains being picked up as the AGPM
+        
+        This method will find the location of the AGPM when coro = True (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. Knowing the percentage of pixels in x and y the AGPM is located from the frame center, we can calculate it's location. With no coronagraph it uses the median images and a low pass filter
+        
+        Parameters
+        ----------
+        path : str
+            Path to cube
+                
+        rel_AGPM_pos_xy : tuple, float
+            relative location of the AGPM from the frame center. This is used to calcualte how many pixels in x and y the AGPM is from the center and can be applied to all datasets with VLT/NaCO as the AGPM is always in the same position (however frame sizes change), thus we can use this relative distance.      
 
-    
+        verbose : bool
+            If True extra messages are shown.
+        
+        debug : bool, False by default
+            Enters pdb once the location has been found
+            
+        Returns
+        ----------
+        [ycom, xcom] : location of AGPM        
+        """            
+        cube = open_fits(path) # opens first sci/sky cube
+        nz,ny,nx = cube.shape # gets size of it. science and sky cubes have same shape              
+   
+        cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
+        # then the position will be that plus the relative shift in y and x
+        rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+        rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+        ycom = cy + rel_shift_y
+        xcom = cx + rel_shift_x
+        if verbose:
+            print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)
+        
+        if debug:
+            pdb.set_trace()
+        return [ycom, xcom]
+
+#def find_AGPM_2_nan_corr(self, path, verbose = True, debug = False):
+#        """
+#        added by Iain to prevent dust grains being picked up as the AGPM
+#        
+#        Finding the AGPM with the cropped science cubes in correct_bad_pixels() (cant use relative method for this stage as the cubes are cropped)
+#        """        
+#        cube = open_fits(self.outpath + '2_nan_corr_' + sci_list[0]) # opens first sci cube
+#        nz,ny,nx = sci_cube.shape # gets size of it         
+#        
+#        median_all_cubes = np.zeros([len(file_list),ny,nx])  #makes empty array 
+#        for sc,fits_name in enumerate(file_list): # loops over all images 
+#            tmp = open_fits(self.outpath + '2_nan_corr_' + fits_name) # opens the cube  
+#            median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
+#        median_frame = np.median(median_all_cubes, axis = 0)
+#        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
+#        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+#        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+#        if verbose:
+#            print('The location of the AGPM/star during correct_bad_pixels is','ycom =',ycom,'xcom =', xcom)
+#        if debug:
+#            pdb.set_trace()
+#        return [ycom, xcom]
+
 def find_nearest(array, value, output='index', constraint=None):
     """
     Function to find the index, and optionally the value, of an array's closest element to a certain value.
@@ -136,6 +199,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         self.inpath = inpath
         self.outpath = outpath        
         self.final_sz = final_sz
+        self.coro = coro
         sci_list = []
         # get the common size (crop size)
         with open(self.inpath+"sci_list.txt", "r") as f:
@@ -146,7 +210,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         self.com_sz = np.array([int(nx - 1)])
         write_fits(self.outpath + 'common_sz', self.com_sz)
         #the size of the shadow in NACO data should be constant.
-        #will differ for NACO data where the choronograph has been adjusted
+        #will differ for NACO data where the coronagraph has been adjusted
         self.shadow_r = 280 
         
         
@@ -292,13 +356,17 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         if verbose:
             print('Unsat dark cubes have been cropped and saved')
         
-        #defining the mask for the sky/sci pCA dark subtraction
+        #defining the mask for the sky/sci pca dark subtraction
         cy, cx, self.shadow_r = find_shadow_list(self, sci_list)
         self.shadow_pos = [cy,cx]
-        self.agpm_pos = find_AGPM_list(self, self.inpath + sci_list[0])
+        if self.coro:
+            self.agpm_pos = find_AGPM(self, self.inpath + sci_list[0]) 
+        else: 
+            raise ValueError('Pipeline does not handle non-coronagraphic data here yet')            
+
         mask_AGPM_com = np.ones([self.com_sz,self.com_sz])
         cy,cx = frame_center(mask_AGPM_com)        
-        #the shift betwen the AGMP and the centre of the lyot stop
+        #the shift betwen the AGPM and the centre of the lyot stop
         self.agpm_shadow_shift = [self.agpm_pos[0] - self.shadow_pos[0],self.agpm_pos[1] - self.shadow_pos[1]]
 
         inner_rad = 3/pixel_scale
@@ -313,9 +381,9 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         mask_AGPM_flat = np.ones([self.com_sz,self.com_sz])
         
         if verbose:
-            print('The mask for flatfeilds have been defined')
+            print('The mask for flatfields have been defined')
       
-        #now begin the dark subtraction useing PCA
+        #now begin the dark subtraction using PCA
         npc_dark=1 #The ideal number of components to consider in PCA
        
         #coordinate system for pca subraction
@@ -535,7 +603,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
 
     def flat_field_correction(self, verbose = True, debug = False, plot = None, remove = False):
         """
-        Scaling of the Cubes with according the the FLATS, in order to minimise any bias in the pixels
+        Scaling of the cubes with according the the FLATS, in order to minimise any bias in the pixels
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, Flase. Cleans file for unused fits
         """
@@ -846,7 +914,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             plot_frames((bpix_map, bpix_map_unsat))
         
         #update final crop size
-        self.agpm_pos = find_AGPM_list(self, self.outpath + '2_nan_corr_' + sci_list[0])
+        self.agpm_pos = find_AGPM(self, self.outpath + '2_nan_corr_' + sci_list[0]) # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0]) 
         self.agpm_pos = [self.agpm_pos[1],self.agpm_pos[0]]
         self.final_sz = self.get_final_sz(self.final_sz)
         write_fits(self.outpath + 'final_sz', np.array([self.final_sz]))
@@ -884,9 +952,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         bpix_map = frame_crop(bpix_map,self.final_sz,cenxy=self.agpm_pos, force = True)
         write_fits(self.outpath+'master_bpix_map_2ndcrop.fits', bpix_map)
         
-        self.agpm_pos = find_AGPM_list(self, self.outpath + '2_crop_' + sci_list[0])
-        self.agpm_pos = [self.agpm_pos[1],self.agpm_pos[0]]
-        
+        #self.agpm_pos = find_filtered_max(self, self.outpath + '2_crop_' + sci_list[0])
+        #self.agpm_pos = [self.agpm_pos[1],self.agpm_pos[0]]        
         
         t0 = time_ini()
         for sc, fits_name in enumerate(sci_list):
@@ -1151,7 +1218,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             self.real_ndit_sci[zz] = min(self.real_ndit_sci[zz] - nfr_rm, min(fits_info.ndit_sci) - nfr_rm)
         min_ndit_sky = min(self.real_ndit_sky)
         for zz in range(len(self.real_ndit_sky)):
-            self.real_ndit_sky[zz] = min_ndit_sky  - nfr_rm
+            self.real_ndit_sky[zz] = min_ndit_sky - nfr_rm       
         
         self.new_ndit_sci = min(fits_info.ndit_sci) - nfr_rm
         self.new_ndit_sky = min(fits_info.ndit_sky) - nfr_rm
@@ -1329,7 +1396,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         unsat_pos = []
         #obtain star positions in the unsat frames
         for fits_name in unsat_list:
-            tmp = find_AGPM_list(self, self.outpath + '3_rmfr_unsat_' + fits_name , verbose = True, debug = False)
+            tmp = find_filtered_max(self, self.outpath + '3_rmfr_unsat_' + fits_name)
             unsat_pos.append(tmp)
             
         self.resel_ori = fits_info.wavelength*206265/(fits_info.size_telescope*fits_info.pixel_scale)
@@ -1454,17 +1521,18 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             print( flux_unsat,flux_psf)
             
         
-    def subtract_sky(self, imlib = 'opencv', npc = [1], mode = 'PCA', verbose = True, debug = False, plot = None, remove = False):
+    def subtract_sky(self, imlib = 'opencv', npc = None, mode = 'PCA', verbose = True, debug = False, plot = None, remove = False):
         """
         Sky subtraction of the science cubes 
         imlib : string: 'ndimage-interp', 'opencv'
         mode : string: 'PCA', 'median'
-        npc : list, None
+        npc : list, None, integer
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, Flase. Cleans file for unused fits
         """
         
         #set up a check for necessary files
+        t0 = time_ini()
         
         sky_list = []
         with open(self.inpath +"sky_list.txt", "r") as f:
@@ -1633,7 +1701,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         if crop_sz%2==0:
             crop_sz+=1
                     
-        t0 = time_ini()
+        #t0 = time_ini()
         #pdb.set_trace()
         # SCI frames
         bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
@@ -1673,7 +1741,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                     shifts_xy_sky[dd,sk,zz,0] = xy_cube0[dd,0] - x_tmp 
                     shifts_xy_sky[dd,sk,zz,1] = xy_cube0[dd,1] - y_tmp
             bar.update()
-        time_fin(t0)
+        #time_fin(t0)
         
         
         #try to debug the fit, check dust pos
@@ -1748,7 +1816,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             if plot == 'save': 
                 plot_frames((old_tmp,old_tmp_tmp,tmp,tmp_tmp), save = self.outpath + 'SCI_median_sky_subtraction')
                 
-         ############## PCA ##############
+        ############## PCA ##############
          
         if mode == 'PCA':            
             master_skies2 = np.zeros([n_sky,self.final_sz,self.final_sz])
@@ -1782,96 +1850,143 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                 plot_frames((tmp,mask_AGPM),vmin = (0,0), vmax = (20000,1), save = self.outpath + 'PCA_sky_subtract_mask')
                 
             if verbose: 
-                print('Begining PCA subtraction')
-            if npc is None:
-                #nnpc_tmp = np.array([1,2,3,4,5,10,20,40,60])
-                nnpc_tmp = np.array([1,2])
-                nnpc = np.array([pc for pc in nnpc_tmp if pc < n_sky*self.new_ndit_sky])
-                npc_opt = np.zeros(len(sci_list))
-                bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
-                for sc, fits_name in enumerate(sci_list):
-                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
-                    sc_time = head['MJD-OBS']
-                    idx_sky = find_nearest(master_sky_times,sc_time)
-                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
-                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
-                    med_sky = np.median(pca_lib,axis=0)
-                    mean_std = np.zeros(nnpc.shape[0])
-                    hmean_std = np.zeros(nnpc.shape[0])
-                    for nn, npc_tmp in enumerate(nnpc):
-                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
-                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
-                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug)
-                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
-                        std = np.zeros(ndust_all)
-                        for dd in range(ndust_all):
-                            std[dd] = np.std(get_circle(np.median(tmp_tmp,axis=0), 3*self.fwhm, mode = 'val', 
-                                                                cy=dust_xy_all[dd][1], cx=dust_xy_all[dd][0]))
-                        mean_std[nn] = np.mean(std)
-                        std_sort = np.sort(std)
-                        hmean_std[nn] = np.mean(std_sort[int(ndust_all/2.):])
-                    npc_opt[sc] = nnpc[np.argmin(hmean_std)]
-                    if verbose:
-                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
-                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
-                    if remove:
-                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
-                        for npc_bad in nnpc_bad:
-                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
-                            os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
-                    else: 
-                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
-
-                    bar.update()
-                write_fits(self.outpath+"TMP_npc_opt.fits",npc_opt)
-            if type(npc) is list:
-                nnpc = np.array([pc for pc in npc if pc < n_sky*self.new_ndit_sky])
-                npc_opt = np.zeros(len(sci_list))
-                bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
-                for sc, fits_name in enumerate(sci_list):
-                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
-                    sc_time = head['MJD-OBS']
-                    idx_sky = find_nearest(master_sky_times,sc_time)
-                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
-                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
-                    med_sky = np.median(pca_lib,axis=0)
-                    mean_std = np.zeros(nnpc.shape[0])
-                    hmean_std = np.zeros(nnpc.shape[0])
-                    for nn, npc_tmp in enumerate(nnpc):
-                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
-                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
-                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug) # this should be the most common output of the final calibrated cubes
-                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
-                        std = np.zeros(ndust_all)
-                        for dd in range(ndust_all):
-                            std[dd] = np.std(get_circle(np.median(tmp_tmp,axis=0), 3*self.fwhm, mode = 'val', 
-                                                                cy=dust_xy_all[dd][1], cx=dust_xy_all[dd][0]))
-                        mean_std[nn] = np.mean(std)
-                        std_sort = np.sort(std)
-                        hmean_std[nn] = np.mean(std_sort[int(ndust_all/2.):])
-                    npc_opt[sc] = nnpc[np.argmin(hmean_std)]
-                    if verbose:
-                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
-                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
-                    if remove:
-                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
-                        os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
-                        for npc_bad in nnpc_bad:
-                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
-                    else: 
-                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
-                    bar.update()
-                write_fits(self.outpath+"TMP_npc_opt.fits",npc_opt)
+                print('Beginning PCA subtraction')
+            
+            if npc is None or isinstance(npc,list): # checks whether none or list
+                if npc is None:
+                    nnpc_tmp = np.array([1,2,3,4,5,10,20,40,60]) # the number of principle components to test 
+                    #nnpc_tmp = np.array([1,2]) 
+                else:
+                    nnpc_tmp = npc # takes the list
+                nnpc = np.array([pc for pc in nnpc_tmp if pc < n_sky*self.new_ndit_sky]) # no idea                
                 
-            else:
-                bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
-                for sc, fits_name in enumerate(sci_list_test):
-                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
-                    tmp_tmp = cube_subtract_sky_pca(tmp, all_skies_imlib, mask_AGPM, ref_cube=None, ncomp=npc)
-                    write_fits(self.outpath+'4_sky_subtr_imlib_'+fits_name, tmp_tmp, verbose=debug)
-                    bar.update()
-                    if remove:
-                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
+                ################### start new stuff
+                
+                test_idx = [0,int(len(sci_list)/2),len(sci_list)-1] # first, middle and last index in science list
+                npc_opt = np.zeros(len(test_idx)) # array of zeros the length of the number of test cubes
+                
+                for sc,fits_idx in enumerate(test_idx): # iterate over the 3 indices 
+                    _, head = open_fits(self.inpath+sci_list[fits_idx], verbose=debug, header=True) # open the cube and get the header
+                    sc_time = head['MJD-OBS'] # read this part of the header, float with the start time? 
+                    idx_sky = find_nearest(master_sky_times,sc_time) # finds the corresponding cube using the time
+                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+ sci_list[fits_idx], verbose=debug) # opens science cube 
+                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))] # gets the sky cube? 
+                    med_sky = np.median(pca_lib,axis=0) # takes median of the sky cubes
+                    mean_std = np.zeros(nnpc.shape[0]) # zeros array with length the number of principle components to test
+                    hmean_std = np.zeros(nnpc.shape[0]) # same as above for some reason? 
+                    for nn, npc_tmp in enumerate(nnpc): # iterate over the number of principle components to test 
+                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
+                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp) # runs PCA sky subtraction
+                        #write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+sci_list[fits_idx], tmp_tmp, verbose=debug)
+                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
+                        std = np.zeros(ndust_all) # zeros array the length of the number of dust objects
+                        for dd in range(ndust_all): # iterate over the number of dust specks 
+                            std[dd] = np.std(get_circle(np.median(tmp_tmp,axis=0), 3*self.fwhm, mode = 'val', 
+                                                                cy=dust_xy_all[dd][1], cx=dust_xy_all[dd][0])) # standard deviation of the values in a circle around the dust in median sky cube?? 
+                        mean_std[nn] = np.mean(std) # mean of standard dev for that PC 
+                        std_sort = np.sort(std) # sort std from smallest to largest? 
+                        hmean_std[nn] = np.mean(std_sort[int(ndust_all/2.):]) # takes the mean of the higher std for second half of the dust specks? 
+                    npc_opt[sc] = nnpc[np.argmin(hmean_std)] # index of the lowest standard deviation? 
+                    if verbose:
+                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))     
+                npc = int(np.median(npc_opt))
+                if verbose:
+                    print('##### Optimal number of principle components for sky subtraction:',npc,'#####')
+                with open(self.outpath+"npc_sky_subtract.txt", "w") as f:
+                    f.write('{}'.format(npc))
+                write_fits(self.outpath+"TMP_npc_opt.fits",npc_opt)
+                ################ end new stuff
+                
+                
+#                bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
+#                for sc, fits_name in enumerate(sci_list):
+#                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
+#                    sc_time = head['MJD-OBS']
+#                    idx_sky = find_nearest(master_sky_times,sc_time)
+#                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
+#                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
+#                    med_sky = np.median(pca_lib,axis=0)
+#                    mean_std = np.zeros(nnpc.shape[0])
+#                    hmean_std = np.zeros(nnpc.shape[0])
+#                    for nn, npc_tmp in enumerate(nnpc):
+#                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
+#                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
+#                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug)
+#                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
+#                        std = np.zeros(ndust_all)
+#                        for dd in range(ndust_all):
+#                            std[dd] = np.std(get_circle(np.median(tmp_tmp,axis=0), 3*self.fwhm, mode = 'val', 
+#                                                                cy=dust_xy_all[dd][1], cx=dust_xy_all[dd][0]))
+#                        mean_std[nn] = np.mean(std)
+#                        std_sort = np.sort(std)
+#                        hmean_std[nn] = np.mean(std_sort[int(ndust_all/2.):])
+#                    npc_opt[sc] = nnpc[np.argmin(hmean_std)]
+##                    if verbose:
+##                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
+#                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
+#                    if remove:
+#                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
+#                        for npc_bad in nnpc_bad:
+#                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
+#                            os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+#                    else: 
+#                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+
+#                    bar.update()
+
+#            if type(npc) is list:
+#                nnpc = np.array([pc for pc in npc if pc < n_sky*self.new_ndit_sky])
+#                npc_opt = np.zeros(len(sci_list))
+#                bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
+#                for sc, fits_name in enumerate(sci_list):
+#                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
+#                    sc_time = head['MJD-OBS']
+#                    idx_sky = find_nearest(master_sky_times,sc_time)
+#                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
+#                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
+#                    med_sky = np.median(pca_lib,axis=0)
+#                    mean_std = np.zeros(nnpc.shape[0])
+#                    hmean_std = np.zeros(nnpc.shape[0])
+#                    for nn, npc_tmp in enumerate(nnpc):
+#                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, 
+#                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
+#                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug) # this should be the most common output of the final calibrated cubes
+#                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
+#                        std = np.zeros(ndust_all)
+#                        for dd in range(ndust_all):
+#                            std[dd] = np.std(get_circle(np.median(tmp_tmp,axis=0), 3*self.fwhm, mode = 'val', 
+#                                                                cy=dust_xy_all[dd][1], cx=dust_xy_all[dd][0]))
+#                        mean_std[nn] = np.mean(std)
+#                        std_sort = np.sort(std)
+#                        hmean_std[nn] = np.mean(std_sort[int(ndust_all/2.):])
+#                    npc_opt[sc] = nnpc[np.argmin(hmean_std)]
+#                    if verbose:
+#                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
+#                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
+#                    if remove:
+#                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
+#                        os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+#                        for npc_bad in nnpc_bad:
+#                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
+#                    else: 
+#                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+#                    bar.update()
+#                write_fits(self.outpath+"TMP_npc_opt.fits",npc_opt)
+                
+           # else: # goes into this loop after it has found the optimal number of pcs
+            bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with PCA')
+            for sc, fits_name in enumerate(sci_list): # previously sci_list_test
+                _, head = open_fits(self.inpath+sci_list[sc], verbose=debug, header=True) # open the cube and get the header
+                sc_time = head['MJD-OBS'] # read this part of the header, float with the start time? 
+                idx_sky = find_nearest(master_sky_times,sc_time) # finds the corresponding cube using the time
+                tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+ sci_list[sc], verbose=debug) # opens science cube 
+                pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))] # gets the sky cube? 
+                med_sky = np.median(pca_lib,axis=0) # takes median of the sky cubes                    
+                tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky, mask_AGPM, ref_cube=None, ncomp=npc)
+                write_fits(self.outpath+'4_sky_subtr_imlib_'+fits_name, tmp_tmp, verbose=debug)
+                bar.update()
+                if remove:
+                    os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
                         
             if verbose:
                 print('Finished PCA dark subtraction')
@@ -1902,7 +2017,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                     if plot == 'save': 
                         plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), save = self.outpath + 'SCI_PCA_dark_subtraction')
                         
-                        
+        time_fin(t0)
     def clean_fits(self, debug = False, verbose = True):
         """
         Use this method to clean for any intermediate fits files
