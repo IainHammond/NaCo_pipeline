@@ -3,10 +3,10 @@
 """
 Created on Mon Mar 16 15:48:04 2020
 
-@author: lewis
+@author: lewis, iain
 """
-__author__ = 'Lewis Picker'
-__all__ = ['input_dataset','find_AGPM_list']
+__author__ = 'Lewis Picker, Iain Hammond'
+__all__ = ['input_dataset','find_AGPM_or_star']
 import matplotlib as mpl
 mpl.use('Agg')
 from matplotlib import pyplot as plt
@@ -17,49 +17,69 @@ import numpy as np
 from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
-from vip_hci.var import frame_filter_lowpass
+from vip_hci.var import frame_filter_lowpass, frame_center
 from naco_pip import fits_info
 import pdb
 
-#test = input_dataset('/home/lewis/Documents/Exoplanets/data_sets/HD179218/Tests/','/home/lewis/Documents/Exoplanets/data_sets/HD179218/Debug/')
-
-
-def find_AGPM_list(self, file_list, rel_AGPM_pos = (y,x), coro = True, verbose = True, debug = False):
+def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), coro = True, verbose = True, debug = False):
         """
-        This method will find the location of the AGPM
-        (roughly the location of the star) 
-        """
+        added by Iain to prevent dust grains being picked up as the AGPM
         
-        # add code for finding AGPM when coro = True, using relative position
+        This method will find the location of the AGPM when coro = True (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. Knowing the percentage of pixels in x and y the AGPM is located from the frame center, we can calculate it's location. With no coronagraph it uses the median images and a low pass filter
         
-        # if coro: 
-            # find central pixel with frame_center from vip.var
-            # then the position will be that plus the relative shift in y and x 
+        Parameters
+        ----------
+        file_list : list of str
+            List containing all science cube names
+                
+        rel_AGPM_pos_xy : tuple, float
+            relative location of the AGPM from the frame center in pixels. This is used to calcualte how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets with VLT/NaCO as the AGPM is always in the same position (however frame sizes change), thus we can use this relative distance.
+
+        coro : bool
+            True for coronagraph data, False otherwise
+        verbose : bool
+            If True extra messages are shown.
+        
+        debug : bool, False by default
+            Enters pdb once the location has been found
             
-        ##### added by iain to fix AGPM location bug
-        size_sci_sky_cube = open_fits(self.outpath + file_list[0]) # opens first sci/sky cube
-        nz,ny,nx = size_sci_sky_cube.shape # gets size of it 
-        median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
-        for sc,fits_name in enumerate(file_list): # loops over all images 
-            tmp = open_fits(self.outpath + fits_name) # opens the cube  
-            median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array        
-        ######
-        #cube = open_fits(self.outpath + file_list[0])
-        #nz, ny, nx = cube.shape
-        median_frame = np.median(median_all_cubes, axis = 0)
-        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
-        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-        if verbose:
-            print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)
+        Returns
+        ----------
+        [ycom, xcom] : location of AGPM or star        
+        """            
+        sci_cube = open_fits(self.inpath + file_list[0]) # opens first sci/sky cube
+        nz,ny,nx = sci_cube.shape # gets size of it. science and sky cubes have same shape       
+        
+        if coro: 
+            cy,cx = frame_center(sci_cube, verbose = verbose) #find central pixel coordinates
+            # then the position will be that plus the relative shift in y and x
+            rel_shift_x = rel_AGPM_pos_xy[0] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+            rel_shift_y = rel_AGPM_pos_xy[1] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+            ycom = cy + rel_shift_y
+            xcom = cx + rel_shift_x
+            if verbose:
+                print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)        
+        else:
+            median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
+            for sc,fits_name in enumerate(file_list): # loops over all images 
+                tmp = open_fits(self.inpath + fits_name) # opens the cube  
+                median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
+            median_frame = np.median(median_all_cubes, axis = 0)
+            median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
+            median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+            ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+            if verbose:
+                print('The location of the star during dark_subtract is','ycom =',ycom,'xcom =', xcom)
         if debug:
             pdb.set_trace()
         return [ycom, xcom]
 
+
 class input_dataset():
-    def __init__(self, inpath, outpath,coro= True): 
+    def __init__(self, inpath, outpath, coro = True): 
         self.inpath = inpath
         self.outpath = outpath
+        self.coro = coro
         old_list = os.listdir(self.inpath)
         self.file_list = [file for file in  old_list if file.endswith('.fits')]        
         self.dit_sci = fits_info.dit_sci
@@ -152,7 +172,7 @@ class input_dataset():
                        header['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
                        header['HIERARCH ESO DET DIT'] == self.dit_sci and \
                            header['HIERARCH ESO DET NDIT'] in self.ndit_sci and\
-                        cube.shape[0] > 2/3*min(self.ndit_sci): #avoid bad cubes
+                        cube.shape[0] > 0.8*min(self.ndit_sci): #avoid bad cubes
                             
                         sci_list.append(fname)
                         sci_list_mjd.append(header['MJD-OBS'])
@@ -163,7 +183,7 @@ class input_dataset():
                          header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
                         header['HIERARCH ESO DET DIT'] == self.dit_sci and\
                         header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and\
-                       cube.shape[0] > 2/3*min(self.ndit_sky): #avoid bad cubes
+                       cube.shape[0] > 0.8*min(self.ndit_sky): #avoid bad cubes
                        sky_list.append(fname)
                        sky_frames.append(cube.shape[0])
                        
@@ -219,7 +239,7 @@ class input_dataset():
        A SKY cube should be less bright at that location allowing the seperation of cubes
        
        """
-       if coro!=True:
+       #if coro!=True:
            
        flux_list = []
        fname_list = []
@@ -238,9 +258,9 @@ class input_dataset():
        self.resel = (fits_info.wavelength*180*3600)/(fits_info.size_telescope *np.pi*
                                                  fits_info.pixel_scale)
                 
-       agpm_pos = find_AGPM_list(self, sci_list)
+       agpm_pos = find_AGPM_or_star(self, sci_list)
        if verbose: 
-           print('The rough location of the star is','y  = ', agpm_pos[0] , 'x =', agpm_pos[1])
+           print('The rough location of the star/AGPM is','y  = ', agpm_pos[0] , 'x =', agpm_pos[1])
 
        #create the aperture
        circ_aper = CircularAperture((agpm_pos[1],agpm_pos[0]), round(nres*self.resel))
