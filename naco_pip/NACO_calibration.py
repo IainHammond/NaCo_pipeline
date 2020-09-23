@@ -6,7 +6,8 @@ Created on Mon Apr  6 16:01:17 2020
 @author: lewis
 """
 __author__ = 'Lewis Picker'
-__all__ = ['find_shadow_list', 'raw_dataset', 'find_nearest', 'find_filtered_max']
+#__all__ = ['find_shadow_list', 'raw_dataset', 'find_nearest', 'find_filtered_max']
+__all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
 import pdb
 import numpy as np
 import pyprind
@@ -21,7 +22,7 @@ from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift,\
 cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated,cube_fix_badpix_clump,\
 cube_recenter_2dfit
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass,\
-mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle
+mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
 from vip_hci.metrics import detection, normalize_psf
 from vip_hci.conf import time_ini, time_fin, timing
 from hciplot import plot_frames
@@ -35,56 +36,68 @@ from astropy.stats import sigma_clipped_stats
 #test = raw_dataset('/home/lewis/Documents/Exoplanets/data_sets/HD179218/Tests/', '/home/lewis/Documents/Exoplanets/data_sets/HD179218/Debug/')
 
 
-def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = False, plot = None):
-        """
-        In coro NACO data there is a lyot stop causing a shadow on the detector
-        this method will return the radius and cetral position of the circular shadow
-        """
+#def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = False, plot = None):
+#        """
+#        In coro NACO data there is a lyot stop causing a shadow on the detector
+#        this method will return the radius and central position of the circular shadow
+#        """
 
-        cube = open_fits(self.inpath + file_list[0])
-        nz, ny, nx = cube.shape
-        median_frame = np.median(cube, axis = 0)
-        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
-        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape) #location of AGPM
-        if debug: 
-            write_fits(self.outpath + 'shadow_median_frame', median_frame)
+#        cube = open_fits(self.inpath + file_list[0])
+#        nz, ny, nx = cube.shape
+#        median_frame = np.median(cube, axis = 0)
+#        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
+#        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+#        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape) #location of AGPM
+#        if debug: 
+#            write_fits(self.outpath + 'shadow_median_frame', median_frame)
 
-        shadow = np.where(median_frame >threshold, 1, 0) #lyot shadow
-        #create simmilar shadow centred at the origin
-        area = sum(sum(shadow))
-        r = np.sqrt(area/np.pi)
-        tmp = np.zeros([ny,nx])
-        tmp = mask_circle(tmp,radius = r, fillwith = 1)
-        tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2 )
-        #measure translation 
-        shift_yx, _, _ = register_translation(tmp, shadow,
-                                      upsample_factor= 100)
-        #express as a coordinate
-        y, x = shift_yx
-        cy = np.round(ycom-y)
-        cx = np.round(xcom-x)
-        if debug:
-            pdb.set_trace()
-        if verbose:
-            print('The centre of the shadow is','cy = ',y,'cx = ',cx)
-        if plot == 'show':
-            plot_frames((median_frame, shadow, tmp))
-        if plot == 'save': 
-            plot_frames((median_frame, shadow, tmp), save = self.outpath + 'shadow_fit')
-            
-        return cy, cx, r
+#        shadow = np.where(median_frame >threshold, 1, 0) #lyot shadow
+#        #create similar shadow centred at the origin
+#        area = sum(sum(shadow))
+#        r = np.sqrt(area/np.pi)
+#        tmp = np.zeros([ny,nx])
+#        tmp = mask_circle(tmp,radius = r, fillwith = 1)
+#        tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2 )
+#        #measure translation 
+#        shift_yx, _, _ = register_translation(tmp, shadow,
+#                                      upsample_factor= 100)
+#        #express as a coordinate
+#        y, x = shift_yx
+#        cy = np.round(ycom-y)
+#        cx = np.round(xcom-x)
+#        if debug:
+#            pdb.set_trace()
+#        if verbose:
+#            print('The centre of the shadow is','cy = ',y,'cx = ',cx)
+#        if plot == 'show':
+#            plot_frames((median_frame, shadow, tmp))
+#        if plot == 'save': 
+#            plot_frames((median_frame, shadow, tmp), save = self.outpath + 'shadow_fit')
+#            
+#        return cy, cx, r
     
-def find_filtered_max(self, path, verbose = True, debug = False):
+def find_filtered_max(self, path, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
         """
         This method will find the location of the max after low pass filtering
         it gives a rough approximation of the stars location
         Need to supply the path to the cube
-        from iain: this should only be used for non-coronagraphic data as it can pick dust specks as the star when an AGPM is dimming it
+         
         """
         cube = open_fits(path)
-        nz, ny, nx = cube.shape
+        #nz, ny, nx = cube.shape
+        #cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
+        
+        # then the position will be that plus the relative shift in y and x
+        #rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+        #rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+       
+        #y_tmp = cy + rel_shift_y 
+        #x_tmp = cx + rel_shift_x
+                
         median_frame = np.median(cube, axis = 0)
+        # define a square of 100 x 100 with the center being the approximate AGPM/star position
+        #median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True) 
+        # apply low pass filter
         #filter for the brightest source 
         median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
         median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
@@ -96,11 +109,11 @@ def find_filtered_max(self, path, verbose = True, debug = False):
             pdb.set_trace
         return [ycom, xcom]
         
-def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), verbose = True, debug = False):
+def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
         """
         added by Iain to prevent dust grains being picked up as the AGPM
         
-        This method will find the location of the AGPM when coro = True (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. Knowing the percentage of pixels in x and y the AGPM is located from the frame center, we can calculate it's location. With no coronagraph it uses the median images and a low pass filter
+        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a subset square image around the expected location and applies a low pass filter + max search method and returns the (y,x) location of the AGPM/star
         
         Parameters
         ----------
@@ -108,7 +121,10 @@ def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), verbose = True, debug =
             Path to cube
                 
         rel_AGPM_pos_xy : tuple, float
-            relative location of the AGPM from the frame center. This is used to calcualte how many pixels in x and y the AGPM is from the center and can be applied to all datasets with VLT/NaCO as the AGPM is always in the same position (however frame sizes change), thus we can use this relative distance.      
+            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets with VLT/NaCO as the AGPM is always in the same approximate position
+            
+        size : int
+            pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
 
         verbose : bool
             If True extra messages are shown.
@@ -118,7 +134,7 @@ def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), verbose = True, debug =
             
         Returns
         ----------
-        [ycom, xcom] : location of AGPM        
+        [ycom, xcom] : location of AGPM or star        
         """            
         cube = open_fits(path) # opens first sci/sky cube
         nz,ny,nx = cube.shape # gets size of it. science and sky cubes have same shape              
@@ -127,37 +143,27 @@ def find_AGPM(self, path, rel_AGPM_pos_xy = (50.5, 6.5), verbose = True, debug =
         # then the position will be that plus the relative shift in y and x
         rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
         rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-        ycom = cy + rel_shift_y
-        xcom = cx + rel_shift_x
-        if verbose:
-            print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)
+        #the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations 
+        y_tmp = cy + rel_shift_y 
+        x_tmp = cx + rel_shift_x
+        median_frame = cube[-1]
         
+        # define a square of 100 x 100 with the center being the approximate AGPM/star position
+        median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True) 
+        # apply low pass filter
+        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
+        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+        # find coordiates of max flux in the square
+        ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+        # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
+        ycom = cornery+ycom_tmp
+        xcom = cornerx+xcom_tmp
+        
+        if verbose:
+            print('The location of the AGPM/star is','ycom =',ycom,'xcom =', xcom)
         if debug:
             pdb.set_trace()
         return [ycom, xcom]
-
-#def find_AGPM_2_nan_corr(self, path, verbose = True, debug = False):
-#        """
-#        added by Iain to prevent dust grains being picked up as the AGPM
-#        
-#        Finding the AGPM with the cropped science cubes in correct_bad_pixels() (cant use relative method for this stage as the cubes are cropped)
-#        """        
-#        cube = open_fits(self.outpath + '2_nan_corr_' + sci_list[0]) # opens first sci cube
-#        nz,ny,nx = sci_cube.shape # gets size of it         
-#        
-#        median_all_cubes = np.zeros([len(file_list),ny,nx])  #makes empty array 
-#        for sc,fits_name in enumerate(file_list): # loops over all images 
-#            tmp = open_fits(self.outpath + '2_nan_corr_' + fits_name) # opens the cube  
-#            median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
-#        median_frame = np.median(median_all_cubes, axis = 0)
-#        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
-#        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-#        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-#        if verbose:
-#            print('The location of the AGPM/star during correct_bad_pixels is','ycom =',ycom,'xcom =', xcom)
-#        if debug:
-#            pdb.set_trace()
-#        return [ycom, xcom]
 
 def find_nearest(array, value, output='index', constraint=None):
     """
@@ -211,7 +217,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         write_fits(self.outpath + 'common_sz', self.com_sz)
         #the size of the shadow in NACO data should be constant.
         #will differ for NACO data where the coronagraph has been adjusted
-        self.shadow_r = 280 
+        self.shadow_r = 280 # shouldnt change for NaCO data
         
         
     def get_final_sz(self, final_sz = None, verbose = True, debug = False):
@@ -229,7 +235,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                                int(2*self.shadow_r), final_sz)
         if final_sz_ori%2 == 0:
             final_sz_ori -= 1
-        final_sz = final_sz_ori
+        final_sz = int(final_sz_ori) # iain: added int() around final_sz_ori as cropping requires an integer
         if verbose:
             print('the final crop size is ', final_sz)
         if debug:
@@ -357,8 +363,8 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             print('Unsat dark cubes have been cropped and saved')
         
         #defining the mask for the sky/sci pca dark subtraction
-        cy, cx, self.shadow_r = find_shadow_list(self, sci_list)
-        self.shadow_pos = [cy,cx]
+        #cy, cx, self.shadow_r = find_shadow_list(self, sci_list)
+        #self.shadow_pos = [cy,cx]
         if self.coro:
             self.agpm_pos = find_AGPM(self, self.inpath + sci_list[0]) 
         else: 
@@ -367,7 +373,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         mask_AGPM_com = np.ones([self.com_sz,self.com_sz])
         cy,cx = frame_center(mask_AGPM_com)        
         #the shift betwen the AGPM and the centre of the lyot stop
-        self.agpm_shadow_shift = [self.agpm_pos[0] - self.shadow_pos[0],self.agpm_pos[1] - self.shadow_pos[1]]
+        #self.agpm_shadow_shift = [self.agpm_pos[0] - self.shadow_pos[0],self.agpm_pos[1] - self.shadow_pos[1]] # iain: this is never used
 
         inner_rad = 3/pixel_scale
         outer_rad =  self.shadow_r*0.8
@@ -1378,7 +1384,7 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                 
     def get_stellar_psf(self, verbose = True, debug = True, plot = None, remove = False): 
         """
-        Obtain a PSF model of the star based of the unsat cubes.
+        Obtain a PSF model of the star based off of the unsat cubes.
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, Flase. Cleans file for unused fits
         """
@@ -1390,8 +1396,11 @@ class raw_dataset():  #potentially change dico to a path to the writen list
         if os.path.isfile(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]) == False:
             raise NameError('Missing 3_rmfr_unsat*.fits. Run: first_frame_removal()')                
                 
-    
+        print('unsat list:', unsat_list)
+        
         self.new_ndit_unsat = int(open_fits(self.outpath +'new_ndit_sci_sky_unsat')[2])
+              
+        print('new_ndit_unsat:', self.new_ndit_unsat)  
                 
         unsat_pos = []
         #obtain star positions in the unsat frames
@@ -1399,23 +1408,28 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             tmp = find_filtered_max(self, self.outpath + '3_rmfr_unsat_' + fits_name)
             unsat_pos.append(tmp)
             
+        print('unsat_pos:', unsat_pos)    
+            
         self.resel_ori = fits_info.wavelength*206265/(fits_info.size_telescope*fits_info.pixel_scale)
         if verbose:
             print('resolution element = ', self.resel_ori)
         
-        flux_list = [] 
+        flux_list = []
         #Measure the flux at those positions
         for un, fits_name in enumerate(unsat_list): 
             circ_aper = CircularAperture((unsat_pos[un][1],unsat_pos[un][0]), round(3*self.resel_ori))
             tmp = open_fits(self.outpath + '3_rmfr_unsat_'+ fits_name, verbose = debug)
             tmp = np.median(tmp, axis = 0)
-            circ_aper_phot = aperture_photometry(tmp,
-                                                    circ_aper, method='exact')
+            circ_aper_phot = aperture_photometry(tmp, circ_aper, method='exact')
             circ_flux = np.array(circ_aper_phot['aperture_sum'])
             flux_list.append(circ_flux[0])
+        
+        print('flux_list:', flux_list)
             
         med_flux = np.median(flux_list)
         std_flux = np.std(flux_list)
+        
+        print('med_flux:',med_flux,'std_flux:',std_flux)
         
         good_unsat_list = []
         good_unsat_pos = []
@@ -1424,21 +1438,27 @@ class raw_dataset():  #potentially change dico to a path to the writen list
             if flux < med_flux + 3*std_flux and flux > med_flux - 3*std_flux:
                 good_unsat_list.append(unsat_list[i])   
                 good_unsat_pos.append(unsat_pos[i])
+        
+        print('good_unsat_list:',good_unsat_list)
+        print('good_unsat_pos:', good_unsat_pos)
                 
         unsat_mjd_list = []
         #get times of unsat cubes (modified jullian calander)
         for fname in unsat_list:
-            tmp, header = open_fits(self.inpath +fname, header=True,
-                                            verbose=debug)
+            tmp, header = open_fits(self.inpath +fname, header=True, verbose=debug)
             unsat_mjd_list.append(header['MJD-OBS'])
             
+        print('unsat_mjd_list:',unsat_mjd_list)
             
-        thr_d = (1.0/fits_info.pixel_scale) # threshhold: differene in star pos must be greater than 1 arc sec
+        thr_d = (1.0/fits_info.pixel_scale) # threshhold: difference in star pos must be greater than 1 arc sec
+        print('thr_d:',thr_d)
         index_dither = [0]
-        unique_pos = [unsat_pos[0]]
+        print('index_dither:',index_dither)
+        unique_pos = [unsat_pos[0]] # we already know the first location is unique
+        print('unique_pos:',unique_pos)
         counter=1
-        for un, pos in enumerate(unsat_pos[1:]):
-            new_pos = True
+        for un, pos in enumerate(unsat_pos[1:]): # looks at all positions after the first one
+            new_pos = True 
             for i,uni_pos in enumerate(unique_pos):
                 if dist(int(pos[1]),int(pos[0]),int(uni_pos[1]),int(uni_pos[0])) < thr_d:
                     index_dither.append(i)
@@ -1449,12 +1469,18 @@ class raw_dataset():  #potentially change dico to a path to the writen list
                 index_dither.append(counter)
                 counter+=1
         
+        print('unique_pos:',unique_pos)
+        print('index_dither:',index_dither)
+        
         all_idx = [i for i in range(len(unsat_list))]
+        print('all_idx:',all_idx)
         for un, fits_name in enumerate(unsat_list):
             if fits_name in good_unsat_list: # just consider the good ones
                 tmp = open_fits(self.outpath+'3_rmfr_unsat_'+fits_name)
-                good_idx = [j for j in all_idx if index_dither[j]!=index_dither[un]] 
-                best_idx = find_nearest(unsat_mjd_list[good_idx[0]:good_idx[-1]],unsat_mjd_list[un])
+                good_idx = [j for j in all_idx if index_dither[j]!=index_dither[un]] # index of cubes on a different part of the detector 
+                print('good_idx:',good_idx)
+                best_idx = find_nearest([unsat_mjd_list[i] for i in good_idx],unsat_mjd_list[un], output='index')
+                print('best_idx:',best_idx)
                 tmp_sky = np.zeros([len(good_idx),tmp.shape[1],tmp.shape[2]])
                 tmp_sky = np.median(open_fits(self.outpath+ '3_rmfr_unsat_'+ unsat_list[good_idx[best_idx]]),axis=0)      
                 write_fits(self.outpath+'4_sky_subtr_unsat_'+unsat_list[un], tmp-tmp_sky) 
