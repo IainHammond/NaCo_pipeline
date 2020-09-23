@@ -17,15 +17,15 @@ import numpy as np
 from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
-from vip_hci.var import frame_filter_lowpass, frame_center
+from vip_hci.var import frame_filter_lowpass, frame_center, get_square
 from naco_pip import fits_info
 import pdb
 
-def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), coro = True, verbose = True, debug = False):
+def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
         """
         added by Iain to prevent dust grains being picked up as the AGPM
         
-        This method will find the location of the AGPM when coro = True (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. Knowing the percentage of pixels in x and y the AGPM is located from the frame center, we can calculate it's location. With no coronagraph it uses the median images and a low pass filter
+        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a subset square image around the expected location and applies a low pass filter + max search method and returns the (y,x) location of the AGPM/star
         
         Parameters
         ----------
@@ -33,10 +33,11 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), coro = Tru
             List containing all science cube names
                 
         rel_AGPM_pos_xy : tuple, float
-            relative location of the AGPM from the frame center in pixels. This is used to calcualte how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets with VLT/NaCO as the AGPM is always in the same position (however frame sizes change), thus we can use this relative distance.
+            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets with VLT/NaCO as the AGPM is always in the same approximate position
+            
+        size : int
+            pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
 
-        coro : bool
-            True for coronagraph data, False otherwise
         verbose : bool
             If True extra messages are shown.
         
@@ -48,32 +49,38 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), coro = Tru
         [ycom, xcom] : location of AGPM or star        
         """            
         sci_cube = open_fits(self.inpath + file_list[0]) # opens first sci/sky cube
-        nz,ny,nx = sci_cube.shape # gets size of it. science and sky cubes have same shape       
+        nz,ny,nx = sci_cube.shape # gets size of it. science and sky cubes have same shape. assumes all cubes are the same ny and nx (they should be!)
+
+        cy,cx = frame_center(sci_cube, verbose = verbose) #find central pixel coordinates
+        # then the position will be that plus the relative shift in y and x
+        rel_shift_x = rel_AGPM_pos_xy[0] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+        rel_shift_y = rel_AGPM_pos_xy[1] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
         
-        if coro: 
-            cy,cx = frame_center(sci_cube, verbose = verbose) #find central pixel coordinates
-            # then the position will be that plus the relative shift in y and x
-            rel_shift_x = rel_AGPM_pos_xy[0] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-            rel_shift_y = rel_AGPM_pos_xy[1] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
-            ycom = cy + rel_shift_y
-            xcom = cx + rel_shift_x
-            if verbose:
-                print('The location of the AGPM is','ycom =',ycom,'xcom =', xcom)        
-        else:
-            median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
-            for sc,fits_name in enumerate(file_list): # loops over all images 
-                tmp = open_fits(self.inpath + fits_name) # opens the cube  
-                median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
-            median_frame = np.median(median_all_cubes, axis = 0)
-            median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
-            median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-            ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-            if verbose:
-                print('The location of the star during dark_subtract is','ycom =',ycom,'xcom =', xcom)
+        #the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations 
+        y_tmp = cy + rel_shift_y 
+        x_tmp = cx + rel_shift_x
+        median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
+        for sc,fits_name in enumerate(file_list): # loops over all images 
+            tmp = open_fits(self.inpath + fits_name) # opens the cube
+            median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
+        median_frame = np.median(median_all_cubes, axis = 0) # median of all median frames
+        
+        # define a square of 100 x 100 with the center being the approximate AGPM/star position
+        median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True) 
+        # apply low pass filter
+        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')       
+        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+        # find coordiates of max flux in the square
+        ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+        # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
+        ycom = cornery+ycom_tmp
+        xcom = cornerx+xcom_tmp
+        
+        if verbose:
+            print('The location of the AGPM/star is','ycom =',ycom,'xcom =', xcom)
         if debug:
             pdb.set_trace()
         return [ycom, xcom]
-
 
 class input_dataset():
     def __init__(self, inpath, outpath, coro = True): 
@@ -81,14 +88,14 @@ class input_dataset():
         self.outpath = outpath
         self.coro = coro
         old_list = os.listdir(self.inpath)
-        self.file_list = [file for file in  old_list if file.endswith('.fits')]        
+        self.file_list = [file for file in old_list if file.endswith('.fits')]        
         self.dit_sci = fits_info.dit_sci
         self.ndit_sci = fits_info.ndit_sci
         self.ndit_sky = fits_info.ndit_sky
         self.dit_unsat = fits_info.dit_unsat
         self.ndit_unsat = fits_info.ndit_unsat
         self.dit_flat = fits_info.dit_flat
-
+        print('##### Number of fits files:', len(self.file_list), '#####')
         
     def bad_columns(self, verbose = True, debug = False):
         """
@@ -100,14 +107,13 @@ class input_dataset():
         for i in range(3, 509, 8):
             for j in range(512):
                 bcm[j,i] = 1
-
+        
         for fname in self.file_list:
-            if verbose:
-                print('Fixing', fname)
             tmp, header_fname = open_fits(self.inpath + fname,
                                                 header = True, verbose = debug)
+            print('Opened {} of type {}'.format(fname,header_fname['HIERARCH ESO DPR TYPE']))
             if verbose:
-                print(tmp.shape)
+                print('Fixing {} of shape {}'.format(fname,tmp.shape))
             #crop the bad pixel map to the same dimentions of the frames
             if len(tmp.shape) == 3:
                 nz, ny, nx = tmp.shape
@@ -125,6 +131,7 @@ class input_dataset():
                            header_fname, output_verify = 'fix')
                 
             else:
+                print('File {} is not a cube ({})'.format(fname,header_fname['HIERARCH ESO DPR TYPE']))
                 ny, nx = tmp.shape
                 cy, cx = ny/2 , nx/2
                 ini_y, fin_y = int(512-cy), int(512+cy)
@@ -137,7 +144,7 @@ class input_dataset():
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify = 'fix')
             if verbose:
-                    print('done fixing',fname)
+                    print('Fixed',fname)
 
     def mk_dico(self, coro = True, verbose = True, debug = False):
         if coro:
@@ -315,7 +322,7 @@ class input_dataset():
        
 ####### Iain's addition to find the derotation angles of the data ########
 
-    def find_derot_angles(self, verbose=False):
+    def find_derot_angles(self, verbose = False):
         """ 
         For datasets with signification rotation when the telescope derotator is switched off. 
         Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
@@ -342,7 +349,7 @@ class input_dataset():
             for line in tmp:    
                 fits_list.append(line.split('\n')[0])
         fits_list.sort()        
-        
+        print('Calculating derotation angles from header data...')
         def _derot_ang_ipag(self,fits_list=fits_list,loc='st'): 
             nsci = len(fits_list)
             parang = np.zeros(nsci)
