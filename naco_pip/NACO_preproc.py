@@ -308,6 +308,9 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         derot_angles_binned: the binned derotation angles
              
         """
+            
+        if isinstance(binning_factor, int) == False and isinstance(binning_factor,list) == False and isinstance(binning_factor,tuple) == False: # if it isnt int, tuple or list then raise an error
+            raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if os.path.isfile(self.outpath+'master_cube_{}_{}_good_frames_cropped.fits'.format(self.recenter_method,self.recenter_model)) == False:
             raise NameError('Missing master cube from recentering and bad frame removal!') 
@@ -318,20 +321,14 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         master_cube = open_fits(self.outpath+'master_cube_{}_{}_good_frames_cropped.fits'.format(self.recenter_method,self.recenter_model), verbose = verbose)
         derot_angles = open_fits(self.outpath+'derot_angles_{}_{}_good_frames.fits'.format(self.recenter_method,self.recenter_model), verbose = verbose)
         
-        if isinstance(binning_factor, int) == False and isinstance(binning_factor,list) == False and isinstance(binning_factor,tuple) == False: # if it isnt int, tuple or list then raise an error
-            raise TypeError('Invalid binning_factor! Use either int, list or tuple')
-    
-        if isinstance(binning_factor, int):
-            if binning_factor == 1: # will skip binning if it's 1
+        def _binning(self,binning_factor,master_cube,derot_angles):
+            if binning_factor == 1: # doesn't bin with 1 but will loop over the other factors in the list or tuple
                 print('Binning factor is 1 (cant bin any frames). Skipping binning...')
                 write_fits(self.outpath+'master_cube_{}_{}_good_frames_cropped_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), master_cube)
-                write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles)
+                write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles)                
             else:
-                print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor))                               
+                print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor))
                 nframes,ny,nx = master_cube.shape
-                
-                # defines a new empty array of length frames divided by the binning factor. fills it with median combined frames based on the binning factor. The last entry will have the median of the no. of frames equal to the binning factor + left over frames at the end. then makes changes to the derot angles files (median combined the respective entries)       
-                
                 derot_angles_binned = np.zeros([int(nframes/binning_factor)])
                 master_cube_binned = np.zeros([int(nframes/binning_factor),ny,nx])
                
@@ -343,26 +340,13 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
                     derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
                 
                 write_fits(self.outpath+'master_cube_{}_{}_good_frames_cropped_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor),master_cube_binned)
-                write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles_binned)
-                
+                write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles_binned)        
+            
+        if isinstance(binning_factor, int):
+            _binning(self,binning_factor,master_cube,derot_angles)
+
         if isinstance(binning_factor,list) or isinstance(binning_factor,tuple):
             for binning_factor in binning_factor:
-                if binning_factor == 1: # doesn't bin with 1 but will loop over the other factors in the list or tuple
-                    print('Binning factor is 1 (cant bin any frames). Skipping binning...')
-                    write_fits(self.outpath+'master_cube_{}_{}_good_frames_cropped_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), master_cube)
-                    write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles)                
-                else:
-                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor))
-                    nframes,ny,nx = master_cube.shape
-                    derot_angles_binned = np.zeros([int(nframes/binning_factor)])
-                    master_cube_binned = np.zeros([int(nframes/binning_factor),ny,nx])
-                   
-                    for idx,frame in enumerate(range(binning_factor,nframes,binning_factor)):
-                        if idx == (int(nframes/binning_factor)-1):
-                            master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:])
-                            derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
-                        master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame],axis=0)
-                        derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
+                _binning(self,binning_factor,master_cube,derot_angles)
+
                     
-                    write_fits(self.outpath+'master_cube_{}_{}_good_frames_cropped_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor),master_cube_binned)
-                    write_fits(self.outpath+'derot_angles_{}_{}_good_frames_bin{}.fits'.format(self.recenter_method,self.recenter_model,binning_factor), derot_angles_binned)
