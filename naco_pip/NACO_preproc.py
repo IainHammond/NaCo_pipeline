@@ -15,7 +15,8 @@ import os
 import pathlib
 from matplotlib import pyplot as plt
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_crop_frames
+from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_crop_frames, frame_crop
+from vip_hci.stats import cube_distance
 from naco_pip import fits_info
 
 class calib_dataset():  #this class is for pre-processing of the calibrated data
@@ -160,12 +161,10 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
         if verbose:
             print('Shifts applied, master cube saved')	     
      
-    def bad_frame_removal(self, correlation_thres = 0.9, pxl_shift_thres = 0.5, crop_size = 31, verbose = True, debug = False, plot = 'save'):	
+    def bad_frame_removal(self, pxl_shift_thres = 0.5, crop_size = 31, verbose = True, debug = False, plot = 'save'):	
         """
-       For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the recentered mastercubes and removes frames with a shift greater than a user defined pixel threshold in x or y above the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube. A threshold, also set by the user, removes all those cubes below the threshold from the mastercube and rotation file, then saves both as new files for use in post processing
-        recenter_method: string, same as method used to recenter the frames
-        recenter_model: string, same as the model used to recenter the frames
-        correlation_thres: default is 0.9, can take any value between 0.0 and 1.0. Any frames below this correlation threshold will be excluded. Generally recommended to use a value between 0.90 and 0.95 (90-95% correlation to the median), however depends on crop_size
+       For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the recentered mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube. Removes all those frames below the threshold from the mastercube and rotation file, then saves both as new files for use in post processing
+       
         pxl_shift_thres: decimal, in units of pixels. Default is 0.5 pixels. Any shifts in the x or y direction greater than this threshold will cause the frame/s to be labelled as bad and thus removed 
         crop_size: integer, must be odd. Default is 31. This sets the cropping during frame correlation to the median    
         plot: 'save' to write to file the correlation plot, None will not     
@@ -229,13 +228,23 @@ class calib_dataset():  #this class is for pre-processing of the calibrated data
 	    
         if verbose:
 	        print('########### Median combining {} frames for correlation check... ###########'.format(len(frames_pxl_threshold)))
-	    
+	        	    
         #makes array of good frames from the recentered mastercube		                                              
-        tmp_median = np.median(frames_pxl_threshold, axis=0)  #median frame of remaining frames
+        tmp_median = np.median(frames_pxl_threshold, axis=0)  #median frame of remaining frames, can be sped up with multi-processing
 	
         if verbose:
             print('Running frame correlation check...')
-	
+
+        # calculates correlation threshold using the median of the Pearson correlation of all frames, minus 1 standard deviation 
+        subarray = cube_crop_frames(frames_pxl_threshold, size = crop_size, verbose=verbose) # crops all the frames to a common size
+        frame_ref = frame_crop(tmp_median, size = crop_size, verbose=verbose) # crops the median of all frames to a common size        
+        distances = cube_distance(subarray, frame_ref, mode = 'full', dist = 'pearson', plot=True) # calculates the correlation of each frame to the median and saves as a list    
+        if plot == 'save': # save a plot of distances compared to the median for each frame if set to 'save'
+            plt.savefig(self.outpath+'distances.pdf') 
+        median_distance = np.median(distances) # median of distances
+        stddev_distance = np.std(distances) # stddev of distances
+        correlation_thres = median_distance - stddev_distance # threshold is the median of the distances minus one stddev
+        
         good_frames, bad_frames = cube_detect_badfr_correlation(frames_pxl_threshold,
 			                                                frame_ref = tmp_median,
 			                                                crop_size=crop_size, 
