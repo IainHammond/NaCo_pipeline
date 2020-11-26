@@ -30,5 +30,5 @@ preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/5_HD1
 
 preproc.recenter(nproc = 1, sigfactor = 4, subi_size = 21,verbose = True, debug = False, plot = False, coro = True)
 preproc.bad_frame_removal(pxl_shift_thres = 0.5, crop_size = 31, verbose = True, debug = False, plot = 'save')
-preproc.crop_cube(arcsecond_diameter = 3, verbose = True, full_output= False)
+preproc.crop_cube(arcsecond_diameter = 3, verbose = True)
 preproc.median_binning(binning_factor = [1,5,25], verbose = True)
