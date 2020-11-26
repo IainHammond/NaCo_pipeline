@@ -18,32 +18,33 @@ from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
 from vip_hci.var import frame_filter_lowpass, frame_center, get_square
-from naco_pip import fits_info
+#from naco_pip import fits_info
 import pdb
 
 def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
         """
         added by Iain to prevent dust grains being picked up as the AGPM
         
-        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a subset square image around the expected location and applies a low pass filter + max search method and returns the (y,x) location of the AGPM/star
+        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
+        using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a
+        subset square image around the expected location and applies a low pass filter + max search method and returns
+        the (y,x) location of the AGPM/star
         
         Parameters
         ----------
         file_list : list of str
             List containing all science cube names
-                
         rel_AGPM_pos_xy : tuple, float
-            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets with VLT/NaCO as the AGPM is always in the same approximate position
-            
+            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
+            calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
+            with VLT/NaCO as the AGPM is always in the same approximate position
         size : int
             pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
-
         verbose : bool
-            If True extra messages are shown.
-        
+            If True extra messages are shown
         debug : bool, False by default
             Enters pdb once the location has been found
-            
+
         Returns
         ----------
         [ycom, xcom] : location of AGPM or star        
@@ -61,7 +62,7 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), size = 101
         x_tmp = cx + rel_shift_x
         median_all_cubes = np.zeros([len(file_list),ny,nx]) # makes empty array 
         for sc,fits_name in enumerate(file_list): # loops over all images 
-            tmp = open_fits(self.inpath + fits_name) # opens the cube
+            tmp = open_fits(self.inpath + fits_name,verbose=debug) # opens the cube
             median_all_cubes[sc] = tmp[-1] # takes the last entry (the median) and adds it to the empty array                 
         median_frame = np.median(median_all_cubes, axis = 0) # median of all median frames
         
@@ -83,62 +84,84 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy = (50.5, 6.5), size = 101
         return [ycom, xcom]
 
 class input_dataset():
-    def __init__(self, inpath, outpath, coro = True): 
+    def __init__(self, inpath, outpath, dataset_dict, coro = True):
         self.inpath = inpath
         self.outpath = outpath
         self.coro = coro
         old_list = os.listdir(self.inpath)
-        self.file_list = [file for file in old_list if file.endswith('.fits')]        
-        self.dit_sci = fits_info.dit_sci
-        self.ndit_sci = fits_info.ndit_sci
-        self.ndit_sky = fits_info.ndit_sky
-        self.dit_unsat = fits_info.dit_unsat
-        self.ndit_unsat = fits_info.ndit_unsat
-        self.dit_flat = fits_info.dit_flat
+        self.file_list = [file for file in old_list if file.endswith('.fits')]
+        self.dit_sci = dataset_dict['dit_sci']
+        self.ndit_sci = dataset_dict['ndit_sci']
+        self.ndit_sky = dataset_dict['ndit_sky']
+        self.dit_unsat = dataset_dict['dit_unsat']
+        self.ndit_unsat = dataset_dict['ndit_unsat']
+        self.dit_flat = dataset_dict['dit_flat']
+        self.fast_reduction = dataset_dict['fast_reduction']
+        self.dataset_dict = dataset_dict
         print('##### Number of fits files:', len(self.file_list), '#####')
         
-    def bad_columns(self, verbose = True, debug = False):
+    def bad_columns(self, sat_val = 32768, verbose = True, debug = False):
         """
         In NACO data there are systematic bad columns in the lower left quadrant
-        This method will correct those bad columns with the median of the neighbouring pixels
+        This method will correct those bad columns with the median of the neighbouring pixels.
+        May require manual inspection of one frame to confirm the saturated value.
+
+        sat_val : int, optional
+            value of the saturated column. Default 32768
         """
         #creating bad pixel map
-        bcm = np.zeros((1026, 1024) ,dtype=np.float64)
-        for i in range(3, 509, 8):
-            for j in range(512):
-                bcm[j,i] = 1
-        
+        #bcm = np.zeros((1026, 1024) ,dtype=np.float64)
+        # for i in range(3, 509, 8):
+        #     for j in range(512):
+        #         bcm[j,i] = 1
+
         for fname in self.file_list:
             tmp, header_fname = open_fits(self.inpath + fname,
                                                 header = True, verbose = debug)
             print('Opened {} of type {}'.format(fname,header_fname['HIERARCH ESO DPR TYPE']))
+            # ADD code here that checks for bad column and updates the mask
             if verbose:
                 print('Fixing {} of shape {}'.format(fname,tmp.shape))
-            #crop the bad pixel map to the same dimentions of the frames
+            #crop the bad pixel map to the same dimensions of the frames
+
             if len(tmp.shape) == 3:
                 nz, ny, nx = tmp.shape
-                cy, cx = ny/2 , nx/2
-                ini_y, fin_y = int(512-cy), int(512+cy)
-                ini_x, fin_x = int(512-cx), int(512+cx)
-                bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                bcm = np.zeros((ny, nx),dtype=np.int8)  # make mask the same dimensions as cube
+                tmp_median = np.median(tmp,axis=0) # median frame of cube
+                # loop through the median cube pixels and if any are 32768, add the location to the mask
+                bcm[np.where(tmp_median==sat_val)] = 1
+                # for i in range(0,nx): # all x pixels
+                #     for j in range(0,ny): # all y pixels
+                #         if tmp_median[j,i] == sat_val: # if saturated
+                #             bcm[j,i] = 1 # mark as bad in mask
+                # cy, cx = ny/2 , nx/2
+                # ini_y, fin_y = int(512-cy), int(512+cy)
+                # ini_x, fin_x = int(512-cx), int(512+cx)
+                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
                 for j in range(nz):
                     #replace bad columns in each frame of the cubes
                     tmp[j] = frame_fix_badpix_isolated(tmp[j],
-                                    bpm_mask= bcm_crop, sigma_clip=3,
+                                    bpm_mask= bcm, sigma_clip=3,
                                     num_neig=5, size=5, protect_mask=False,
                                     radius=30, verbose=debug, debug=False)
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify = 'fix')
-                
+
             else:
                 print('File {} is not a cube ({})'.format(fname,header_fname['HIERARCH ESO DPR TYPE']))
                 ny, nx = tmp.shape
-                cy, cx = ny/2 , nx/2
-                ini_y, fin_y = int(512-cy), int(512+cy)
-                ini_x, fin_x = int(512-cx), int(512+cx)
-                bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                bcm = np.zeros((ny, nx),dtype=np.int8)  # make mask the same dimensions as frame
+                bcm[np.where(tmp == sat_val)] = 1
+                # for i in range(0,nx):
+                #     for j in range(0,ny):
+                #         if tmp[j,i] == sat_val:
+                #             bcm[j,i] = 1
+                # cy, cx = ny/2 , nx/2
+                # ini_y, fin_y = int(512-cy), int(512+cy)
+                # ini_x, fin_x = int(512-cx), int(512+cx)
+                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
                 tmp = frame_fix_badpix_isolated(tmp,
-                             bpm_mask= bcm_crop, sigma_clip=3, num_neig=5,
+                             bpm_mask= bcm, sigma_clip=3, num_neig=5,
                              size=5, protect_mask=False, radius=30,
                              verbose=debug, debug=False)
                 write_fits(self.outpath + fname, tmp,
@@ -155,18 +178,14 @@ class input_dataset():
            sci_list = []
            sci_list_mjd = []
            sky_list = []
+           sky_list_mjd = []
            unsat_list = []
-           unsat_list_mjd = []
            flat_list = []
-           X_sci_list = []
-           X_unsat_list = []
            flat_dark_list = []
            sci_dark_list = []
            unsat_dark_list = []
-           sci_frames = []
-           sky_frames = []
-           unsat_frames = []
-           flat_frames = []
+           master_mjd = []
+           master_airmass = []
            
            if verbose: 
                print('Creating dictionary')
@@ -183,28 +202,29 @@ class input_dataset():
                             
                         sci_list.append(fname)
                         sci_list_mjd.append(header['MJD-OBS'])
-                        X_sci_list.append(header['AIRMASS'])
-                        sci_frames.append(cube.shape[0])
-                        
+                        # sci_list_airmass.append(header['AIRMASS'])
+
                    elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
                          header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
                         header['HIERARCH ESO DET DIT'] == self.dit_sci and\
                         header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and\
                        cube.shape[0] > 0.8*min(self.ndit_sky): #avoid bad cubes
+
                        sky_list.append(fname)
-                       sky_frames.append(cube.shape[0])
-                       
+                       sky_list_mjd.append(header['MJD-OBS'])
+                       # sky_list_airmass.append(header['AIRMASS'])
+
                    elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
                        header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
                            header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
                        unsat_list.append(fname)
-                       unsat_list_mjd.append(header['MJD-OBS'])
-                       X_unsat_list.append(header['AIRMASS'])
-                       unsat_frames.append(cube.shape[0])
+                       # unsat_list_mjd.append(header['MJD-OBS'])
+                       # unsat_list_airmass.append(header['AIRMASS'])
                        
                    elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
                        flat_list.append(fname)
-                       flat_frames.append(cube.shape[0])
+                       # flat_list_mjd.append(header['MJD-OBS'])
+                       # flat_list_airmass.append(header['AIRMASS'])
                        
                    elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
                        if header['HIERARCH ESO DET DIT'] == self.dit_flat:
@@ -213,10 +233,16 @@ class input_dataset():
                            sci_dark_list.append(fname)
                        if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
                            unsat_dark_list.append(fname)
-                           
-           with open(self.outpath+"sci_list.txt", "w") as f:
-                for sci in sci_list:
-                    f.write(sci+'\n')
+
+           with open(self.outpath+"sci_list_mjd.txt", "w") as f:
+                for time in sci_list_mjd:
+                    f.write(str(time)+'\n')
+           with open(self.outpath+"sky_list_mjd.txt", "w") as f:
+                for time in sky_list_mjd:
+                    f.write(str(time)+'\n')
+           with open(self.outpath + "sci_list.txt", "w") as f:
+               for sci in sci_list:
+                   f.write(sci + '\n')
            with open(self.outpath+"sky_list.txt", "w") as f:
                 for sci in sky_list:
                     f.write(sci+'\n')
@@ -243,31 +269,43 @@ class input_dataset():
        """
        Empty SKY list could be caused by a misclassification of the header in NACO data
        This method will check the flux of the SCI cubes around the location of the AGPM 
-       A SKY cube should be less bright at that location allowing the seperation of cubes
+       A SKY cube should be less bright at that location allowing the separation of cubes
        
        """
-       #if coro!=True:
-           
+
        flux_list = []
        fname_list = []
        sci_list = []
+       sky_list = []
+       sci_list_mjd = [] # observation time of each sci cube
+       sky_list_mjd = [] # observation time of each sky cube
        with open(self.outpath+"sci_list.txt", "r") as f: 
             tmp = f.readlines()
             for line in tmp:    
                 sci_list.append(line.split('\n')[0])
 
-       sky_list = []
        with open(self.outpath+"sky_list.txt", "r") as f: 
             tmp = f.readlines()
             for line in tmp:
                 sky_list.append(line.split('\n')[0])
-        
-       self.resel = (fits_info.wavelength*180*3600)/(fits_info.size_telescope *np.pi*
-                                                 fits_info.pixel_scale)
+
+       with open(self.outpath+"sci_list_mjd.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                sci_list_mjd.append(float(line.split('\n')[0]))
+
+       with open(self.outpath+"sky_list_mjd.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                sky_list_mjd.append(float(line.split('\n')[0]))
+
+       self.resel = (self.dataset_dict['wavelength']*180*3600)/(self.dataset_dict['size_telescope'] *np.pi*
+                                                 self.dataset_dict['pixel_scale'])
                 
-       agpm_pos = find_AGPM_or_star(self, sci_list)
+       agpm_pos = find_AGPM_or_star(self, sci_list, verbose = debug)
        if verbose: 
            print('The rough location of the star/AGPM is','y  = ', agpm_pos[0] , 'x =', agpm_pos[1])
+           print('Measuring flux in SCI cubes...')
 
        #create the aperture
        circ_aper = CircularAperture((agpm_pos[1],agpm_pos[0]), round(nres*self.resel))
@@ -282,7 +320,7 @@ class input_dataset():
            circ_flux = np.array(circ_aper_phot['aperture_sum'])
            flux_list.append(circ_flux[0])
            fname_list.append(fname)
-           if verbose: 
+           if debug:
                print('centre flux has been measured for', fname)
        
        median_flux = np.median(flux_list)
@@ -293,8 +331,11 @@ class input_dataset():
 
        for i in range(len(flux_list)):
            if flux_list[i] < median_flux - 2*sd_flux:
-               sky_list.append(fname_list[i])
-               sci_list.remove(fname_list[i])
+               sky_list.append(fname_list[i]) # add the sky cube to the sky cube list
+               sky_list_mjd.append(sci_list_mjd[i]) # add the observation to the sky obs list from the sci obs list
+
+               sci_list.remove(fname_list[i])  # remove the sky cube from the sci list
+               sci_list_mjd.remove(sci_list_mjd[i])  # remove the sky obs time from the sci obs list
                symbol = 'bo'
            if plot: 
                if flux_list[i] > median_flux - 2*sd_flux:
@@ -310,13 +351,49 @@ class input_dataset():
                plt.savefig(self.outpath + 'flux_plot')
            if plot == 'show':
                plt.show()
-                         
-       with open(self.outpath+"sci_list.txt", "w") as f: 
-                for sci in sci_list:
-                    f.write(sci+'\n')
-       with open(self.outpath+"sky_list.txt", "w") as f:
-                for sci in sky_list:
-                    f.write(sci+'\n')
+
+       # sci_list.sort()
+       # with open(self.outpath + "sci_list.txt", "w") as f:
+       #     for sci in sci_list:
+       #         f.write(sci + '\n')
+       sci_list.sort()
+       if self.fast_reduction:
+           with open(self.outpath + "sci_list_ori.txt", "w") as f:
+               for ss, sci in enumerate(sci_list):
+                   tmp = open_fits(self.inpath + sci, verbose=debug)
+                   if ss == 0:
+                       master_sci = np.zeros([len(sci_list), tmp.shape[1], tmp.shape[2]])
+                   master_sci[ss] = tmp[-1]
+                   f.write(sci + '\n')
+           with open(self.outpath + "sci_list.txt", "w") as f:
+               f.write('master_sci_fast_reduction.fits')
+           write_fits(self.outpath + 'master_sci_fast_reduction.fits', master_sci,verbose=debug)
+           print('Saved fast reduction master science cube')
+       else:
+           with open(self.outpath + "sci_list.txt", "w") as f:
+               for sci in sci_list:
+                   f.write(sci + '\n')
+       sky_list.sort()
+       with open(self.outpath + "sky_list.txt", "w") as f:
+           for sky in sky_list:
+               f.write(sky + '\n')
+       sci_list_mjd.sort()
+       # save the sci observation time to text file
+       with open(self.outpath + "sci_list_mjd.txt", "w") as f:
+           for time in sci_list_mjd:
+               f.write(str(time) + '\n')
+
+       sky_list_mjd.sort()
+       # save the sky observation time to text file
+       with open(self.outpath + "sky_list_mjd.txt", "w") as f:
+           for time in sky_list_mjd:
+               f.write(str(time) + '\n')
+
+       if len(sci_list_mjd) != len(sci_list):
+           print('======== WARNING: SCI observation time list is a different length to SCI cube list!! ========')
+
+       if len(sky_list_mjd) != len(sky_list):
+           print('======== WARNING: SKY observation time list is a different length to SKY cube list!! ========')
        if verbose:
            print('done :)')
        
@@ -324,7 +401,7 @@ class input_dataset():
 
     def find_derot_angles(self, verbose = False):
         """ 
-        For datasets with signification rotation when the telescope derotator is switched off. 
+        For datasets with significant rotation when the telescope derotator is switched off.
         Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
         Finds the derotation angle vector to apply to a set of NACO cubes to align it with North up. 
         IMPORTANT: The list of fits should be in chronological order of acquisition, however the code should sort them itself.
@@ -341,31 +418,38 @@ class input_dataset():
         n_frames_vec: 1d numpy array
             Vector with number of frames in each cube
         """
-        
-        #open the list of science images and add them to fits_list to be used in _derot_ang_ipag
-        fits_list = []
-        with open(self.outpath+"sci_list.txt", "r") as f:
-            tmp = f.readlines()
-            for line in tmp:    
-                fits_list.append(line.split('\n')[0])
-        fits_list.sort()        
+        # open the list of science images and add them to sci_list to be used in _derot_ang_ipag
+        sci_list = []
+        if self.fast_reduction:
+            with open(self.outpath + "sci_list_ori.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    sci_list.append(line.split('\n')[0])
+        else:
+            with open(self.outpath+"sci_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    sci_list.append(line.split('\n')[0])
+        sci_list.sort()
+
         print('Calculating derotation angles from header data...')
-        def _derot_ang_ipag(self,fits_list=fits_list,loc='st'): 
-            nsci = len(fits_list)
+
+        def _derot_ang_ipag(self,sci_list=sci_list,loc='st'):
+            nsci = len(sci_list)
             parang = np.zeros(nsci)
             posang = np.zeros(nsci)
             rot_pt_off = np.zeros(nsci)
             n_frames_vec = np.ones(nsci, dtype=int)
             
             if loc == 'st':
-                kw_par = 'HIERARCH ESO TEL PARANG START'
-                kw_pos = 'HIERARCH ESO ADA POSANG'
+                kw_par = 'HIERARCH ESO TEL PARANG START' # Parallactic angle at start
+                kw_pos = 'HIERARCH ESO ADA POSANG'       # Position angle at start
             elif loc == 'nd':
-                kw_par = 'HIERARCH ESO TEL PARANG END'
-                kw_pos = 'HIERARCH ESO ADA POSANG END'        
+                kw_par = 'HIERARCH ESO TEL PARANG END'   # Parallactic angle at end
+                kw_pos = 'HIERARCH ESO ADA POSANG END'   # Position angle at exposure end
             # FIRST COMPILE PARANG, POSANG and PUPILPOS 
-            for ff in range(len(fits_list)):
-                cube, header = open_fits(self.inpath+fits_list[ff], header=True, verbose=False)
+            for ff in range(len(sci_list)):
+                cube, header = open_fits(self.inpath+sci_list[ff], header=True, verbose=False)
                 n_frames_vec[ff] = cube.shape[0]-1 # "-1" is because the last frame is the median of all others
                 parang[ff] = header[kw_par]
                 posang[ff] = header[kw_pos]
@@ -388,7 +472,7 @@ class input_dataset():
                         print("the standard deviation of pupil positions is greater than 1: ", rot_pt_off_std)
                 # find index where the transit occurs (change of sign of parang OR big difference in pupil pos)
                 n_changes = 0
-                for ff in range(len(fits_list)-1):
+                for ff in range(len(sci_list)-1):
                     if parang[ff]*parang[ff+1] < 0. or np.abs(rot_pt_off[ff]-rot_pt_off[ff+1]) > 1.:
                         idx_transit = ff+1
                         n_changes+=1
@@ -418,19 +502,26 @@ class input_dataset():
                 
             return -1.*final_derot_angs, n_frames_vec
 
-        n_sci = len(fits_list)
-        derot_angles_st, _ = _derot_ang_ipag(self,fits_list,loc='st')
-        derot_angles_nd, n_frames_vec = _derot_ang_ipag(self,fits_list,loc='nd')
-        final_derot_angs = np.zeros([n_sci,int(np.amax(n_frames_vec))])
-        
+        n_sci = len(sci_list)
+        derot_angles_st, _ = _derot_ang_ipag(self,sci_list,loc='st')
+        derot_angles_nd, n_frames_vec = _derot_ang_ipag(self,sci_list,loc='nd')
+
+        #if self.fast_reduction:
+            #final_derot_angs = np.zeros([1, n_sci])
+
+        final_derot_angs = np.zeros([n_sci, int(np.amax(n_frames_vec))])
         for sc in range(n_sci):
             n_frames = int(n_frames_vec[sc])
             nfr_vec = np.arange(n_frames)
-            final_derot_angs[sc,:n_frames] = derot_angles_st[sc]+(((derot_angles_nd[sc]-derot_angles_st[sc])*nfr_vec/(n_frames-1)))
-        write_fits(self.outpath+"derot_angles_uncropped.fits",final_derot_angs)    
-        return final_derot_angs, n_frames_vec
-        
-        
-        
-        
+            final_derot_angs[sc,:n_frames] = derot_angles_st[sc]+((derot_angles_nd[sc] - derot_angles_st[sc]) * nfr_vec / (n_frames - 1))
+
+        if self.fast_reduction:
+            final_derot_angs_median = np.zeros([n_sci])
+            for sc in range(n_sci):
+                #final_derot_angs[sc] = np.apply_along_axis(lambda v: np.median(v[np.nonzero(v)]), 0, final_derot_angs[sc])
+                final_derot_angs_median[sc] = np.median(final_derot_angs[sc])
+            final_derot_angs = final_derot_angs_median
+        write_fits(self.outpath+"derot_angles_uncropped.fits",final_derot_angs,verbose=verbose)
+        print('Derotation angles have been computed and saved to file')
+        #return final_derot_angs, n_frames_vec
         
