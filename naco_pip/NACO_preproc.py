@@ -87,7 +87,7 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
             print('fwhm:',fwhm,'of type',type(fwhm))
-
+        mem = np.zeros(len(sci_list))
         # Creates a master science cube with just the median of each cube
         bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
@@ -98,9 +98,11 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
                 #mem_msg = 'Set check_memory=False to override this memory check'
             tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
             input_bytes = tmp.nbytes
-            check_enough_memory(input_bytes, verbose=True)
+            memory = check_enough_memory(input_bytes, verbose=True)
             tmp = None
+            mem[sc] = memory
             bar.update()
+        write_fits(self.outpath+'memory.fits',mem,verbose=debug)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
@@ -362,7 +364,8 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
         derot_angles_good_frames_bin{}.fits: the binned derotation angles
              
         """
-        if isinstance(binning_factor, int) == False and isinstance(binning_factor,list) == False and isinstance(binning_factor,tuple) == False: # if it isnt int, tuple or list then raise an error
+        if isinstance(binning_factor, int) == False and isinstance(binning_factor,list) == False and \
+                isinstance(binning_factor,tuple) == False:  # if it isnt int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if not os.path.isfile(self.outpath + 'master_cube_good_frames_cropped.fits'):

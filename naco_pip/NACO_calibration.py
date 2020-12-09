@@ -66,17 +66,20 @@ def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = Fal
        if verbose:
            print('The centre of the shadow is','cy = ',cy,'cx = ',cx)
        if plot == 'show':
-           plot_frames((median_frame, shadow, tmp))
+           plot_frames((median_frame, shadow, tmp),vmax=(np.percentile(median_frame,99.9),1,1),
+                       vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow')
        if plot == 'save':
-           plot_frames((median_frame, shadow, tmp), save = self.outpath + 'shadow_fit')
+           plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame,99.9),1,1),
+                       vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow',
+                       dpi=300, save = self.outpath + 'shadow_fit.pdf')
 
        return cy, cx, r
     
 def find_filtered_max(path, verbose = True, debug = False):
         """
-        This method will find the location of the max after low pass filtering
-        it gives a rough approximation of the stars location
-        Need to supply the path to the cube
+        This method will find the location of the max after low pass filtering.
+        It gives a rough approximation of the stars location, reliable in unsaturated frames where the star dominates.
+        Need to supply the path to the cube.
          
         """
         cube = open_fits(path, verbose = debug)
@@ -232,6 +235,8 @@ class raw_dataset:
     def get_final_sz(self, final_sz = None, verbose = True, debug = False):
         """
         Update the cropping size as you wish
+
+        debug: enters Python debugger after finding the size
         """
         if final_sz is None:
             final_sz_ori = min(2*self.agpm_pos[0]-1,2*self.agpm_pos[1]-1,2*\
@@ -251,17 +256,21 @@ class raw_dataset:
             pdb.set_trace()
         return final_sz
 
-
-
-    def dark_subtract(self, bad_quadrant = [3], npc_dark = 1, verbose = True, debug = False, plot = None, NACO = True):
+    def dark_subtract(self, bad_quadrant = [3], method = 'pca', npc_dark = 1, verbose = True, debug = False, plot = None, NACO = True):
         """
-        Dark subtraction of the fits using PCA
+        Dark subtraction of science, sky and flats using principal component analysis or median subtraction.
+        Unsaturated frames are always median dark subtracted.
+        All frames are also cropped to a common size.
         
         Parameters:
         ***********
         bad_quadrant : list, optional
             list of bad quadrants to ignore. quadrants are in format  2 | 1  Default = 3 (inherently bad NaCO quadrant)
                                                                       3 | 4
+
+        method : str, default = 'pca'
+            'pca' for dark subtraction via principal component analysis
+            'median' for median subtraction of dark
 
         npc_dark : int, optional
             number of principal components subtracted during dark subtraction. Default = 1 (most variance in the PCA library)
@@ -444,11 +453,10 @@ class raw_dataset:
         write_fits(self.outpath + "master_all_darks.fits", master_all_darks,verbose=debug)
         
         #defining the mask for the sky/sci pca dark subtraction
-        _, _, self.shadow_r = find_shadow_list(self, sci_list)
-        print("SHADOW:",self.shadow_r)
-        #self.shadow_pos = [cy,cx]
+        _, _, self.shadow_r = find_shadow_list(self, sci_list,verbose=verbose, debug=debug,plot=plot)
+
         if self.coro:
-            self.agpm_pos = find_AGPM(self.inpath + sci_list[0])
+            self.agpm_pos = find_AGPM(self.inpath + sci_list[0],verbose=verbose,debug=debug)
         else: 
             raise ValueError('Pipeline does not handle non-coronagraphic data here yet')            
 
@@ -502,6 +510,89 @@ class raw_dataset:
         if verbose:
             print('Masks have been saved as fits file')
 
+        if method == 'median':
+
+            # median dark subtraction of SCI cubes
+            tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits',verbose=debug)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # consider the median within the mask
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                tmp_tmp = tmp - tmp_tmp_tmp_median
+                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
+            if verbose:
+                print('Dark has been subtracted from SCI cubes')
+
+            if plot:
+                tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
+                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
+            if plot == 'show':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Sci', 'Sci Median Dark Subtracted',
+                            'Pixel Mask'), title='Sci Median Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Sci', 'Sci Median Dark Subtracted',
+                            'Pixel Mask'), title='Sci Median Dark Subtraction',
+                            dpi=300, save=self.outpath + 'SCI_median_dark_subtract.pdf')
+
+            # median dark subtract of sky cubes
+            tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits',verbose=debug)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])
+            for sc, fits_name in enumerate(sky_list):
+                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                tmp_tmp = tmp - tmp_tmp_tmp_median
+                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
+            if verbose:
+                print('Dark has been subtracted from SKY cubes')
+
+            if plot:
+                tmp_tmp_med = np.median(tmp, axis=0)  # sky before subtraction
+                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sky after dark subtract
+            if plot == 'show':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Sky', 'Sky Median Dark Subtracted',
+                            'Pixel Mask'), title='Sky Median Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Sky', 'Sky Median Dark Subtracted',
+                            'Pixel Mask'), title='Sky Median Dark Subtraction',
+                            dpi=300, save=self.outpath + 'SKY_median_dark_subtract.pdf')
+
+            # median dark subtract of flat cubes
+            tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
+            tmp_tmp_tmp = open_fits(self.outpath + 'flat_dark_cube.fits',verbose=debug)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_flat)])
+            for sc, fits_name in enumerate(flat_list):
+                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                tmp_tmp[sc] = tmp - tmp_tmp_tmp_median
+            write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp,verbose=debug)
+            if verbose:
+                print('Dark has been subtracted from FLAT frames')
+
+            if plot:
+                tmp_tmp_med = np.median(tmp, axis=0)  # flat cube before subtraction
+                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # flat cube after dark subtract
+            if plot == 'show':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Flat', 'Flat Median Dark Subtracted',
+                            'Pixel Mask'), title='Flat Median Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med,99.9),
+                            np.percentile(tmp_tmp_med_after,99.9), 1), vmin=(np.percentile(tmp_tmp_med,0.1),
+                            np.percentile(tmp_tmp_med_after,0.1), 0), label=('Raw Flat', 'Flat Median Dark Subtracted',
+                            'Pixel Mask'), title='Flat Median Dark Subtraction',
+                            dpi=300, save=self.outpath + 'FLAT_median_dark_subtract.pdf')
       #original code           ####################
 #        #now begin the dark subtraction using PCA
 #        npc_dark=1 #The ideal number of components to consider in PCA
@@ -588,471 +679,433 @@ class raw_dataset:
 #        
 #        #master_all_darks[:len(flat_dark_list)] = tmp.copy()      
 #        #master_all_darks[len(flat_dark_list):] = tmp.copy()
+        if method == 'pca':
+            tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose = debug) # the cube of all darks - PCA works better with a larger library of DARKs
+            tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
 
-        tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose = debug) # the cube of all darks - PCA works better with a larger library of DARKs
-        tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
+            diff = np.zeros([len(flat_list)])
+            bar = pyprind.ProgBar(len(flat_list), stream=1, title='Finding difference between DARKS and FLATS')
+            for fl, flat_name in enumerate(flat_list):
+                tmp = open_fits(self.inpath+flat_name, header=False, verbose=False)
+                tmp_tmp[fl] = frame_crop(tmp, self.com_sz, force=True, verbose=False) # added force = True
+                diff[fl] = np.median(tmp_tmp_tmp)-np.median(tmp_tmp[fl]) # median of pixels in all darks - median of all pixels in flat frame
+                tmp_tmp[fl]+=diff[fl] # subtracting median of flat from the flat and adding the median of the dark
+                bar.update()
 
-        diff = np.zeros([len(flat_list)])
-        bar = pyprind.ProgBar(len(flat_list), stream=1, title='Finding difference between DARKS and FLATS')
-        for fl, flat_name in enumerate(flat_list):
-            tmp = open_fits(self.inpath+flat_name, header=False, verbose=False)
-            tmp_tmp[fl] = frame_crop(tmp, self.com_sz, force=True, verbose=False) # added force = True            
-            diff[fl] = np.median(tmp_tmp_tmp)-np.median(tmp_tmp[fl]) # median of pixels in all darks - median of all pixels in flat frame
-            tmp_tmp[fl]+=diff[fl] # subtracting median of flat from the flat and adding the median of the dark        
-            bar.update()
-
-        #write_fits(self.outpath + 'TMP_cropped_flat.fits', tmp_tmp, verbose=verbose) # to check if the flats are aligned with the darks
-        #test_diff = np.linspace(np.average(diff),5000,50)
-
-
-        def _get_test_diff_flat(guess,verbose=False):
-            #tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
-            #stddev = []
-            # loop over values around the median of diff to scale the frames accurately
-            #for idx,td in enumerate(test_diff):
-            tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp+guess, tmp_tmp_tmp,
-                                                            mask_AGPM_flat, ref_cube=None, ncomp=npc_dark),axis=0)
-            tmp_tmp_pca-= np.median(diff)+guess # subtract the negative median of diff values and subtract test diff (aka add it back)
-            subframe = tmp_tmp_pca[np.where(mask_std)] # where mask_std is an optional argument
-            #subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
-            #if idx ==0:
-            subframe = subframe.reshape((-1,self.com_sz-crop))
-
-                #stddev.append(np.std(subframe)) # save the stddev around this bad area
-            stddev = np.std(subframe)
-            write_fits(self.outpath + 'dark_flat_subframe.fits', subframe, verbose=debug)
-            #if verbose:
-            print('Guess = {}'.format(guess))
-            print('Stddev = {}'.format(stddev))
-
-    #        for fl, flat_name in enumerate(flat_list):
-    #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
-
-            #return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
-            return stddev
-
-        # step_size1 = 50
-        # step_size2 = 10
-        # n_test1 = 50
-        # n_test2 = 50
+            #write_fits(self.outpath + 'TMP_cropped_flat.fits', tmp_tmp, verbose=verbose) # to check if the flats are aligned with the darks
+            #test_diff = np.linspace(np.average(diff),5000,50)
 
 
-        # lower_diff = guess - (n_test1 * step_size1) / 2
-        # upper_diff = guess + (n_test1 * step_size1) / 2
+            def _get_test_diff_flat(guess,verbose=False):
+                #tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
+                #stddev = []
+                # loop over values around the median of diff to scale the frames accurately
+                #for idx,td in enumerate(test_diff):
+                tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp+guess, tmp_tmp_tmp,
+                                                                mask_AGPM_flat, ref_cube=None, ncomp=npc_dark),axis=0)
+                tmp_tmp_pca-= np.median(diff)+guess # subtract the negative median of diff values and subtract test diff (aka add it back)
+                subframe = tmp_tmp_pca[np.where(mask_std)] # where mask_std is an optional argument
+                #subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
+                #if idx ==0:
+                subframe = subframe.reshape((-1,self.com_sz-crop))
 
-        #test_diff = np.arange(lower_diff, upper_diff, n_test1) - guess
-        # print('lower_diff:', lower_diff)
-        # print('upper_diff:', upper_diff)
-        # print('test_diff:', test_diff)
-        # chisquare = function that computes stddev, p = test_diff
-        #solu = minimize(chisquare, p, args=(cube, angs, etc.), method='Nelder-Mead', options=options)
-        if verbose:
-            print('FLATS difference w.r.t. DARKS:', diff)
-            print('Calculating optimal PCA dark subtraction for FLATS...')
-        guess = 0
-        solu = minimize(_get_test_diff_flat,x0=guess,args = (debug),method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
-
-        # guess = solu.x
-        # print('best diff:',guess)
-        # # lower_diff = guess - (n_test2 * step_size2) / 2
-        # # upper_diff = guess + (n_test2 * step_size2) / 2
-        # #
-        # # test_diff = np.arange(lower_diff, upper_diff, n_test2) - guess
-        # # print('lower_diff:', lower_diff)
-        # # print('upper_diff:', upper_diff)
-        # # print('test_diff:', test_diff)
-        #
-        # solu = minimize(_get_test_diff_flat, x0=test_diff, args=(), method='Nelder-Mead',
-        #                 options={'maxiter': 1})
-
-        best_test_diff = solu.x # x is the solution (ndarray)
-        best_test_diff = best_test_diff[0] # take out of array
-        if verbose:
-            print('Best difference (value) to add to FLATS is {} found in {} iterations'.format(best_test_diff,solu.nit))
-
-        # cond = True
-        # max_it = 3 # maximum iterations
-        # counter = 0
-        # while cond and counter<max_it:
-        #     index,best_diff = _get_test_diff_flat(self,first_guess = np.median(diff), n_test = n_test1,lower_limit = 0.1*np.median(diff),upper_limit = 2)
-        #     if index !=0 and index !=n_test1-1:
-        #         cond = False
-        #     else:
-        #         first_guess =
-        #     counter +=1
-        #     if counter==max_it:
-        #         print('##### Reached maximum iterations for finding test diff! #####')
-        # _,_ = _get_test_diff_flat(self, first_guess=best_diff, n_test=n_test2, lower_limit=0.8, upper_limit=1.2,plot=plot)
-
-
-        #write_fits(self.outpath + '1_crop_flat_cube_test_diff.fits', tmp_tmp_pca + td, verbose=debug)
-        # if verbose:
-        #     print('stddev:', np.round(stddev, 3))
-        #     print('Lowest standard dev is {} at frame {} with constant {}'.format(np.round(np.min(stddev), 2),
-        #                                                                           np.round(np.argmin(stddev), 2) + 1,
-        #                                                                           test_diff[np.argmin(stddev)]))
-
-        tmp_tmp_pca = cube_subtract_sky_pca(tmp_tmp + best_test_diff, tmp_tmp_tmp,
-                                            mask_AGPM_flat, ref_cube=None, ncomp=npc_dark)
-        bar = pyprind.ProgBar(len(flat_list), stream=1, title='Correcting FLATS via PCA dark subtraction')
-        for fl, flat_name in enumerate(flat_list):
-            tmp_tmp_pca[fl] = tmp_tmp_pca[fl] - diff[fl] - best_test_diff  # add back the constant
-            bar.update()
-        write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp_pca, verbose=debug)
-
-        if plot:
-            tmp_tmp_med = np.median(tmp_tmp, axis=0)  # flat before subtraction
-            tmp_tmp_pca = np.median(tmp_tmp_pca, axis=0)  # flat after dark subtract
-        if plot == 'show':
-            plot_frames((tmp_tmp_med, tmp_tmp_pca, mask_AGPM_flat), vmax=(25000, 14000, 1), vmin=(-2500, 9000, 0),title='Flat PCA Dark Subtraction')
-        if plot == 'save':
-            plot_frames((tmp_tmp_med, tmp_tmp_pca, mask_AGPM_flat), vmax=(25000, 14000, 1), vmin=(-2500, 9000, 0),
-                        label=('Raw Flat','Flat PCA Dark Subtracted','Pixel Mask'),title='Flat PCA Dark Subtraction',
-                        dpi=300, save=self.outpath + 'FLAT_PCA_dark_subtract.pdf')
-
-        if verbose:
-            print('Flats have been dark corrected')
-
-        ################
-#        #median dark subtraction of SCI cubes
-#        tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
-#        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0)
-#        #consider the median within the mask
-#        #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # worried about this line, median of median? 
-#        for sc, fits_name in enumerate(sci_list):
-#            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
-#            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
-#            #PCA works best when the considering the difference
-#            #tmp_median = np.median(tmp,axis = 0)
-#            #tmp_median = tmp_median[np.where(mask_AGPM_com)] 
-#            #diff = tmp_tmp_tmp_median - np.median(tmp_median)
-#            #if debug:
-#            #    print('difference w.r.t dark =', diff)
-#            #tmp_tmp = cube_subtract_sky_pca(tmp +diff , tmp_tmp_tmp,
-#            #                    mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
-#            #if debug:
-#            #    write_fits(self.outpath+'1_crop_diff'+fits_name, tmp_tmp)
-#            tmp_tmp = tmp - tmp_tmp_tmp_median
-#            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp)     
-#        if verbose:
-#            print('Dark has been subtracted from SCI cubes')        
-#    
-#        #median dark subtract of sky cubes
-#        tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
-#        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0)
-#        #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])
-#        for sc, fits_name in enumerate(sky_list):
-#            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
-#            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)   
-#            #tmp_median = np.median(tmp,axis = 0)
-#            #tmp_median = tmp_median[np.where(mask_AGPM_com)]
-#            #diff = tmp_tmp_tmp_median - np.median(tmp_median)
-#            #if debug:
-#            #       print('difference w.r.t dark = ',  diff)
-#            #tmp_tmp = cube_subtract_sky_pca(tmp +diff, tmp_tmp_tmp,
-#            #                        mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
-#            #if debug:
-#            #    write_fits(self.outpath+'1_crop_diff'+fits_name, tmp_tmp)
-#            tmp_tmp = tmp - tmp_tmp_tmp_median
-#            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp)
-#        if verbose:
-#            print('Dark has been subtracted from SKY cubes')
-
-           ######################## 
-            
-#        ### ORIGINAL PCA CODE
-        
-        #PCA dark subtraction of SCI cubes
-        #tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
-        tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose =debug)
-        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0) # median frame of all darks 
-        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # integer median of all the pixels within the mask       
-
-        tmp_tmp = np.zeros([len(sci_list), self.com_sz, self.com_sz])
-        #cy,cx = frame_center(tmp_tmp)
-
-        middle_idx = int(len(sci_list) / 2)
-        counter = 0
-
-        diff = np.zeros([len(sci_list)])
-        bar = pyprind.ProgBar(len(sci_list), stream=1, title='Finding difference between DARKS and SCI cubes. This may take some time.')
-        for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug) # open science
-            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug) # crop science to common size
-            #PCA works best when the considering the difference
-            tmp_median = np.median(tmp,axis = 0) # make median frame from all frames in cube
-            #tmp_median = tmp_median[np.where(mask_AGPM_com)]
-            diff[sc] = tmp_tmp_tmp_median - np.median(tmp_median) # median pixel value of all darks minus median pixel value of sci cube
-            tmp_tmp[sc] = tmp_median + diff[sc]
-            # if sc==0 or sc==middle_idx or sc==len(sci_list)-1:
-            #     tmp_tmp[counter] = tmp_median + diff[sc]
-            #     counter = counter + 1
-            if debug:
-                print('difference w.r.t dark =', diff[sc])
-            bar.update()
-        write_fits(self.outpath + 'dark_sci_diff.fits',diff,verbose=debug)
-        write_fits(self.outpath + 'sci_plus_diff.fits',tmp_tmp,verbose=debug)
-        # with open(self.outpath + "dark_sci_diff.txt", "w") as f:
-        #     for diff_sci in diff:
-        #         f.write(str(diff_sci) + '\n')
-        if verbose:
-            print('SCI difference w.r.t. DARKS has been saved to fits file.')
-            print('SCI difference w.r.t. DARKS:', diff)
-
-        #lower_diff = 0.8*np.median(diff)
-        #upper_diff = 1.2*np.median(diff)
-        #test_diff = np.arange(abs(lower_diff),abs(upper_diff),50) - abs(np.median(diff)) # make a range of values in increments of 50 from 0.9 to 1.1 times the median
-        #print('test diff:',test_diff)
-        #tmp_tmp_pca = np.zeros([len(test_diff),self.com_sz,self.com_sz])
-        #best_idx = []
-
-        def _get_test_diff_sci(guess, verbose=False):
-            # tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
-            # stddev = []
-            # loop over values around the median of diff to scale the frames accurately
-            # for idx,td in enumerate(test_diff):
-            tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp + guess, tmp_tmp_tmp,
-                                                          mask_AGPM_com, ref_cube=None, ncomp=npc_dark), axis=0)
-            tmp_tmp_pca -= np.median(diff) + guess  # subtract the negative median of diff values and subtract test diff (aka add it back)
-            subframe = tmp_tmp_pca[np.where(mask_sci)]
-            # subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
-            # if idx ==0:
-            # stddev.append(np.std(subframe)) # save the stddev around this bad area
-            stddev = np.std(subframe)
-            if verbose:
+                    #stddev.append(np.std(subframe)) # save the stddev around this bad area
+                stddev = np.std(subframe)
+                write_fits(self.outpath + 'dark_flat_subframe.fits', subframe, verbose=debug)
+                #if verbose:
                 print('Guess = {}'.format(guess))
-                print('Standard deviation = {}'.format(stddev))
-            subframe = subframe.reshape(46,-1) # hard coded 46 because the subframe size is hardcoded to center pixel +-23
-            write_fits(self.outpath + 'dark_sci_subframe.fits', subframe, verbose=debug)
+                print('Stddev = {}'.format(stddev))
 
-            #        for fl, flat_name in enumerate(flat_list):
-            #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
+        #        for fl, flat_name in enumerate(flat_list):
+        #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
 
-            # return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
-            return stddev
+                #return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
+                return stddev
+
+            # step_size1 = 50
+            # step_size2 = 10
+            # n_test1 = 50
+            # n_test2 = 50
 
 
-        #test_sci_list = [sci_list[i] for i in [0,middle_idx,-1]]
-        
-        #bar = pyprind.ProgBar(len(sci_list), stream=1, title='Testing diff for science cubes')
-        guess = 0
-        #best_diff = []
-        #for sc in [0,middle_idx,-1]:
-        if verbose:
-            print('Calculating optimal PCA dark subtraction for SCI cubes. This may take some time.')
-        solu = minimize(_get_test_diff_sci, x0=guess, args=(verbose), method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
+            # lower_diff = guess - (n_test1 * step_size1) / 2
+            # upper_diff = guess + (n_test1 * step_size1) / 2
 
-        best_test_diff = solu.x  # x is the solution (ndarray)
-        best_test_diff = best_test_diff[0]  # take out of array
-        #best_diff.append(best_test_diff)
-        if verbose:
-            print('Best difference (value) to add to SCI cubes is {} found in {} iterations'.format(best_test_diff,solu.nit))
-            #stddev = [] # to refresh the list after each loop
-            #tmp = open_fits(self.inpath+sci_list[sc], header=False, verbose=debug)
-            #tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
-            
-            #for idx,td in enumerate(test_diff):
-                #tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp[sc]+guess, tmp_tmp_tmp,mask_AGPM_com, ref_cube=None, ncomp=npc_dark),axis=0)
-                #tmp_tmp_pca-= np.median(diff)+td
-                #subframe = tmp_tmp_pca[np.where(mask_std)]
-                #subframe = tmp_tmp_pca[idx,int(cy)-23:int(cy)+23,:] # square around center that includes that bad lines
-                #stddev.append(np.std(subframe))
-            #best_idx.append(np.argmin(stddev))
-            #print('Best index of test diff: {} of constant: {}'.format(np.argmin(stddev),test_diff[np.argmin(stddev)]))
-            #bar.update()
-            #if sc == 0:
-            #    write_fits(self.outpath+'1_crop_sci_cube_test_diff.fits', tmp_tmp_pca + td, verbose = debug)
-
-        # sci_list_mjd = np.array(self.sci_list_mjd) # convert list to numpy array
-        # xp = sci_list_mjd[np.array([0,middle_idx,-1])] # only get first, middle, last
-        # #fp = test_diff[np.array(best_idx)]
-        # fp = best_diff
-        # opt_diff = np.interp(x = sci_list_mjd, xp = xp, fp = fp, left=None, right=None, period=None) # optimal diff for each sci cube
-
-        if verbose:
-            print('Optimal constant to apply to each science cube: {}'.format(best_test_diff))
-
-        bar = pyprind.ProgBar(len(sci_list), stream=1, title='Correcting SCI cubes via PCA dark subtraction')
-        for sc,fits_name in enumerate(sci_list):
-            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
-            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
-                     
-            tmp_tmp_pca = cube_subtract_sky_pca(tmp +diff[sc] +best_test_diff, tmp_tmp_tmp,
-                                mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
-                                
-            tmp_tmp_pca = tmp_tmp_pca - diff[sc] - best_test_diff # add back the constant
-            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp_pca, verbose = debug)
-            bar.update()
-        if verbose:
-            print('Dark has been subtracted from SCI cubes')
-
-        if plot: 
-            tmp = np.median(tmp, axis = 0)
-            tmp_tmp_pca = np.median(tmp_tmp_pca,axis = 0)
-        if plot == 'show': 
-            plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com),vmax = (25000,25000,1), vmin = (-2500,-2500,0))
-        if plot == 'save': 
-            plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com),vmax = (25000,25000,1), vmin = (-2500,-2500,0),
-                        label=('Raw Science','Science PCA Dark Subtracted','Pixel Mask'),title='Science PCA Dark Subtraction',
-                        dpi=300,save = self.outpath + 'SCI_PCA_dark_subtract.pdf')
-
-        #dark subtract of sky cubes
-        #tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
-#        tmp_tmp_tmp = open_fits(self.outpath+'master_all_darks.fits')
-#        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0)
-#        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])
-#        
-#        bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting dark current in sky cubes')
-#        for sc, fits_name in enumerate(sky_list):
-#            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
-#            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)   
-#            tmp_median = np.median(tmp,axis = 0)
-#            tmp_median = tmp_median[np.where(mask_AGPM_com)]
-#            diff = tmp_tmp_tmp_median - np.median(tmp_median)
-#            if debug:
-#                   print('difference w.r.t dark = ',  diff)
-#            tmp_tmp = cube_subtract_sky_pca(tmp +diff +test_diff[np.argmin(stddev)], tmp_tmp_tmp,
-#                                    mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
-#            if debug:
-#                write_fits(self.outpath+'1_crop_diff'+fits_name, tmp_tmp)
-#            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp -diff -test_diff[np.argmin(stddev)], verbose = debug)
-#            bar.update()
-#        if verbose:
-#            print('Dark has been subtracted from SKY cubes')
-#        if plot: 
-#            tmp = np.median(tmp, axis = 0)
-#            tmp_tmp = np.median(tmp_tmp-diff,axis = 0)
-#        if plot == 'show':
-#            plot_frames((tmp,tmp_tmp,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0))
-#        if plot == 'save':
-#            plot_frames((tmp,tmp_tmp,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0),save = self.outpath + 'SKY_PCA_dark_subtract')
-
-        tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose = debug)
-        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0) # median frame of all darks 
-        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # integer median of all the pixels within the mask       
-
-        tmp_tmp = np.zeros([len(sky_list), self.com_sz, self.com_sz])
-        cy,cx = frame_center(tmp_tmp)
-        
-        diff = np.zeros([len(sky_list)])                
-        
-        bar = pyprind.ProgBar(len(sky_list), stream=1, title='Finding difference between darks and sky cubes')
-        for sc, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug) # open sky
-            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug) # crop sky to common size            
-            #PCA works best when the considering the difference
-            tmp_median = np.median(tmp,axis = 0) # make median frame from all frames in cube
-            #tmp_median = tmp_median[np.where(mask_AGPM_com)] 
-            diff[sc] = tmp_tmp_tmp_median - np.median(tmp_median) # median pixel value of all darks minus median pixel value of sky cube
-            tmp_tmp[sc] = tmp_median + diff[sc]
-            if debug:
-                print('difference w.r.t dark =', diff[sc])
-            bar.update()
-        write_fits(self.outpath + 'dark_sci_diff.fits', diff, verbose=debug)
-        if verbose:
-            print('SKY difference w.r.t. DARKS has been saved to fits file.')
-            print('SKY difference w.r.t. DARKS:', diff)
-
-        def _get_test_diff_sky(guess, verbose=False):
-            # tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
-            # stddev = []
-            # loop over values around the median of diff to scale the frames accurately
-            # for idx,td in enumerate(test_diff):
-            tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp + guess, tmp_tmp_tmp,
-                                                          mask_AGPM_com, ref_cube=None, ncomp=npc_dark), axis=0)
-            tmp_tmp_pca -= np.median(diff) + guess  # subtract the negative median of diff values and subtract test diff (aka add it back)
-            subframe = tmp_tmp_pca[np.where(mask_sci)]
-            # subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
-            # if idx ==0:
-            # stddev.append(np.std(subframe)) # save the stddev around this bad area
-            stddev = np.std(subframe)
+            #test_diff = np.arange(lower_diff, upper_diff, n_test1) - guess
+            # print('lower_diff:', lower_diff)
+            # print('upper_diff:', upper_diff)
+            # print('test_diff:', test_diff)
+            # chisquare = function that computes stddev, p = test_diff
+            #solu = minimize(chisquare, p, args=(cube, angs, etc.), method='Nelder-Mead', options=options)
             if verbose:
-                print('Guess = {}'.format(guess))
-                print('Standard deviation = {}'.format(stddev))
-            subframe = subframe.reshape(46,-1) # hard coded 46 because the subframe size is hardcoded to center pixel +-23
-            write_fits(self.outpath + 'dark_sky_subframe.fits', subframe, verbose=debug)
+                print('FLATS difference w.r.t. DARKS:', diff)
+                print('Calculating optimal PCA dark subtraction for FLATS...')
+            guess = 0
+            solu = minimize(_get_test_diff_flat,x0=guess,args = (debug),method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
 
-            #        for fl, flat_name in enumerate(flat_list):
-            #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
+            # guess = solu.x
+            # print('best diff:',guess)
+            # # lower_diff = guess - (n_test2 * step_size2) / 2
+            # # upper_diff = guess + (n_test2 * step_size2) / 2
+            # #
+            # # test_diff = np.arange(lower_diff, upper_diff, n_test2) - guess
+            # # print('lower_diff:', lower_diff)
+            # # print('upper_diff:', upper_diff)
+            # # print('test_diff:', test_diff)
+            #
+            # solu = minimize(_get_test_diff_flat, x0=test_diff, args=(), method='Nelder-Mead',
+            #                 options={'maxiter': 1})
 
-            # return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
-            return stddev
+            best_test_diff = solu.x # x is the solution (ndarray)
+            best_test_diff = best_test_diff[0] # take out of array
+            if verbose:
+                print('Best difference (value) to add to FLATS is {} found in {} iterations'.format(best_test_diff,solu.nit))
 
-        guess = 0
-        if verbose:
-            print('Calculating optimal PCA dark subtraction for SKY cubes. This may take some time.')
-        solu = minimize(_get_test_diff_sky, x0=guess, args=(verbose), method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
+            # cond = True
+            # max_it = 3 # maximum iterations
+            # counter = 0
+            # while cond and counter<max_it:
+            #     index,best_diff = _get_test_diff_flat(self,first_guess = np.median(diff), n_test = n_test1,lower_limit = 0.1*np.median(diff),upper_limit = 2)
+            #     if index !=0 and index !=n_test1-1:
+            #         cond = False
+            #     else:
+            #         first_guess =
+            #     counter +=1
+            #     if counter==max_it:
+            #         print('##### Reached maximum iterations for finding test diff! #####')
+            # _,_ = _get_test_diff_flat(self, first_guess=best_diff, n_test=n_test2, lower_limit=0.8, upper_limit=1.2,plot=plot)
 
-        best_test_diff = solu.x  # x is the solution (ndarray)
-        best_test_diff = best_test_diff[0]  # take out of array
 
-        #
-        # lower_diff = 0.9*np.median(diff)
-        # upper_diff = 1.1*np.median(diff)
-        # test_diff = np.arange(abs(lower_diff),abs(upper_diff),50) - abs(np.median(diff)) # make a range of values in increments of 50 from 0.9 to 1.1 times the median
-        # tmp_tmp_pca = np.zeros([len(test_diff),self.com_sz,self.com_sz])
-        # best_idx = []
-                
-        #middle_idx = int(len(sky_list)/2)
+            #write_fits(self.outpath + '1_crop_flat_cube_test_diff.fits', tmp_tmp_pca + td, verbose=debug)
+            # if verbose:
+            #     print('stddev:', np.round(stddev, 3))
+            #     print('Lowest standard dev is {} at frame {} with constant {}'.format(np.round(np.min(stddev), 2),
+            #                                                                           np.round(np.argmin(stddev), 2) + 1,
+            #                                                                           test_diff[np.argmin(stddev)]))
 
-        #print('Testing diff for SKY cubes')
-        # for sc in [0,middle_idx,-1]:
-        #     stddev = [] # to refresh the list after each loop
-        #     tmp = open_fits(self.inpath+sky_list[sc], header=False, verbose=debug)
-        #     tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
-        #
-        #     for idx,td in enumerate(test_diff):
-        #         tmp_tmp_pca[idx] = np.median(cube_subtract_sky_pca(tmp+diff[sc]+td, tmp_tmp_tmp,
-        #                                                 mask_AGPM_com, ref_cube=None, ncomp=npc_dark),axis=0)
-        #         tmp_tmp_pca[idx]-= np.median(diff)+td
-        #
-        #         subframe = tmp_tmp_pca[idx,int(cy)-23:int(cy)+23,:] # square around center that includes that bad lines
-        #         stddev.append(np.std(subframe))
-        #     best_idx.append(np.argmin(stddev))
-        #     print('Best index of test diff: {} of constant: {}'.format(np.argmin(stddev),test_diff[np.argmin(stddev)]))
-        #     #bar.update()
-        #     if sc == 0:
-        #         write_fits(self.outpath+'1_crop_sky_cube_test_diff.fits', tmp_tmp_pca + td, verbose = debug)
-        # print('test')
-        # sky_list_mjd = np.array(self.sky_list_mjd) # convert list to numpy array
-        # xp = sky_list_mjd[np.array([0,middle_idx,-1])] # only get first, middle, last
-        # fp = test_diff[np.array(best_idx)]
-        #
-        # opt_diff = np.interp(x = sky_list_mjd, xp = xp, fp = fp, left=None, right=None, period=None) # optimal diff for each sci cube
-        # print('Opt diff',opt_diff)
-        # if debug:
-        #     with open(self.outpath+"best_idx_sky.txt", "w") as f:
-        #         for idx in best_idx:
-        #             f.write(str(idx)+'\n')
-        # if verbose:
-        #     print('Optimal constant: {}'.format(opt_diff))
-        if verbose:
-            print('Optimal constant to apply to each sky cube: {}'.format(best_test_diff))
+            tmp_tmp_pca = cube_subtract_sky_pca(tmp_tmp + best_test_diff, tmp_tmp_tmp,
+                                                mask_AGPM_flat, ref_cube=None, ncomp=npc_dark)
+            bar = pyprind.ProgBar(len(flat_list), stream=1, title='Correcting FLATS via PCA dark subtraction')
+            for fl, flat_name in enumerate(flat_list):
+                tmp_tmp_pca[fl] = tmp_tmp_pca[fl] - diff[fl] - best_test_diff  # add back the constant
+                bar.update()
+            write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp_pca, verbose=debug)
 
-        bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting SKY cubes via PCA dark subtraction')
-        for sc,fits_name in enumerate(sky_list):
-            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
-            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
-                     
-            tmp_tmp_pca = cube_subtract_sky_pca(tmp +diff[sc] +best_test_diff, tmp_tmp_tmp,
-                                mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
-                                
-            tmp_tmp_pca = tmp_tmp_pca - diff[sc] - best_test_diff # add back the constant
-            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp_pca, verbose = debug)
-  
-        if verbose:
-            print('Dark has been subtracted from SKY cubes')
+            if plot:
+                tmp_tmp_med = np.median(tmp_tmp, axis=0)  # flat before subtraction
+                tmp_tmp_pca = np.median(tmp_tmp_pca, axis=0)  # flat after dark subtract
+            if plot == 'show':
+                plot_frames((tmp_tmp_med, tmp_tmp_pca, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med,99.9),
+                                                                              np.percentile(tmp_tmp_pca,99.9), 1),
+                            vmin=(np.percentile(tmp_tmp_med,0.1), np.percentile(tmp_tmp_pca,0.1), 0),
+                            title='Flat PCA Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp_tmp_med, tmp_tmp_pca, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med,99.9),
+                                                                              np.percentile(tmp_tmp_pca,99.9), 1),
+                            vmin=(np.percentile(tmp_tmp_med,0.1), np.percentile(tmp_tmp_pca,0.1), 0),
+                            title='Flat PCA Dark Subtraction', dpi=300, save=self.outpath + 'FLAT_PCA_dark_subtract.pdf')
 
-        # plot first,middle,last ================
-        if plot: 
-            tmp = np.median(tmp, axis = 0)
-            tmp_tmp_pca = np.median(tmp_tmp_pca,axis = 0)
-        if plot == 'show':
-            plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0))
-        if plot == 'save':
-            plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0),
-                        label=('Raw Sky','Sky PCA Dark Subtracted','Pixel Mask'),title='Sky PCA Dark Subtraction',
-                        dpi=300,save = self.outpath + 'SKY_PCA_dark_subtract.pdf')
+            if verbose:
+                print('Flats have been dark corrected')
+
+    #        ### ORIGINAL PCA CODE
+
+            #PCA dark subtraction of SCI cubes
+            #tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
+            tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose =debug)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0) # median frame of all darks
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # integer median of all the pixels within the mask
+
+            tmp_tmp = np.zeros([len(sci_list), self.com_sz, self.com_sz])
+
+            diff = np.zeros([len(sci_list)])
+            bar = pyprind.ProgBar(len(sci_list), stream=1, title='Finding difference between DARKS and SCI cubes. This may take some time.')
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug) # open science
+                tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug) # crop science to common size
+                #PCA works best when the considering the difference
+                tmp_median = np.median(tmp,axis = 0) # make median frame from all frames in cube
+                #tmp_median = tmp_median[np.where(mask_AGPM_com)]
+                diff[sc] = tmp_tmp_tmp_median - np.median(tmp_median) # median pixel value of all darks minus median pixel value of sci cube
+                tmp_tmp[sc] = tmp_median + diff[sc]
+                # if sc==0 or sc==middle_idx or sc==len(sci_list)-1:
+                #     tmp_tmp[counter] = tmp_median + diff[sc]
+                #     counter = counter + 1
+                if debug:
+                    print('difference w.r.t dark =', diff[sc])
+                bar.update()
+            write_fits(self.outpath + 'dark_sci_diff.fits',diff,verbose=debug)
+            write_fits(self.outpath + 'sci_plus_diff.fits',tmp_tmp,verbose=debug)
+            # with open(self.outpath + "dark_sci_diff.txt", "w") as f:
+            #     for diff_sci in diff:
+            #         f.write(str(diff_sci) + '\n')
+            if verbose:
+                print('SCI difference w.r.t. DARKS has been saved to fits file.')
+                print('SCI difference w.r.t. DARKS:', diff)
+
+            #lower_diff = 0.8*np.median(diff)
+            #upper_diff = 1.2*np.median(diff)
+            #test_diff = np.arange(abs(lower_diff),abs(upper_diff),50) - abs(np.median(diff)) # make a range of values in increments of 50 from 0.9 to 1.1 times the median
+            #print('test diff:',test_diff)
+            #tmp_tmp_pca = np.zeros([len(test_diff),self.com_sz,self.com_sz])
+            #best_idx = []
+
+            def _get_test_diff_sci(guess, verbose=False):
+                # tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
+                # stddev = []
+                # loop over values around the median of diff to scale the frames accurately
+                # for idx,td in enumerate(test_diff):
+                tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp + guess, tmp_tmp_tmp,
+                                                              mask_AGPM_com, ref_cube=None, ncomp=npc_dark), axis=0)
+                tmp_tmp_pca -= np.median(diff) + guess  # subtract the negative median of diff values and subtract test diff (aka add it back)
+                subframe = tmp_tmp_pca[np.where(mask_sci)]
+                # subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
+                # if idx ==0:
+                # stddev.append(np.std(subframe)) # save the stddev around this bad area
+                stddev = np.std(subframe)
+                if verbose:
+                    print('Guess = {}'.format(guess))
+                    print('Standard deviation = {}'.format(stddev))
+                subframe = subframe.reshape(46,-1) # hard coded 46 because the subframe size is hardcoded to center pixel +-23
+                write_fits(self.outpath + 'dark_sci_subframe.fits', subframe, verbose=debug)
+
+                #        for fl, flat_name in enumerate(flat_list):
+                #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
+
+                # return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
+                return stddev
+
+
+            #test_sci_list = [sci_list[i] for i in [0,middle_idx,-1]]
+
+            #bar = pyprind.ProgBar(len(sci_list), stream=1, title='Testing diff for science cubes')
+            guess = 0
+            #best_diff = []
+            #for sc in [0,middle_idx,-1]:
+            if verbose:
+                print('Calculating optimal PCA dark subtraction for SCI cubes. This may take some time.')
+            solu = minimize(_get_test_diff_sci, x0=guess, args=(verbose), method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
+
+            best_test_diff = solu.x  # x is the solution (ndarray)
+            best_test_diff = best_test_diff[0]  # take out of array
+            #best_diff.append(best_test_diff)
+            if verbose:
+                print('Best difference (value) to add to SCI cubes is {} found in {} iterations'.format(best_test_diff,solu.nit))
+                #stddev = [] # to refresh the list after each loop
+                #tmp = open_fits(self.inpath+sci_list[sc], header=False, verbose=debug)
+                #tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
+
+                #for idx,td in enumerate(test_diff):
+                    #tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp[sc]+guess, tmp_tmp_tmp,mask_AGPM_com, ref_cube=None, ncomp=npc_dark),axis=0)
+                    #tmp_tmp_pca-= np.median(diff)+td
+                    #subframe = tmp_tmp_pca[np.where(mask_std)]
+                    #subframe = tmp_tmp_pca[idx,int(cy)-23:int(cy)+23,:] # square around center that includes that bad lines
+                    #stddev.append(np.std(subframe))
+                #best_idx.append(np.argmin(stddev))
+                #print('Best index of test diff: {} of constant: {}'.format(np.argmin(stddev),test_diff[np.argmin(stddev)]))
+                #bar.update()
+                #if sc == 0:
+                #    write_fits(self.outpath+'1_crop_sci_cube_test_diff.fits', tmp_tmp_pca + td, verbose = debug)
+
+            # sci_list_mjd = np.array(self.sci_list_mjd) # convert list to numpy array
+            # xp = sci_list_mjd[np.array([0,middle_idx,-1])] # only get first, middle, last
+            # #fp = test_diff[np.array(best_idx)]
+            # fp = best_diff
+            # opt_diff = np.interp(x = sci_list_mjd, xp = xp, fp = fp, left=None, right=None, period=None) # optimal diff for each sci cube
+
+            if verbose:
+                print('Optimal constant to apply to each science cube: {}'.format(best_test_diff))
+
+            bar = pyprind.ProgBar(len(sci_list), stream=1, title='Correcting SCI cubes via PCA dark subtraction')
+            for sc,fits_name in enumerate(sci_list):
+                tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
+
+                tmp_tmp_pca = cube_subtract_sky_pca(tmp +diff[sc] +best_test_diff, tmp_tmp_tmp,
+                                    mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
+
+                tmp_tmp_pca = tmp_tmp_pca - diff[sc] - best_test_diff # add back the constant
+                write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp_pca, verbose = debug)
+                bar.update()
+            if verbose:
+                print('Dark has been subtracted from SCI cubes')
+
+            if plot:
+                tmp = np.median(tmp, axis = 0)
+                tmp_tmp_pca = np.median(tmp_tmp_pca,axis = 0)
+            if plot == 'show':
+                plot_frames((tmp, tmp_tmp_pca, mask_AGPM_com), vmax=(np.percentile(tmp, 99.9),
+                                                                     np.percentile(tmp_tmp_pca, 99.9), 1),
+                            vmin=(np.percentile(tmp, 0.1), np.percentile(tmp_tmp_pca, 0.1), 0),
+                            label=('Raw Science', 'Science PCA Dark Subtracted', 'Pixel Mask'),
+                            title='Science PCA Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp, tmp_tmp_pca, mask_AGPM_com), vmax=(np.percentile(tmp, 99.9),
+                                                                     np.percentile(tmp_tmp_pca, 99.9), 1),
+                            vmin=(np.percentile(tmp, 0.1), np.percentile(tmp_tmp_pca, 0.1), 0),
+                            label=('Raw Science', 'Science PCA Dark Subtracted', 'Pixel Mask'),
+                            title='Science PCA Dark Subtraction',
+                            dpi=300,save = self.outpath + 'SCI_PCA_dark_subtract.pdf')
+
+            #dark subtract of sky cubes
+            #tmp_tmp_tmp = open_fits(self.outpath+'sci_dark_cube.fits')
+    #        tmp_tmp_tmp = open_fits(self.outpath+'master_all_darks.fits')
+    #        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0)
+    #        tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])
+    #
+    #        bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting dark current in sky cubes')
+    #        for sc, fits_name in enumerate(sky_list):
+    #            tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
+    #            tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
+    #            tmp_median = np.median(tmp,axis = 0)
+    #            tmp_median = tmp_median[np.where(mask_AGPM_com)]
+    #            diff = tmp_tmp_tmp_median - np.median(tmp_median)
+    #            if debug:
+    #                   print('difference w.r.t dark = ',  diff)
+    #            tmp_tmp = cube_subtract_sky_pca(tmp +diff +test_diff[np.argmin(stddev)], tmp_tmp_tmp,
+    #                                    mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
+    #            if debug:
+    #                write_fits(self.outpath+'1_crop_diff'+fits_name, tmp_tmp)
+    #            write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp -diff -test_diff[np.argmin(stddev)], verbose = debug)
+    #            bar.update()
+    #        if verbose:
+    #            print('Dark has been subtracted from SKY cubes')
+    #        if plot:
+    #            tmp = np.median(tmp, axis = 0)
+    #            tmp_tmp = np.median(tmp_tmp-diff,axis = 0)
+    #        if plot == 'show':
+    #            plot_frames((tmp,tmp_tmp,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0))
+    #        if plot == 'save':
+    #            plot_frames((tmp,tmp_tmp,mask_AGPM_com), vmax = (25000,25000,1), vmin = (-2500,-2500,0),save = self.outpath + 'SKY_PCA_dark_subtract')
+
+            tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits', verbose = debug)
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp,axis = 0) # median frame of all darks
+            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # integer median of all the pixels within the mask
+
+            tmp_tmp = np.zeros([len(sky_list), self.com_sz, self.com_sz])
+            cy,cx = frame_center(tmp_tmp)
+
+            diff = np.zeros([len(sky_list)])
+
+            bar = pyprind.ProgBar(len(sky_list), stream=1, title='Finding difference between darks and sky cubes')
+            for sc, fits_name in enumerate(sky_list):
+                tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug) # open sky
+                tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug) # crop sky to common size
+                #PCA works best when the considering the difference
+                tmp_median = np.median(tmp,axis = 0) # make median frame from all frames in cube
+                #tmp_median = tmp_median[np.where(mask_AGPM_com)]
+                diff[sc] = tmp_tmp_tmp_median - np.median(tmp_median) # median pixel value of all darks minus median pixel value of sky cube
+                tmp_tmp[sc] = tmp_median + diff[sc]
+                if debug:
+                    print('difference w.r.t dark =', diff[sc])
+                bar.update()
+            write_fits(self.outpath + 'dark_sci_diff.fits', diff, verbose=debug)
+            if verbose:
+                print('SKY difference w.r.t. DARKS has been saved to fits file.')
+                print('SKY difference w.r.t. DARKS:', diff)
+
+            def _get_test_diff_sky(guess, verbose=False):
+                # tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
+                # stddev = []
+                # loop over values around the median of diff to scale the frames accurately
+                # for idx,td in enumerate(test_diff):
+                tmp_tmp_pca = np.median(cube_subtract_sky_pca(tmp_tmp + guess, tmp_tmp_tmp,
+                                                              mask_AGPM_com, ref_cube=None, ncomp=npc_dark), axis=0)
+                tmp_tmp_pca -= np.median(diff) + guess  # subtract the negative median of diff values and subtract test diff (aka add it back)
+                subframe = tmp_tmp_pca[np.where(mask_sci)]
+                # subframe = tmp_tmp_pca[int(cy)-23:int(cy)+23,:-17] # square around center that includes the bad lines in NaCO data
+                # if idx ==0:
+                # stddev.append(np.std(subframe)) # save the stddev around this bad area
+                stddev = np.std(subframe)
+                if verbose:
+                    print('Guess = {}'.format(guess))
+                    print('Standard deviation = {}'.format(stddev))
+                subframe = subframe.reshape(46,-1) # hard coded 46 because the subframe size is hardcoded to center pixel +-23
+                write_fits(self.outpath + 'dark_sky_subframe.fits', subframe, verbose=debug)
+
+                #        for fl, flat_name in enumerate(flat_list):
+                #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
+
+                # return test_diff[np.argmin[stddev]] # value of test_diff corresponding to lowest stddev
+                return stddev
+
+            guess = 0
+            if verbose:
+                print('Calculating optimal PCA dark subtraction for SKY cubes. This may take some time.')
+            solu = minimize(_get_test_diff_sky, x0=guess, args=(verbose), method='Nelder-Mead',tol = 2e-4,options = {'maxiter':100, 'disp':verbose})
+
+            best_test_diff = solu.x  # x is the solution (ndarray)
+            best_test_diff = best_test_diff[0]  # take out of array
+
+            #
+            # lower_diff = 0.9*np.median(diff)
+            # upper_diff = 1.1*np.median(diff)
+            # test_diff = np.arange(abs(lower_diff),abs(upper_diff),50) - abs(np.median(diff)) # make a range of values in increments of 50 from 0.9 to 1.1 times the median
+            # tmp_tmp_pca = np.zeros([len(test_diff),self.com_sz,self.com_sz])
+            # best_idx = []
+
+            #middle_idx = int(len(sky_list)/2)
+
+            #print('Testing diff for SKY cubes')
+            # for sc in [0,middle_idx,-1]:
+            #     stddev = [] # to refresh the list after each loop
+            #     tmp = open_fits(self.inpath+sky_list[sc], header=False, verbose=debug)
+            #     tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
+            #
+            #     for idx,td in enumerate(test_diff):
+            #         tmp_tmp_pca[idx] = np.median(cube_subtract_sky_pca(tmp+diff[sc]+td, tmp_tmp_tmp,
+            #                                                 mask_AGPM_com, ref_cube=None, ncomp=npc_dark),axis=0)
+            #         tmp_tmp_pca[idx]-= np.median(diff)+td
+            #
+            #         subframe = tmp_tmp_pca[idx,int(cy)-23:int(cy)+23,:] # square around center that includes that bad lines
+            #         stddev.append(np.std(subframe))
+            #     best_idx.append(np.argmin(stddev))
+            #     print('Best index of test diff: {} of constant: {}'.format(np.argmin(stddev),test_diff[np.argmin(stddev)]))
+            #     #bar.update()
+            #     if sc == 0:
+            #         write_fits(self.outpath+'1_crop_sky_cube_test_diff.fits', tmp_tmp_pca + td, verbose = debug)
+            # print('test')
+            # sky_list_mjd = np.array(self.sky_list_mjd) # convert list to numpy array
+            # xp = sky_list_mjd[np.array([0,middle_idx,-1])] # only get first, middle, last
+            # fp = test_diff[np.array(best_idx)]
+            #
+            # opt_diff = np.interp(x = sky_list_mjd, xp = xp, fp = fp, left=None, right=None, period=None) # optimal diff for each sci cube
+            # print('Opt diff',opt_diff)
+            # if debug:
+            #     with open(self.outpath+"best_idx_sky.txt", "w") as f:
+            #         for idx in best_idx:
+            #             f.write(str(idx)+'\n')
+            # if verbose:
+            #     print('Optimal constant: {}'.format(opt_diff))
+            if verbose:
+                print('Optimal constant to apply to each sky cube: {}'.format(best_test_diff))
+
+            bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting SKY cubes via PCA dark subtraction')
+            for sc,fits_name in enumerate(sky_list):
+                tmp = open_fits(self.inpath+fits_name, header=False, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
+
+                tmp_tmp_pca = cube_subtract_sky_pca(tmp +diff[sc] +best_test_diff, tmp_tmp_tmp,
+                                    mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
+
+                tmp_tmp_pca = tmp_tmp_pca - diff[sc] - best_test_diff # add back the constant
+                write_fits(self.outpath+'1_crop_'+fits_name, tmp_tmp_pca, verbose = debug)
+
+            if verbose:
+                print('Dark has been subtracted from SKY cubes')
+
+            if plot:
+                tmp = np.median(tmp, axis = 0)
+                tmp_tmp_pca = np.median(tmp_tmp_pca,axis = 0)
+            if plot == 'show':
+                plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com), vmax = (np.percentile(tmp,99.9),
+                np.percentile(tmp_tmp_pca,99.9),1), vmin = (np.percentile(tmp,0.1),np.percentile(tmp_tmp_pca,0.1),0),
+                label=('Raw Sky','Sky PCA Dark Subtracted','Pixel Mask'),title='Sky PCA Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp,tmp_tmp_pca,mask_AGPM_com), vmax = (np.percentile(tmp,99.9),
+                np.percentile(tmp_tmp_pca,99.9),1), vmin = (np.percentile(tmp,0.1),np.percentile(tmp_tmp_pca,0.1),0),
+                label=('Raw Sky','Sky PCA Dark Subtracted','Pixel Mask'),title='Sky PCA Dark Subtraction', dpi=300,
+                save = self.outpath + 'SKY_PCA_dark_subtract.pdf')
 
         #median dark subtract of UNSAT cubes
         tmp_tmp_tmp = open_fits(self.outpath+'unsat_dark_cube.fits',verbose=debug)
@@ -1077,20 +1130,30 @@ class raw_dataset:
             
         if verbose:
             print('Dark has been subtracted from UNSAT cubes')
+
         if plot:
-            tmp = np.median(tmp, axis = 0)
-            tmp_tmp = np.median(tmp_tmp,axis = 0)
+            tmp = np.median(tmp, axis = 0) # unsat before subtraction
+            tmp_tmp = np.median(tmp_tmp,axis = 0)  # unsat after dark subtract
+
+        # plots unsat dark, raw unsat, dark subtracted unsat
         if plot == 'show':
-            plot_frames((tmp_tmp_tmp,tmp,tmp_tmp))
+            plot_frames((tmp_tmp_tmp,tmp,tmp_tmp),vmax=(np.percentile(tmp_tmp_tmp,99.9),
+                        np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),vmin=(np.percentile(tmp_tmp_tmp,0.1),
+                        np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)), label= ('Raw Unsat Dark','Raw Unsat',
+                        'Unsat Dark Subtracted'),title='Unsat Dark Subtraction')
         if plot == 'save':
-            plot_frames((tmp_tmp_tmp,tmp,tmp_tmp),
-                        label=('Raw Unsat Dark','Raw Unsat','Unsat Dark Subtracted'),title='Unsat Dark Subtraction',
+            plot_frames((tmp_tmp_tmp,tmp,tmp_tmp),vmax=(np.percentile(tmp_tmp_tmp,99.9),
+                        np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),vmin=(np.percentile(tmp_tmp_tmp,0.1),
+                        np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)), label= ('Raw Unsat Dark','Raw Unsat',
+                        'Unsat Dark Subtracted'),title='Unsat Dark Subtraction',
                         dpi=300, save = self.outpath + 'UNSAT_dark_subtract.pdf')
 
     def fix_sporadic_columns(self, quadrant='topleft', xpixels_from_center = 7, interval = 8, verbose = True, debug = False):
         """ 
-        For correcting sporadic bad columns in science and sky cubes which can appear in NACO data, similar to the permanent bad columns in the bottom left quadrant. Position of columns should be confirmed with manual visual inspection.
-        
+        For correcting sporadic bad columns in science and sky cubes which can appear in NACO data, similar to the
+        permanent bad columns in the bottom left quadrant. Position of columns should be confirmed with manual visual
+        inspection.
+
         Parameters:
         ***********        
         quadrant: str
@@ -1306,7 +1369,10 @@ class raw_dataset:
         if verbose:
             print('Master flat frames has been saved')
         if plot == 'show': 
-            plot_frames((master_flat_frame, master_flat_unsat))
+            plot_frames((master_flat_frame, master_flat_unsat),vmax=(np.percentile(master_flat_frame,99.9),
+                                                                     np.percentile(master_flat_unsat,99.9)),
+                        vmin=(np.percentile(master_flat_frame,0.1),np.percentile(master_flat_unsat,0.1)),
+                        dpi=300,label=('Master flat frame','Master flat unsat'))
 
         #scaling of SCI cubes with respect to the master flat
         bar = pyprind.ProgBar(len(sci_list), stream=1, title='Scaling SCI cubes with respect to the master flat')
@@ -1325,9 +1391,16 @@ class raw_dataset:
             tmp = np.median(tmp, axis = 0)
             tmp_tmp = np.median(tmp_tmp, axis = 0)
         if plot == 'show':
-            plot_frames((master_flat_frame, tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000))
-        if plot == 'save': 
-            plot_frames((master_flat_frame, tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000), save = self.outpath + 'SCI_flat_correction')
+            plot_frames((master_flat_frame, tmp, tmp_tmp),vmin = (0,np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax = (2,np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),
+                        label=('Master flat frame','Origianl Science','Flat field corrected'),dpi=300,
+                        title='Science Flat Field Correction')
+        if plot == 'save':
+            plot_frames((master_flat_frame, tmp, tmp_tmp),
+                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                        label=('Master flat frame', 'Original Science', 'Flat field corrected'), dpi=300,
+                        title='Science Flat Field Correction',save = self.outpath + 'SCI_flat_correction.pdf')
         
         #scaling of SKY cubes with respects to the master flat
         bar = pyprind.ProgBar(len(sky_list), stream=1, title='Scaling SKY cubes with respect to the master flat')
@@ -1346,9 +1419,17 @@ class raw_dataset:
             tmp = np.median(tmp, axis = 0)
             tmp_tmp = np.median(tmp_tmp, axis = 0)
         if plot == 'show': 
-            plot_frames((master_flat_frame, tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000))
+            plot_frames((master_flat_frame, tmp, tmp_tmp),
+                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                        label=('Master flat frame', 'Original Science', 'Flat field corrected'), dpi=300,
+                        title='Science Flat Field Correction')
         if plot == 'save':
-            plot_frames((master_flat_frame, tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000), save = self.outpath + 'SKY_flat_correction')
+            plot_frames((master_flat_frame, tmp, tmp_tmp),
+                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                        label=('Master flat frame', 'Original Sky', 'Flat field corrected'), dpi=300,
+                        title='Sky Flat Field Correction', save = self.outpath + 'SKY_flat_correction.pdf')
 
         #scaling of UNSAT cubes with respects to the master flat unsat
         bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Scaling UNSAT cubes with respect to the master flat')
@@ -1367,9 +1448,17 @@ class raw_dataset:
             tmp = np.median(tmp,axis = 0)
             tmp_tmp = np.median(tmp_tmp, axis = 0)
         if plot == 'show':
-            plot_frames((master_flat_unsat,tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000))
+            plot_frames((master_flat_unsat, tmp, tmp_tmp),
+                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                        label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
+                        title='Unsat Flat Field Correction')
         if plot == 'save':
-            plot_frames((master_flat_unsat,tmp, tmp_tmp),vmin = (0,0,0),vmax = (2,16000,16000), save = self.outpath + 'UNSAT_flat_correction')
+            plot_frames((master_flat_unsat, tmp, tmp_tmp),
+                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                        label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
+                        title='Unsat Flat Field Correction',  save = self.outpath + 'UNSAT_flat_correction.pdf')
 
     def correct_nan(self, verbose = True, debug = False, plot = None, remove = False):
         """
@@ -1402,8 +1491,9 @@ class raw_dataset:
 
         n_sci = len(sci_list)
         n_sky = len(sky_list)
+        n_unsat = len(unsat_list)
 
-        bar = pyprind.ProgBar(n_sci, stream=1, title='Correcting nan pixels in SCI frames')
+        bar = pyprind.ProgBar(n_sci, stream=1, title='Correcting NaN pixels in SCI frames')
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath+'2_ff_'+fits_name, verbose=debug)
             tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
@@ -1412,16 +1502,20 @@ class raw_dataset:
             if remove:
                 os.system("rm "+self.outpath+'2_ff_'+fits_name)
         if verbose:
-            print('Done corecting NAN pixels in SCI frames')
+            print('Done correcting NaN pixels in SCI frames')
         if plot:
             tmp = np.median(tmp,axis=0)
             tmp_tmp = np.median(tmp_tmp,axis=0)
         if plot == 'show':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000))
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Science NaN Pixel Correction',dpi=300)
         if plot == 'save':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000), save = self.outpath + 'SCI_nan_correction')
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Science NaN Pixel Correction',dpi=300, save = self.outpath + 'SCI_nan_correction.pdf')
 
-        bar = pyprind.ProgBar(n_sky, stream=1, title='Correcting nan pixels in SKY frames')
+        bar = pyprind.ProgBar(n_sky, stream=1, title='Correcting NaN pixels in SKY frames')
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath+'2_ff_'+fits_name, verbose=debug)
             tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
@@ -1430,40 +1524,52 @@ class raw_dataset:
             if remove:
                 os.system("rm "+self.outpath+'2_ff_'+fits_name)
         if verbose:
-            print('Done corecting NAN pixels in SKY frames')
+            print('Done corecting NaN pixels in SKY frames')
         if plot:
             tmp = np.median(tmp,axis=0)
             tmp_tmp = np.median(tmp_tmp,axis=0)
         if plot == 'show':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000))
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Sky NaN Pixel Correction',dpi=300)
         if plot == 'save':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000), save = self.outpath + 'SKY_nan_correction')
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Sky NaN Pixel Correction',dpi=300, save = self.outpath + 'SKY_nan_correction.pdf')
 
+        bar = pyprind.ProgBar(n_unsat, stream=1, title='Correcting NaN pixels in UNSAT frames')
         for un, fits_name in enumerate(unsat_list):
             tmp = open_fits(self.outpath+'2_ff_unsat_'+fits_name, verbose=debug)
             tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
             write_fits(self.outpath+'2_nan_corr_unsat_'+fits_name, tmp_tmp, verbose=debug)
+            bar.update()
             if remove:
                 os.system("rm "+self.outpath+'2_ff_unsat_'+fits_name)
         if verbose:
-            print('Done correcting NAN pixels in UNSAT frames')
+            print('Done correcting NaN pixels in UNSAT frames')
         if plot:
             tmp = np.median(tmp,axis=0)
             tmp_tmp = np.median(tmp_tmp,axis=0)
         if plot == 'show':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000))
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Unsat NaN Pixel Correction',dpi=300)
         if plot == 'save':
-            plot_frames((tmp,tmp_tmp),vmin = (0,0), vmax = (16000,16000), save = self.outpath + 'UNSAT_nan_correction')
+            plot_frames((tmp,tmp_tmp),vmin=(np.percentile(tmp,0.1),np.percentile(tmp_tmp,0.1)),
+                        vmax=(np.percentile(tmp,99.9),np.percentile(tmp_tmp,99.9)),label=('Before','After'),
+                        title='Unsat NaN Pixel Correction',dpi=300, save = self.outpath + 'UNSAT_nan_correction.pdf')
             
     def correct_bad_pixels(self, verbose = True, debug = False, plot = None, remove = False): 
         """
-        Correct bad pixels twice, once for the bad pixels determined from the flatfeilds
-        Another correction is needed to correct bad pixels in each frame caused by residuals,
-        hot pixels and gamma-rays.
+        Correct bad pixels twice, once for the bad pixels determined from the flat fields
+        Another correction is needed to correct bad pixels in each frame caused by residuals, hot pixels and gamma-rays.
+
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, False. Cleans file for unused fits
         """
-        print('Running bad pixel correction...')
+        if verbose:
+            print('Running bad pixel correction...')
+
         sci_list = []
         with open(self.inpath +"sci_list.txt", "r") as f:
             tmp = f.readlines()
@@ -1494,8 +1600,7 @@ class raw_dataset:
         
         tmp = open_fits(self.outpath+'2_nan_corr_unsat_'+unsat_list[-1],header = False,verbose=debug)
         nx_unsat_crop = tmp.shape[2]
-        
-        
+
         master_flat_frame = open_fits(self.outpath+'master_flat_field.fits',verbose=debug)
         # Create bpix map
         bpix = np.where(np.abs(master_flat_frame-1.09)>0.41) # i.e. for QE < 0.68 and QE > 1.5
@@ -1521,9 +1626,9 @@ class raw_dataset:
             plot_frames((bpix_map, bpix_map_unsat))
         
         #update final crop size
-        self.agpm_pos = find_AGPM(self.outpath + '2_nan_corr_' + sci_list[0]) # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0])
+        self.agpm_pos = find_AGPM(self.outpath + '2_nan_corr_' + sci_list[0], verbose=verbose,debug=debug) # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0])
         self.agpm_pos = [self.agpm_pos[1],self.agpm_pos[0]]
-        self.final_sz = self.get_final_sz(self.final_sz)
+        self.final_sz = self.get_final_sz(self.final_sz,verbose=verbose,debug=debug)
         write_fits(self.outpath + 'final_sz', np.array([self.final_sz]),verbose=debug)
       
         #crop frames to that size
@@ -1550,9 +1655,11 @@ class raw_dataset:
             tmp = open_fits(self.outpath+'2_crop_'+sci_list[0])[-1]
             tmp_tmp = open_fits(self.outpath+'2_crop_'+sci_list[1])[-1]
         if plot == 'show':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),np.percentile(tmp_tmp[0],99.9)))
+            plot_frames((old_tmp,tmp,old_tmp_tmp,tmp_tmp),vmin=(0,0,0,0),
+                        vmax=(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),
+                              np.percentile(tmp_tmp[0],99.9)),title='Second Bad Pixel')
         if plot == 'save':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),np.percentile(tmp_tmp[0],99.9)), save = self.outpath + 'Second_badpx_crop')
+            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp),vmin = (0,0,0,0),vmax =(np.percentile(tmp[0],99.9),np.percentile(tmp[0],99.9),np.percentile(tmp_tmp[0],99.9),np.percentile(tmp_tmp[0],99.9)), save = self.outpath + 'Second_badpx_crop.pdf')
             
         # Crop the bpix map in a same way
         bpix_map = frame_crop(bpix_map,self.final_sz,cenxy=self.agpm_pos, force = True)
@@ -1992,7 +2099,7 @@ class raw_dataset:
                 os.system("rm "+self.outpath+'2_bpix_corr2_unsat_'+fits_name)
                 os.system("rm "+self.outpath+'2_bpix_corr2_map_unsat_'+fits_name)
                 
-    def get_stellar_psf(self, verbose = True, debug = True, plot = None, remove = False): 
+    def get_stellar_psf(self, verbose = True, debug = False, plot = None, remove = False):
         """
         Obtain a PSF model of the star based off of the unsat cubes.
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
@@ -2015,7 +2122,7 @@ class raw_dataset:
         unsat_pos = []
         #obtain star positions in the unsat frames
         for fits_name in unsat_list:
-            tmp = find_filtered_max(self.outpath + '3_rmfr_unsat_' + fits_name)
+            tmp = find_filtered_max(self.outpath + '3_rmfr_unsat_' + fits_name,verbose=verbose,debug=debug)
             unsat_pos.append(tmp)
             
         print('unsat_pos:', unsat_pos)    
@@ -2339,7 +2446,7 @@ class raw_dataset:
             crop_sz+=1
                     
         #t0 = time_ini()
-        #pdb.set_trace()
+
         # SCI frames
         bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
         for sc, fits_name in enumerate(sci_list):
@@ -2481,9 +2588,12 @@ class raw_dataset:
             # Do PCA subtraction of the sky
             tmp = np.median(tmp,axis = 0)
             if plot == 'show':
-                plot_frames((tmp,mask_AGPM),vmin = (0,0), vmax = (20000,1))
+                plot_frames((tmp,mask_AGPM),vmin = (np.percentile(tmp,0.1),0), vmax = (np.percentile(tmp,99.9),1),
+                            label=('Sky frame','Mask'), dpi=300, title = 'PCA Sky Subtract Mask')
             if plot == 'save':
-                plot_frames((tmp,mask_AGPM),vmin = (0,0), vmax = (20000,1), save = self.outpath + 'PCA_sky_subtract_mask')
+                plot_frames((tmp,mask_AGPM),vmin = (np.percentile(tmp,0.1),0), vmax = (np.percentile(tmp,99.9),1),
+                            label=('Sky frame','Mask'), dpi=300, title = 'PCA Sky Subtract Mask',
+                            save = self.outpath + 'PCA_sky_subtract_mask.pdf')
                 
             if verbose: 
                 print('Beginning PCA subtraction')
