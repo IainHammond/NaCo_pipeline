@@ -2586,13 +2586,18 @@ class raw_dataset:
             mask_AGPM = get_annulus_segments(mask_arr, mask_inner_rad, mask_width, mode = 'mask')[0]
             mask_AGPM = frame_crop(mask_AGPM,self.final_sz)
             # Do PCA subtraction of the sky
-            tmp = np.median(tmp,axis = 0)
+            if plot:
+                tmp = np.median(tmp,axis = 0)
+                tmp_tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+sci_list[-1],verbose=debug)
+                tmp_tmp = np.median(tmp_tmp,axis=0)
             if plot == 'show':
-                plot_frames((tmp,mask_AGPM),vmin = (np.percentile(tmp,0.1),0), vmax = (np.percentile(tmp,99.9),1),
-                            label=('Sky frame','Mask'), dpi=300, title = 'PCA Sky Subtract Mask')
+                plot_frames((tmp_tmp,tmp,mask_AGPM),vmin = (np.percentile(tmp_tmp,0.1),np.percentile(tmp,0.1),0),
+                            vmax = (np.percentile(tmp_tmp,99.9),np.percentile(tmp,99.9),1),
+                            label=('Science frame','Sky frame','Mask'), dpi=300, title = 'PCA Sky Subtract Mask')
             if plot == 'save':
-                plot_frames((tmp,mask_AGPM),vmin = (np.percentile(tmp,0.1),0), vmax = (np.percentile(tmp,99.9),1),
-                            label=('Sky frame','Mask'), dpi=300, title = 'PCA Sky Subtract Mask',
+                plot_frames((tmp_tmp,tmp,mask_AGPM),vmin = (np.percentile(tmp_tmp,0.1),np.percentile(tmp,0.1),0),
+                            vmax = (np.percentile(tmp_tmp,99.9),np.percentile(tmp,99.9),1),
+                            label=('Science frame','Sky frame','Mask'), dpi=300,
                             save = self.outpath + 'PCA_sky_subtract_mask.pdf')
                 
             if verbose: 
