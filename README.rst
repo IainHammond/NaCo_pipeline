@@ -1,4 +1,4 @@
-naco_pip - planet detecting pipeline
+NACO Pipeline - planet detecting pipeline
 =======================================================
 
 Introduction
