@@ -13,7 +13,7 @@ Capability
 - automatic classified of cubes and reading observation time
 - derotation angle calculation for ADI
 - dark subtraction via PCA
-- flat fielding (with+without airmass)
+- flat fielding (with or without airmass)
 - bad/hot/NaN pixel correction
 - remove sporadic DIT frames + re-scale frames
 - sky subtraction via PCA
@@ -32,7 +32,9 @@ Under testing
 
 Known Issues:
 ------------
-- Fast reduction is not working
-- plot scales aren't ideal
-- sporadic columns fix may not work on all data sets
-
+- fast reduction doesnt work in some sections
+- some plots are messy
+- debug mode hasn't been used in a very long time and may throw bugs/walls of output
+- in some data sets the systematic horizontal bars weren't quite removed
+- sometimes after binning the last frame is just zeros
+- bad pixel correction and sky subtraction is extremely slow for large data sets
