@@ -2754,7 +2754,7 @@ class raw_dataset:
                     if plot == 'show': 
                         plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2))
                     if plot == 'save': 
-                        plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), save = self.outpath + 'SCI_PCA_dark_subtraction')   
+                        plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), save = self.outpath + 'SCI_PCA_sky_subtraction')
                 else:
                     # ... IF PCA WITH A SPECIFIC NPC
                     old_tmp = np.median(open_fits(self.outpath+'3_AGPM_aligned_imlib_'+sci_list[0]), axis=0) 
@@ -2766,7 +2766,7 @@ class raw_dataset:
                     if plot == 'show':
                         plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2))
                     if plot == 'save': 
-                        plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), save = self.outpath + 'SCI_PCA_dark_subtraction')
+                        plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), save = self.outpath + 'SCI_PCA_sky_subtraction.pdf')
                         
         #time_fin(t0)
     def clean_fits(self):
