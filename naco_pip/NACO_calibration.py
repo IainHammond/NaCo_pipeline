@@ -2343,9 +2343,11 @@ class raw_dataset:
         tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz, 
                                               kernel_size=hpf_sz, fwhm_size=self.fwhm)
         if plot == 'show':
-            plot_frames(tmp, title = 'Isolated dust grains')
+            plot_frames(tmp, title = 'Isolated dust grains',vmax = np.percentile(tmp,99.9),vmin=np.percentile(tmp,0.1),
+                        dpi=300)
         if plot == 'save':
-            plot_frames(tmp, title = 'Isolated dust grains', save = self.outpath + 'Isolated_grains')        
+            plot_frames(tmp, title = 'Isolated dust grains',vmax = np.percentile(tmp,99.9),vmin=np.percentile(tmp,0.1),
+                        dpi=300,save = self.outpath + 'Isolated_grains.pdf')
         #then use the automatic detection tool of vip_hci.metrics
         snr_thr = 10
         snr_thr_all = 30
