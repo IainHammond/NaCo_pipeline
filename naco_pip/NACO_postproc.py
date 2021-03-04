@@ -23,7 +23,7 @@ from vip_hci.fits import open_fits, write_fits
 from vip_hci.pca import pca, pca_annular
 from vip_hci.metrics import normalize_psf, snrmap, contrast_curve
 from vip_hci.medsub import median_sub
-from vip.var import mask_circle,frame_filter_gaussian2d
+from vip_hci.var import mask_circle,frame_filter_lowpass
 #from naco_pip import fits_info
 
 # Definition of Useful function
@@ -265,7 +265,7 @@ class postproc_dataset:  #this class is for post-processing of the pre-processed
            if not isfile(outpath_sub.format(binning_factor, recenter_method, recenter_model) + 'final_PCA-ADI_full_' + test_pcs_str + '_conv.fits'):
                tmp = open_fits(outpath_sub.format(binning_factor, recenter_method, recenter_model) + 'final_PCA-ADI_full_' + test_pcs_str + '.fits')
                for nn in range(tmp.shape[0]):
-                   tmp[nn] = frame_filter_gaussian2d(tmp[nn], self.fwhm, mode='conv')
+                   tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size = self.fwhm, mode='conv')
                write_fits(outpath_sub.format(binning_factor, recenter_method, recenter_model) + 'final_PCA-ADI_full_' + test_pcs_str  + '_conv.fits',
                           tmp, verbose=False)
            ### SNR map
@@ -333,7 +333,7 @@ class postproc_dataset:  #this class is for post-processing of the pre-processed
                    if not isfile(outpath_sub.format(binning_factor, recenter_method, recenter_model) + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits'):
                        tmp = open_fits(outpath_sub.format(binning_factor, recenter_method, recenter_model)+'final_PCA-ADI_ann_'+test_pcs_str+'.fits')
                        for nn in range(tmp.shape[0]):
-                           tmp[nn] = frame_filter_gaussian2d(tmp[nn], self.fwhm, mode='conv')
+                           tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size = self.fwhm, mode='conv')
                        write_fits(outpath_sub.format(binning_factor, recenter_method, recenter_model)+'final_PCA-ADI_ann_'+test_pcs_str+'_conv.fits',
                                   tmp, verbose=False)
 
