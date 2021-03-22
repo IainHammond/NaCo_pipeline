@@ -36,5 +36,4 @@ Known Issues:
 - some plots are messy
 - debug mode hasn't been used in a very long time and may throw bugs/walls of output
 - in some data sets the systematic horizontal bars weren't quite removed
-- sometimes after binning the last frame is just zeros
 - bad pixel correction and sky subtraction is extremely slow for large data sets
