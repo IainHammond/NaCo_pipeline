@@ -7,9 +7,8 @@ Created on Mon Mar 16 15:48:04 2020
 """
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['input_dataset', 'find_AGPM_or_star']
-# test
-import matplotlib as mpl
 
+import matplotlib as mpl
 mpl.use('Agg')
 from matplotlib import pyplot as plt
 import os
@@ -20,7 +19,6 @@ from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
 from vip_hci.var import frame_filter_lowpass, frame_center, get_square
-# from naco_pip import fits_info
 import pdb
 
 
