@@ -8,7 +8,6 @@ Created on Thurs July 30 2020
 __author__ = 'Iain Hammond'
 __all__ = ['calib_dataset']
 
-import pdb
 import numpy as np
 import pyprind
 import os
@@ -17,11 +16,9 @@ from matplotlib import pyplot as plt
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_crop_frames, frame_crop
 from vip_hci.stats import cube_distance
-#from naco_pip import fits_info
 from vip_hci.conf import check_enough_memory
 
-
-class calib_dataset:  #this class is for pre-processing of the calibrated data
+class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
         self.inpath = inpath
         self.outpath = outpath + '{}_{}/'.format(recenter_method,recenter_model)
@@ -29,7 +26,7 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
         self.recenter_method = recenter_method
         self.recenter_model = recenter_model
         self.sci_list = []
-        #get all the science cubes into a list
+        # get all the science cubes into a list
         with open(self.inpath +"sci_list.txt", "r") as f:
             tmp = f.readlines()
             for line in tmp:
@@ -42,6 +39,7 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
             del tmp
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
+        os.system("cp "+ self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath) # for use later
         
     def recenter(self, nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = None, verbose = True, debug = False, plot = False, coro = True):
         """
@@ -389,7 +387,7 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
                
                 for idx,frame in enumerate(range(binning_factor,nframes,binning_factor)):
                     if idx == (int(nframes/binning_factor)-1):
-                        master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:])
+                        master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:],axis=0)
                         derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
                     master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame],axis=0)
                     derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
@@ -403,6 +401,3 @@ class calib_dataset:  #this class is for pre-processing of the calibrated data
         if isinstance(binning_factor,list) or isinstance(binning_factor,tuple):
             for binning_factor in binning_factor:
                 _binning(self,binning_factor,master_cube,derot_angles)
-
-
-                    
