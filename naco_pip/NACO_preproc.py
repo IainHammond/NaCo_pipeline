@@ -85,7 +85,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
             print('fwhm:',fwhm,'of type',type(fwhm))
-        mem = np.zeros(len(sci_list))
+        mem = np.zeros(len(self.sci_list))
         # Creates a master science cube with just the median of each cube
         bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
