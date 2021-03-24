@@ -190,7 +190,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
            if not isfile(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_conv.fits'):
                tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits',verbose=verbose)
                for nn in range(tmp.shape[0]):
-                   tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size = self.fwhm, mode='conv')
+                   tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size = self.fwhm, gauss_mode='conv')
                write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str  + '_conv.fits',
                           tmp, verbose=verbose)
            ### SNR map
@@ -254,7 +254,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                if not isfile(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits'):
                    tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
                    for nn in range(tmp.shape[0]):
-                       tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size=self.fwhm, mode='conv')
+                       tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size=self.fwhm, gauss_mode='conv')
                    write_fits(outpath_sub+'final_PCA-ADI_ann_'+test_pcs_str+'_conv.fits',
                               tmp, verbose=verbose)
 
