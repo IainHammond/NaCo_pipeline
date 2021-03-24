@@ -62,7 +62,7 @@ preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQ
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/', dataset_dict,
-                           nproc=1, npc=15)
+                           nproc=8, npc=15)
 
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
