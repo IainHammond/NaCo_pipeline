@@ -71,8 +71,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         #     print('Alert: Input path corrected. This likely occurred due to an input path typo')
         if verbose:
             print('Input path is {}'.format(self.inpath))
-        details = dataset_dict['details']
-        source = dataset_dict['source']
+        details = self.dataset_dict['details']
+        source = self.dataset_dict['source']
         tn_shift = -0.58 # Milli et al 2017
 
         ADI_cube_name = '{}_master_cube.fits'    # template name for input master cube
