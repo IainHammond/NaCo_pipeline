@@ -24,7 +24,7 @@
 #SBATCH --time=0-24:00:00
 
 # To receive an email when job completes or fails
-#SBATCH --mail-user=<imham3@student.monash.edu>
+#SBATCH --mail-user=<iain.hammond@monash.edu>
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 
