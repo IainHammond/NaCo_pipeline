@@ -127,7 +127,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
                 # make median combination of the de-rotated cube.
                 tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm,
-                                             radius_int=0, asize=snn_sz, delta_rot=delta_rot,
+                                             radius_int=0, asize=ann_sz, delta_rot=delta_rot,
                                              full_output=False, verbose=verbose)
                 tmp_tmp = mask_circle(tmp_tmp,mask_IWA_px)  # we mask the IWA
                 write_fits(outpath_sub+'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
