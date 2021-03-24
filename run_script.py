@@ -28,7 +28,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
                 'details': details,'ndit_sci': ndit_sci, 'ndit_sky':ndit_sky,'ndit_unsat':ndit_unsat,'dit_sci':dit_sci,
                 'dit_unsat':dit_unsat,'dit_unsat':dit_unsat,'dit_flat':dit_flat,'fast_reduction':fast_reduction}
 
-######  Activite various functions and set inpath + outpaths ######
+######  Activate various functions and set inpath + outpaths ######
 
 clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/raw/',
                      '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/', dataset_dict,coro = True)
