@@ -25,7 +25,7 @@ from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle,frame_filter_lowpass
 
 class preproc_dataset:  #this class is for post-processing of the pre-processed data
-    def __init__(self,inpath,outpath,nproc,npc):
+    def __init__(self,inpath,outpath,dataset_dict,nproc,npc):
         self.inpath = inpath
         self.outpath = outpath
         self.nproc = nproc
@@ -36,22 +36,13 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
 
-    def postprocessing(self, recenter_method, recenter_model, binning_factor, cropped = True,
-                 do_adi = True, do_adi_contrast = True, do_pca_full = True, do_pca_ann = False, do_snr_map = True,
-                 do_snr_map_opt = True, delta_rot = (0.5,3), plot = True, verbose = True, debug = False):
+    def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=False, cropped=True,
+                       do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, PCA-ADI, PCA-ann. Includes constrast curves and SNR maps.
 
         Parameters:
         ***********
-        recenter_method : str
-            method used to recenter in preproc
-        recenter_model : str
-            model used to recenter in preproc
-        binning_factor : int
-            for use in the name of the master cube. Will not be considered if = 1 or if cropped = False
-        cropped : bool
-            whether to use cropped frames. Must be used for running PCA in concentric annuli
         do_adi : bool
             Whether to do a median-ADI processing
         do_adi_contrast : bool
@@ -59,7 +50,9 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         do_pca_full : bool
             Whether to apply PCA-ADI on full frame
         do_pca_ann : bool, default is False
-            Whether to apply PCA-ADI in concentric annuli (more computer intensive). Only runs if cropped = True
+            Whether to apply PCA-ADI in concentric annuli (more computer intensive). Only runs if cropped=True
+        cropped : bool
+            whether the master cube was cropped in pre-processing
         do_snr_map : bool
             whether to compute an SNR map (warning: computer intensive); useful only when point-like features are seen
             in the image
@@ -75,27 +68,23 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
  
         """
         # ensures the correct inpath to the pre-processed data using the provided method and model
-        if self.inpath != calib.outpath + '{}_{}/'.format(recenter_method, recenter_model):
-            self.inpath = calib.outpath + '{}_{}/'.format(recenter_method, recenter_model)
-            print('Alert: Input path corrected. This likely occurred due to an input path typo')
+        # if self.inpath != calib.outpath + '{}_{}/'.format(recenter_method, recenter_model):
+        #     self.inpath = calib.outpath + '{}_{}/'.format(recenter_method, recenter_model)
+        #     print('Alert: Input path corrected. This likely occurred due to an input path typo')
         if verbose:
             print('Input path is {}'.format(self.inpath))
         details = dataset_dict['details']
         source = dataset_dict['source']
         tn_shift = -0.58 # Milli et al 2017
-        if cropped:
-            ADI_cube_name = 'master_cube_good_frames_cropped_bin{}.fits'    # template name for input master cubes (i.e. the recentered bad-frame trimmed ones)
-            derot_ang_name = 'derot_angles_good_frames_bin{}.fits'          # template name for corresponding input derotation angles
-            ADI_cube = open_fits(self.inpath+ADI_cube_name.format(binning_factor),verbose=verbose)
-            derot_angles = open_fits(self.inpath+derot_ang_name.format(binning_factor),verbose=verbose)+tn_shift
-        else:
-            ADI_cube_name = 'master_cube_good_frames.fits'                  # template name for input master cubes (i.e. the recentered bad-frame trimmed ones)
-            derot_ang_name = 'derot_angles_good_frames.fits'                # template name for corresponding input derotation angles
-            ADI_cube = open_fits(self.inpath+ADI_cube_name,verbose=verbose)
-            derot_angles = open_fits(self.inpath+derot_ang_name,verbose=verbose)+tn_shift
-        psf_name = "master_unsat_psf.fits"                                  # name of the non-coroangraphic stellar PSF
-        psfn_name = "master_unsat_psf_norm.fits"
-        flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"
+
+        ADI_cube_name = '{}_master_cube.fits'    # template name for input master cube
+        derot_ang_name = 'derot_angles.fits'     # template name for corresponding input derotation angles
+        psf_name = "master_unsat_psf.fits"       # name of the non-coroangraphic stellar PSF
+        psfn_name = "master_unsat_psf_norm.fits" # normalised PSF
+        flux_psf_name = "master_unsat-stellarpsf_fluxes.fits" # flux in a FWHM aperture found in calibration
+
+        ADI_cube = open_fits(self.inpath+ADI_cube_name.format(source),verbose=verbose)
+        derot_angles = open_fits(self.inpath+derot_ang_name,verbose=verbose)+tn_shift
         psf = open_fits(self.inpath+psf_name,verbose=verbose)
         psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
         starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
@@ -114,21 +103,19 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         overwrite_ADI = True                                                 # whether to overwrite output median-ADI files
         overwrite_pp = False                                                 # whether to overwrite output PCA-ADI files
 
-        # TEST number of principal components - for cropped and uncropped cubes
+        # TEST number of principal components
         ## PCA-FULL       
         if do_pca_full:
             test_pcs_full= list(range(1,self.npc+1))
         # PCA-ANN
         if do_pca_ann:
-            test_pcs_ann = list(range(1,self.npc+1)) # pca ann will only run with a cropped cube
+            test_pcs_ann = list(range(1,self.npc+1)) # needs a cropped cube
 
         # make directories if they don't exist
+        outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
+
         if not isdir(self.outpath):
             os.system("mkdir "+self.outpath)
-        if cropped:
-            outpath_sub = self.outpath + "sub_crop_bin{}_{}_{}/".format(binning_factor,recenter_method,recenter_model)
-        else:
-            outpath_sub = self.outpath + "sub_nocrop_{}_{}/".format(recenter_method,recenter_model)
         if not isdir(outpath_sub):
             os.system("mkdir "+outpath_sub)
 
@@ -141,14 +128,13 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                              full_output=debug, verbose=verbose)
                     tmp = mask_circle(tmp,mask_IWA_px)
                     write_fits(outpath_sub+'TMP_ADI_simple_cube_der.fits', tmp,verbose=verbose)
-                else: # make median combination of the de-rotated cube.
-                    tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm,
+
+                # make median combination of the de-rotated cube.
+                tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm,
                                              radius_int=0, asize=snn_sz, delta_rot=delta_rot,
-                                             full_output=debug, verbose=verbose)
+                                             full_output=False, verbose=verbose)
                 tmp_tmp = mask_circle(tmp_tmp,mask_IWA_px)  # we mask the IWA
                 write_fits(outpath_sub+'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
-            else:
-                tmp_tmp = open_fits(outpath_sub+'final_ADI_simple.fits',verbose=verbose)
 
             ## SNR map
             if (not isfile(outpath_sub+'final_ADI_simple_snrmap.fits') or overwrite_ADI) and do_snr_map:
@@ -157,6 +143,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                 tmp_tmp = snrmap(tmp, self.fwhm,nproc=nproc, verbose=verbose)
                 write_fits(outpath_sub+'final_ADI_simple_snrmap.fits', tmp_tmp, verbose=verbose)
 
+            ## Contrast curve
             if do_adi_contrast:
                 pn_contr_curve_adi = contrast_curve(ADI_cube, derot_angles, psfn, self.fwhm, pxscale=self.pixel_scale,
                                                     starphot=starphot, algo=median_sub, sigma=5., nbranch=1, theta=0,
@@ -232,9 +219,10 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
            ######################## PCA-ADI annular #######################
            if do_pca_ann:
-               if not cropped:
-                   raise ValueError("PCA in concentric annuli must be performed on a cropped cube!")
-
+               if cropped==False:
+                   raise ValueError('PCA-ADI annular requires a cropped cube!')
+               PCA_ADI_cube = ADI_cube.copy()
+               del ADI_cube
                test_pcs_str_list = [str(x) for x in test_pcs_ann]
                ntest_pcs = len(test_pcs_ann)
                test_pcs_str = "npc" + "-".join(test_pcs_str_list)
@@ -245,25 +233,26 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
                for pp, npc in enumerate(test_pcs_ann):
                    tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
-                                             radius_int=mask_IWA_px, fwhm=self.whm, asize=ann_sz * self.fwhm,
+                                             radius_int=mask_IWA_px, fwhm=self.whm, asize=ann_sz*self.fwhm,
                                              n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
-                                             svd_mode=svd_mode_2, nproc=self.nproc, min_frames_lib=max(npc, 10),
+                                             svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                              max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
                                              interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
                                              full_output=False, verbose=verbose)
-                   write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
 
                    if do_snr_map_opt:
                        tmp_tmp_tmp_tmp[pp] = pca_annular(PCA_ADI_cube, -derot_angles, cube_ref=ref_cube,
                                                          scale_list=None, radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                                         asize=ann_sz * self.fwhm, n_segments=1, delta_rot=delta_rot,
-                                                         delta_sep=(0.1, 1), ncomp=int(npc), svd_mode=svd_mode_2,
+                                                         asize=ann_sz*self.fwhm, n_segments=1, delta_rot=delta_rot,
+                                                         delta_sep=(0.1, 1), ncomp=int(npc), svd_mode=svd_mode,
                                                          nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                          max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
                                                          interpolation='lanczos4', collapse='median',
                                                          ifs_collapse_range='all', full_output=False, verbose=verbose)
-                       write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,
-                              verbose=verbose)
+
+               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
+               if do_snr_map_opt:
+                   write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
 
                ### Convolution
                if not isfile(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits'):
@@ -279,14 +268,14 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                    for pp in range(ntest_pcs):
                        tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=nproc, verbose=verbose)
                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
-                   write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits',
-                              tmp, verbose=verbose)
+                   write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits', tmp, verbose=verbose)
                ### SNR map optimized
                if (not isfile(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits'))and do_snr_map_opt:
                    tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits', verbose=verbose)
                    tmp_tmp = open_fits(outpath_sub +'neg_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
                    for pp in range(ntest_pcs):
-                       tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], verbose=verbose)
+                       tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], nproc=nproc,
+                                        verbose=verbose)
                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                    write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
         
