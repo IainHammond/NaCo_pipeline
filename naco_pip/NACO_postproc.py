@@ -77,13 +77,11 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
         ADI_cube_name = '{}_master_cube.fits'    # template name for input master cube
         derot_ang_name = 'derot_angles.fits'     # template name for corresponding input derotation angles
-        psf_name = "master_unsat_psf.fits"       # name of the non-coroangraphic stellar PSF
         psfn_name = "master_unsat_psf_norm.fits" # normalised PSF
         flux_psf_name = "master_unsat-stellarpsf_fluxes.fits" # flux in a FWHM aperture found in calibration
 
         ADI_cube = open_fits(self.inpath+ADI_cube_name.format(source),verbose=verbose)
         derot_angles = open_fits(self.inpath+derot_ang_name,verbose=verbose)+tn_shift
-        psf = open_fits(self.inpath+psf_name,verbose=verbose)
         psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
         starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
 
