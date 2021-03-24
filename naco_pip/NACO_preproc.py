@@ -175,7 +175,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # write all the shifts
         write_fits(self.outpath+'x_shifts.fits', sx) # writes the x shifts to the file
         write_fits(self.outpath+'y_shifts.fits', sy) # writes the y shifts to the file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']),tmp_tmp) #makes the master cube
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),tmp_tmp) #makes the master cube
         write_fits(self.outpath+'derot_angles.fits',angles_1dvector) # writes the 1D array of derotation angles
         if verbose:
             print('Shifts applied, master cube saved')
@@ -203,7 +203,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('Beginning bad frame removal...')
             print('\n')
         angle_file = open_fits(self.outpath+'derot_angles.fits',verbose=debug) #opens the rotation file
-        recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']),verbose=debug) # loads the master cube
+        recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),verbose=debug) # loads the master cube
 
         #open x shifts file for the respective method
         x_shifts = open_fits(self.outpath+"x_shifts.fits",verbose=debug)
@@ -295,7 +295,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         angle_threshold = angle_pxl_threshold[good_frames]
 
         # saves the good frames to a new file, and saves the derotation angles to a new file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']), frames_threshold)
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold)
         write_fits(self.outpath+'derot_angles.fits', angle_threshold)
         if verbose: 
             print('Saved good frames and their respective rotations to file')	
@@ -323,10 +323,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             Cube with cropped frames
 
         """
-        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source'])):
+        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
             raise NameError('Missing master cube from recentering and bad frame removal!')
 
-        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']),
+        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
                                 verbose=debug)
 
         nz,ny,nx= master_cube.shape
@@ -346,7 +346,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             if verbose:
                 print('######### Running frame cropping #########')
             master_cube = cube_crop_frames(master_cube, crop_size, force = False, verbose = debug, full_output = False)
-        write_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']), master_cube)
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube)
 
     def median_binning(self, binning_factor = 10, verbose = True, debug = False):
         """ 
@@ -370,13 +370,13 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 isinstance(binning_factor,tuple) == False:  # if it isnt int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
-        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source'])):
+        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
             raise NameError('Missing master cube from recentering and bad frame removal!') 
             
         if not os.path.isfile(self.outpath + 'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentering and bad frame removal!') 
         
-        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(dataset_dict['source']), verbose = debug)
+        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose = debug)
         derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose = debug)
         
         def _binning(self,binning_factor,master_cube,derot_angles):
@@ -396,8 +396,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame],axis=0)
                     derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
                 
-                write_fits(self.outpath+'{}_master_cube.fits'.format(
-                    dataset_dict['source'],binning_factor),master_cube_binned)
+                write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'],binning_factor),master_cube_binned)
                 write_fits(self.outpath+'derot_angles.fits'.format(binning_factor), derot_angles_binned)
             
         if isinstance(binning_factor, int):
