@@ -31,8 +31,6 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         self.nproc = nproc
         self.npc = npc
         self.fwhm = open_fits(self.inpath + 'fwhm.fits', verbose=False)[0] # fwhm is first entry
-        if verbose:
-            print('FWHM:',self.fwhm)
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
 
