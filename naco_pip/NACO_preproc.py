@@ -105,14 +105,17 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
                 print('##### Recentering via speckle pattern #####')
-                #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts, optimal inner radius value when you fit an annulus
-                tmp_tmp,cube_sci_lpf,cube_stret,sx, sy,opt_rad = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
+                #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
+                tmp_tmp,cube_sci_lpf,cube_stret,sx,sy = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
                                                                 alignment_iter = 5, gammaval = 1,
                                                                 min_spat_freq = 0.5, max_spat_freq = 3,
                                                                 fwhm = fwhm, debug = debug,
                                                                 recenter_median = True, negative = coro,
                                                                 fit_type='gaus', crop=False, subframesize = subi_size,
                                                                 imlib='opencv',interpolation='lanczos4',plot = plot, full_output = True)
+
+                del cube_sci_lpf
+                del cube_stret
         elif self.recenter_method == '2dfit':	
                 # DOUBLE GAUSSIAN
                 print('##### Recentering via 2dfit #####')         	
