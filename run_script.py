@@ -4,7 +4,7 @@
 Created on Sun Apr 12 13:11:12 2020
 @author: lewis, iain
 """
-from naco_pip import input_dataset, raw_dataset, calib_dataset
+from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6 #meters
 size_telescope = 8.2 #meters
@@ -48,24 +48,24 @@ calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/
 # calib.correct_bad_pixels(debug = False, plot = 'save')
 # calib.first_frames_removal(debug = False, plot = 'save')
 # calib.get_stellar_psf(debug = False, plot = 'save')
-calib.subtract_sky(npc = 1, debug = False, plot = 'save')
+# calib.subtract_sky(npc = 1, debug = False, plot = 'save')
 
 preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
                         recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
 
-# preproc.recenter(nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = 251, verbose = True, debug = False, plot = 'save', coro = True)
-# preproc.bad_frame_removal(pxl_shift_thres = 0.4, sub_frame_sz = 31, verbose = True, debug = False, plot = 'save')
-# ### for PCA in concentric annuli, a binned cube is needed ###
-# preproc.crop_cube(arcsecond_diameter = 6, verbose = True, debug = False)
-# preproc.median_binning(binning_factor = [1,10], verbose = True)
+preproc.recenter(nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = 251, verbose = True, debug = False, plot = 'save', coro = True)
+preproc.bad_frame_removal(pxl_shift_thres = 0.4, sub_frame_sz = 31, verbose = True, debug = False, plot = 'save')
+### for PCA in concentric annuli, a cropped cube is needed at minimum ###
+preproc.crop_cube(arcsecond_diameter = 2, verbose = True, debug = False)
+preproc.median_binning(binning_factor = 10, verbose = True)
 
-postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/speckle_gauss/',
-                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/', nproc=1, npc=15)
+postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/', dataset_dict,
+                           nproc=1, npc=15)
 
-postproc.postprocessing(recenter_method='speckle', recenter_model='gauss', binning_factor=1, cropped=True, do_adi=True,
-                        do_adi_contrast=True, do_pca_full=True, do_pca_ann=False, do_snr_map=True, do_snr_map_opt=True,
-                        delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
+postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
+                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
 
 # some previous data sets:
 
