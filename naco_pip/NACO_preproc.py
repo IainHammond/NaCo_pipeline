@@ -40,6 +40,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
         os.system("cp "+ self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath) # for use later
+        os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         
     def recenter(self, nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = None, verbose = True, debug = False, plot = False, coro = True):
         """
