@@ -253,7 +253,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                                          max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
                                                          interpolation='lanczos4', collapse='median',
                                                          ifs_collapse_range='all', full_output=False, verbose=verbose)
-
+               print('test')
                write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
                if do_snr_map_opt:
                    write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
@@ -282,5 +282,5 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                         verbose=verbose)
                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                    write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
-        
+               print('test2')
                 
