@@ -38,7 +38,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
 
-    def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=False, cropped=True,
+    def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, PCA-ADI, PCA-ann. Includes constrast curves and SNR maps.
@@ -52,7 +52,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         do_pca_full : bool
             Whether to apply PCA-ADI on full frame
         do_pca_ann : bool, default is False
-            Whether to apply PCA-ADI in concentric annuli (more computer intensive). Only runs if cropped=True
+            Whether to apply annular PCA-ADI (more computer intensive). Only runs if cropped=True
         cropped : bool
             whether the master cube was cropped in pre-processing
         do_snr_map : bool
