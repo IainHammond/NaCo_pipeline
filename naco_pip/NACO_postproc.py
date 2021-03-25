@@ -221,66 +221,64 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits',
                           tmp, verbose=verbose)
 
-           ######################## PCA-ADI annular #######################
-           if do_pca_ann:
-               if cropped==False:
-                   raise ValueError('PCA-ADI annular requires a cropped cube!')
-               PCA_ADI_cube = ADI_cube.copy()
-               del ADI_cube
-               test_pcs_str_list = [str(x) for x in test_pcs_ann]
-               ntest_pcs = len(test_pcs_ann)
-               test_pcs_str = "npc" + "-".join(test_pcs_str_list)
+       ######################## PCA-ADI annular #######################
+        if do_pca_ann:
+           if cropped==False:
+               raise ValueError('PCA-ADI annular requires a cropped cube!')
+           PCA_ADI_cube = ADI_cube.copy()
+           del ADI_cube
+           test_pcs_str_list = [str(x) for x in test_pcs_ann]
+           ntest_pcs = len(test_pcs_ann)
+           test_pcs_str = "npc" + "-".join(test_pcs_str_list)
 
-               tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+           tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+           if do_snr_map_opt:
+               tmp_tmp_tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+
+           for pp, npc in enumerate(test_pcs_ann):
+               tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
+                                         radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz*self.fwhm,
+                                         n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
+                                         svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
+                                         max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
+                                         interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
+                                         full_output=False, verbose=verbose)
+
                if do_snr_map_opt:
-                   tmp_tmp_tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+                   tmp_tmp_tmp_tmp[pp] = pca_annular(PCA_ADI_cube, -derot_angles, cube_ref=ref_cube,
+                                                     scale_list=None, radius_int=mask_IWA_px, fwhm=self.fwhm,
+                                                     asize=ann_sz*self.fwhm, n_segments=1, delta_rot=delta_rot,
+                                                     delta_sep=(0.1, 1), ncomp=int(npc), svd_mode=svd_mode,
+                                                     nproc=self.nproc, min_frames_lib=max(npc, 10),
+                                                     max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
+                                                     interpolation='lanczos4', collapse='median',
+                                                     ifs_collapse_range='all', full_output=False, verbose=verbose)
 
-               for pp, npc in enumerate(test_pcs_ann):
-                   tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
-                                             radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz*self.fwhm,
-                                             n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
-                                             svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
-                                             max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
-                                             interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
-                                             full_output=False, verbose=verbose)
+           write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
+           if do_snr_map_opt:
+               write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
 
-                   if do_snr_map_opt:
-                       tmp_tmp_tmp_tmp[pp] = pca_annular(PCA_ADI_cube, -derot_angles, cube_ref=ref_cube,
-                                                         scale_list=None, radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                                         asize=ann_sz*self.fwhm, n_segments=1, delta_rot=delta_rot,
-                                                         delta_sep=(0.1, 1), ncomp=int(npc), svd_mode=svd_mode,
-                                                         nproc=self.nproc, min_frames_lib=max(npc, 10),
-                                                         max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
-                                                         interpolation='lanczos4', collapse='median',
-                                                         ifs_collapse_range='all', full_output=False, verbose=verbose)
-               print('test')
-               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
-               if do_snr_map_opt:
-                   write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
+           ### Convolution
+           if not isfile(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits'):
+               tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
+               for nn in range(tmp.shape[0]):
+                   tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size=self.fwhm, gauss_mode='conv')
+               write_fits(outpath_sub+'final_PCA-ADI_ann_'+test_pcs_str+'_conv.fits',
+                          tmp, verbose=verbose)
 
-               ### Convolution
-               if not isfile(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits'):
-                   tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
-                   for nn in range(tmp.shape[0]):
-                       tmp[nn] = frame_filter_lowpass(tmp[nn], fwhm_size=self.fwhm, gauss_mode='conv')
-                   write_fits(outpath_sub+'final_PCA-ADI_ann_'+test_pcs_str+'_conv.fits',
-                              tmp, verbose=verbose)
-
-               ### SNR map
-               if (not isfile(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits')) and do_snr_map:
-                   tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
-                   for pp in range(ntest_pcs):
-                       tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=verbose)
-                       tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
-                   write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits', tmp, verbose=verbose)
-               ### SNR map optimized
-               if (not isfile(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits'))and do_snr_map_opt:
-                   tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits', verbose=verbose)
-                   tmp_tmp = open_fits(outpath_sub +'neg_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
-                   for pp in range(ntest_pcs):
-                       tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
-                                        verbose=verbose)
-                       tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
-                   write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
-               print('test2')
-                
+           ### SNR map
+           if (not isfile(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits')) and do_snr_map:
+               tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
+               for pp in range(ntest_pcs):
+                   tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=verbose)
+                   tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+               write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap.fits', tmp, verbose=verbose)
+           ### SNR map optimized
+           if (not isfile(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits'))and do_snr_map_opt:
+               tmp = open_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'.fits', verbose=verbose)
+               tmp_tmp = open_fits(outpath_sub +'neg_PCA-ADI_ann_'+test_pcs_str+'.fits',verbose=verbose)
+               for pp in range(ntest_pcs):
+                   tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
+                                    verbose=verbose)
+                   tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+               write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
