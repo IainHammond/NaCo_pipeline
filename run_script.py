@@ -12,8 +12,9 @@ pixel_scale = 0.02719  #arcsecs per pixel
 
 ###### source information: ######
 
+source = 'Elias2-24'
 #CQTau
-source = 'CQTau' # used in some saved filenames and plots
+#source = 'CQTau' # used in some saved filenames and plots
 details = '(NACO+AGPM)' # info displayed in plots and figures
 ndit_sci = [100] #number of frames per science cube
 ndit_sky = [100] # number of frames per sky cube
@@ -30,16 +31,16 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 ######  Activate various functions and set inpath + outpaths ######
 
-clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/raw/',
-                     '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/', dataset_dict,coro = True)
+# clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/raw/',
+#                      '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/', dataset_dict,coro = True)
 
 #clas.bad_columns()
 # clas.mk_dico()
 # clas.find_sky_in_sci_cube(plot = 'save')
 # clas.find_derot_angles()
 
-calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/',
-                    '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/', dataset_dict,final_sz = None)
+# calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/',
+#                     '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/', dataset_dict,final_sz = None)
 
 # calib.dark_subtract(bad_quadrant = [3], debug = False, plot = 'save')
 # ##calib.fix_sporadic_columns(quadrant='topright', xpixels_from_center = 7, interval = 8, verbose = True, debug = False)
@@ -50,9 +51,9 @@ calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/
 # calib.get_stellar_psf(debug = False, plot = 'save')
 # calib.subtract_sky(npc = 1, debug = False, plot = 'save')
 
-preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
-                        '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
-                        recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
+# preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
+#                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
+#                         recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
 
 # preproc.recenter(nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = 251, verbose = True, debug = False, plot = 'save', coro = True)
 # preproc.bad_frame_removal(pxl_shift_thres = 0.4, sub_frame_sz = 31, verbose = True, debug = False, plot = 'save')
@@ -60,11 +61,11 @@ preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQ
 # preproc.crop_cube(arcsecond_diameter = 2, verbose = True, debug = False)
 # preproc.median_binning(binning_factor = 10, verbose = True)
 
-postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
-                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/', dataset_dict,
+postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc/', dataset_dict,
                            nproc=8, npc=15)
 
-postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
+postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
 
 # some previous data sets:
