@@ -77,13 +77,14 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
         ADI_cube_name = '{}_master_cube.fits'    # template name for input master cube
         derot_ang_name = 'derot_angles.fits'     # template name for corresponding input derotation angles
-        psfn_name = "master_unsat_psf_norm.fits" # normalised PSF
-        flux_psf_name = "master_unsat-stellarpsf_fluxes.fits" # flux in a FWHM aperture found in calibration
-
         ADI_cube = open_fits(self.inpath+ADI_cube_name.format(source),verbose=verbose)
         derot_angles = open_fits(self.inpath+derot_ang_name,verbose=verbose)+tn_shift
-        psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
-        starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
+
+        if do_adi_contrast:
+            psfn_name = "master_unsat_psf_norm.fits" # normalised PSF
+            flux_psf_name = "master_unsat-stellarpsf_fluxes.fits" # flux in a FWHM aperture found in calibration
+            psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
+            starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
 
         mask_IWA = 1                                                        # size of numerical mask hiding the inner part of post-processed images. Provided in terms of fwhm. 1px for NACO
         mask_IWA_px = mask_IWA*self.fwhm
