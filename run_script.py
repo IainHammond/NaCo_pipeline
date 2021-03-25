@@ -65,7 +65,7 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc/', dataset_dict,
                            nproc=1, npc=15)
 
-postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
+postproc.postprocessing(do_adi=False, do_adi_contrast=False, do_pca_full=False, do_pca_ann=True, cropped=True,
                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
 
 # some previous data sets:

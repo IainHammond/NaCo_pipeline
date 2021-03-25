@@ -234,7 +234,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
                for pp, npc in enumerate(test_pcs_ann):
                    tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
-                                             radius_int=mask_IWA_px, fwhm=self.whm, asize=ann_sz*self.fwhm,
+                                             radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz*self.fwhm,
                                              n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
                                              svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                              max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
