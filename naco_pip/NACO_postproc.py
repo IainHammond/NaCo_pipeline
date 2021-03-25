@@ -30,7 +30,11 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         self.outpath = outpath
         self.nproc = nproc
         self.npc = npc
-        self.fwhm = open_fits(self.inpath + 'fwhm.fits', verbose=False)[0] # fwhm is first entry
+        try:
+            self.fwhm = open_fits(self.inpath + 'fwhm.fits', verbose=False)[0] # fwhm is first entry
+        except:
+            print("Alert: No FWHM file found. Setting to median value of 4.2")
+            self.fwhm = 4.2
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
 
