@@ -73,11 +73,22 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         # if self.inpath != calib.outpath + '{}_{}/'.format(recenter_method, recenter_model):
         #     self.inpath = calib.outpath + '{}_{}/'.format(recenter_method, recenter_model)
         #     print('Alert: Input path corrected. This likely occurred due to an input path typo')
+
+        # make directories if they don't exist
+        outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
+
+        if not isdir(self.outpath):
+            os.system("mkdir " + self.outpath)
+        if not isdir(outpath_sub):
+            os.system("mkdir " + outpath_sub)
+
         if verbose:
             print('Input path is {}'.format(self.inpath))
+            print('Output path is {}'.format(outpath_sub))
+
         details = self.dataset_dict['details']
         source = self.dataset_dict['source']
-        tn_shift = -0.58 # Milli et al 2017
+        tn_shift = -0.58 # Milli et al 2017, true North correction factor
 
         ADI_cube_name = '{}_master_cube.fits'    # template name for input master cube
         derot_ang_name = 'derot_angles.fits'     # template name for corresponding input derotation angles
@@ -111,14 +122,6 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         # PCA-ANN
         if do_pca_ann:
             test_pcs_ann = list(range(1,self.npc+1)) # needs a cropped cube
-
-        # make directories if they don't exist
-        outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
-
-        if not isdir(self.outpath):
-            os.system("mkdir "+self.outpath)
-        if not isdir(outpath_sub):
-            os.system("mkdir "+outpath_sub)
 
         ######################### Simple ADI ###########################
         if do_adi:
