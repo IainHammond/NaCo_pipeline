@@ -8,21 +8,16 @@ Created on Thu 27 Aug 2020 15:45:23
 __author__ = 'Iain Hammond'
 __all__ = ['preproc_dataset']
 
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
 import numpy as np
 from os.path import isfile, isdir
 import os
-import pandas
-from pandas import DataFrame as DF
 
-import vip_hci as vip
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.pca import pca, pca_annular
-from vip_hci.metrics import normalize_psf,snrmap,contrast_curve
+from vip_hci.metrics import snrmap,contrast_curve
 from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle,frame_filter_lowpass
+from vip_hci.negfc import mcmc_negfc_sampling, show_corner_plot, show_walk_plot, confidence, firstguess, cube_planet_free
 
 class preproc_dataset:  #this class is for post-processing of the pre-processed data
     def __init__(self,inpath,outpath,dataset_dict,nproc,npc):
@@ -75,6 +70,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         #     print('Alert: Input path corrected. This likely occurred due to an input path typo')
 
         # make directories if they don't exist
+        print("======= Starting post-processing....=======")
         outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
 
         if not isdir(self.outpath):
@@ -282,3 +278,60 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                     verbose=verbose)
                    tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
+
+    # def do_negfc(self,guess_xy=(0,0),mcmc_negfc=True,verbose=True,debug=False):
+    #     """
+    #     xxx
+    #
+    #     Parameters:
+    #     ***********
+    #     guess : tuple
+    #         first estimate of the source location to be provdied to firstguess()
+    #     mcmc_negfc : bool
+    #         whether to run MCMC NEGFC sampling (computationally intensive)
+    #     verbose : bool
+    #         prints more output when True
+    #
+    #     """
+    #     print("======= Starting NEGFC....=======")
+    #
+    #     outpath_sub = self.outpath + "negfc/"
+    #
+    #     if not isdir(self.outpath):
+    #         os.system("mkdir " + self.outpath)
+    #     if not isdir(outpath_sub):
+    #         os.system("mkdir " + outpath_sub)
+    #
+    #     if verbose:
+    #         print('Input path is {}'.format(self.inpath))
+    #         print('Output path is {}'.format(outpath_sub))
+    #
+    #     source = self.dataset_dict['source']
+    #
+    #     ADI_cube_name = '{}_master_cube.fits'  # template name for input master cube
+    #     derot_ang_name = 'derot_angles.fits'  # template name for corresponding input derotation angles
+    #     ADI_cube = open_fits(self.inpath + ADI_cube_name.format(source), verbose=verbose)
+    #     derot_angles = open_fits(self.inpath + derot_ang_name, verbose=verbose) + tn_shift
+    #
+    #     ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc[ff], plsc=plsc,
+    #                            planets_xy_coord=planet_pos_crop, fwhm=fwhm,
+    #                            annulus_width=asize, aperture_radius=ap_rad, cube_ref=ref_cube,
+    #                            svd_mode=svd_mode, scaling=None, fmerit=fm, imlib=imlib,
+    #                            interpolation=interpolation, collapse='median', p_ini=None,
+    #                            transmission=transmission, algo=algo,
+    #                            f_range=f_range, simplex=True, simplex_options=None, plot=False,
+    #                            verbose=True, save=False)
+    #
+    #     final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc[ff], plsc=plsc,
+    #                                       initial_state=ini_state, fwhm=fwhm, weights=weights,
+    #                                       annulus_width=asize, aperture_radius=ap_rad, cube_ref=ref_cube,
+    #                                       svd_mode=svd_mode, scaling=None, fmerit=fm,
+    #                                       imlib=imlib, interpolation=interpolation, transmission=transmission,
+    #                                       collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
+    #                                       ac_c=ac_c, mu_sigma=mu_sigma,
+    #                                       burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test=conv_test,
+    #                                       niteration_min=niteration_min, niteration_limit=niteration_limit,
+    #                                       niteration_supp=0, check_maxgap=20, nproc=nproc, algo=algo,
+    #                                       output_dir=outpath_5.format(bin_fac, filt + '_' + fm + label_test),
+    #                                       output_file="MCMC_results", display=False, verbosity=2,
+    #                                       save=True)
