@@ -299,7 +299,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             if do_firstguess = True, first estimate of the source location to be provdied to firstguess()
         mcmc_negfc : bool
             whether to run MCMC NEGFC sampling (computationally intensive)
-        algo : pca_annulus, pca_annular, pca. default pca_annular
+        algo : 'pca_annulus', 'pca_annular', 'pca'. default 'pca_annular'
             select which routine to be used to model and subtract the stellar PSF
         nwalkers_ini : int, default 120
             for MCMC, the number of Goodman & Weare 'walkers'
@@ -340,12 +340,15 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         psfn = open_fits(self.inpath + psfn_name, verbose=verbose)
         #starphot = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
 
-        if algo == pca_annular:
+        if algo == 'pca_annular':
             label_pca = 'pca_annular'
-        elif algo == pca_annulus:
+            algo = pca_annular
+        elif algo == 'pca_annulus':
             label_pca = 'pca_annulus'
-        elif algo == pca:
+            algo = 'pca_annulus'
+        elif algo == 'pca':
             label_pca = 'pca'
+            algo = pca
         opt_npc = 15
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
