@@ -280,7 +280,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
 
     def do_negfc(self,do_firstguess=True, guess_xy=(0,0),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
-                 niteration_limit=10000, save_plot=True,verbose=True):
+                 niteration_limit=10000, weights=False, save_plot=True,verbose=True):
         """
         Module for estimating the location and flux of a planet.
 
@@ -306,7 +306,10 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         niteration_min : int, default 25
             for MCMC, the simulation will run at least this number of steps per walker
         niteration_limit : int, default 10000
-            for MCMC, stops simulation if this many steps run without having reached the convergence criterion,
+            for MCMC, stops simulation if this many steps run without having reached the convergence criterion
+        weights : bool
+            for MCMC, should only be used on unsaturated datasets, where the flux of the star can be measured in each
+            image of the cube
         save_plot : bool, default True
             the MCMC results are pickled and saved to the outpath
         verbose : bool
@@ -334,18 +337,17 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         ADI_cube_name = '{}_master_cube.fits'  # template name for input master cube
         derot_ang_name = 'derot_angles.fits'  # template name for corresponding input derotation angles
         psfn_name = "master_unsat_psf_norm.fits"  # normalised PSF
-        #flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
+
         ADI_cube = open_fits(self.inpath + ADI_cube_name.format(source), verbose=verbose)
         derot_angles = open_fits(self.inpath + derot_ang_name, verbose=verbose) + tn_shift
         psfn = open_fits(self.inpath + psfn_name, verbose=verbose)
-        #starphot = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
 
         if algo == 'pca_annular':
             label_pca = 'pca_annular'
             algo = pca_annular
         elif algo == 'pca_annulus':
             label_pca = 'pca_annulus'
-            algo = 'pca_annulus'
+            algo = pca_annulus
         elif algo == 'pca':
             label_pca = 'pca'
             algo = pca
@@ -370,6 +372,12 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         if not isfile(outpath_sub + "MCMC_results") and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc), verbose=verbose)
 
+            if weights:
+                flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
+                weights = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
+            else:
+                weights = None
+
             cy, cx = frame_center(ADI_cube[0])
             dy_pl = guess_xy[0][1] - cy
             dx_pl = guess_xy[0][0] - cx
@@ -382,7 +390,6 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             bounds = [(max(r_pl - asize / 2., 1), r_pl + asize / 2.),  # radius
                       (theta_pl - delta_theta, theta_pl + delta_theta),  # angle
                       (0, 5 * abs(ini_state[2]))]
-            weights = None
 
             mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                           initial_state=ini_state, fwhm=self.fwhm, weights=weights,
