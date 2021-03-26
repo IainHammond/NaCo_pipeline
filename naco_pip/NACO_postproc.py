@@ -149,7 +149,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                                     starphot=starphot, algo=median_sub, sigma=5., nbranch=1, theta=0,
                                                     inner_rad=1, wedge=(0,360), student=True, transmission=None,
                                                     smooth=True, plot=plot, dpi=300, debug=debug,
-                                                    save_plot=outpath_sub, verbose=verbose)
+                                                    save_plot=outpath_sub+'contrast_adi.pdf', verbose=verbose)
 
         ####################### PCA-ADI full ###########################
         if do_pca_full:
