@@ -21,12 +21,14 @@ Capability
 - automatic bad frame detection 
 - cropping
 - binning 
-- median ADI and PCA in full frame
+- median ADI 
+- PCA in full frame and PCA annular
 - S/N map
 
 Under testing
 ------------
 - fast reduction
+- NEGFC
 
 Known Issues:
 ------------
