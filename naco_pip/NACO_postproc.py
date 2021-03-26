@@ -150,6 +150,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                                     inner_rad=1, wedge=(0,360), student=True, transmission=None,
                                                     smooth=True, plot=plot, dpi=300, debug=debug,
                                                     save_plot=outpath_sub+'contrast_adi.pdf', verbose=verbose)
+            if verbose:
+                print("======= Completed Median-ADI =======")
 
         ####################### PCA-ADI full ###########################
         if do_pca_full:
@@ -217,6 +219,9 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits',
                           tmp, verbose=verbose)
 
+           if verbose:
+               print("======= Completed PCA Full Frame =======")
+
        ######################## PCA-ADI annular #######################
         if do_pca_ann:
            if cropped==False:
@@ -278,6 +283,9 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                     verbose=verbose)
                    tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
+
+           if verbose:
+               print("======= Completed PCA Annular =======")
 
     def do_negfc(self,do_firstguess=True, guess_xy=(0,0),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
                  niteration_limit=10000, weights=False, save_plot=True,verbose=True):
