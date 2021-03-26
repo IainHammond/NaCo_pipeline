@@ -13,7 +13,7 @@ from os.path import isfile, isdir
 import os
 
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.pca import pca, pca_annular
+from vip_hci.pca import pca, pca_annular, pca_annulus
 from vip_hci.metrics import snrmap,contrast_curve
 from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle,frame_filter_lowpass, frame_center
@@ -280,23 +280,37 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                write_fits(outpath_sub +'final_PCA-ADI_ann_'+test_pcs_str+'_snrmap_opt.fits',tmp, verbose=verbose)
 
     def do_negfc(self,do_firstguess=True, guess_xy=(0,0),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
-                 niteration_limit=10000, save_plot=True,verbose=True,debug=False):
+                 niteration_limit=10000, save_plot=True,verbose=True):
         """
-        xxx
+        Module for estimating the location and flux of a planet.
+
+        Using a first guess from the (x,y) coordinates in pixels for the planet, we can estimate a preliminary guess for
+        the position and flux for each planet.
+
+        If using MCMC, runs an affine invariant MCMC sampling algorithm in order to determine the position and the flux
+        of the planet using the 'Negative Fake Companion' technique. The result of this procedure is a chain with the
+        samples from the posterior distributions of each of the 3 parameters.
 
         Parameters:
         ***********
-        guess : tuple
-            first estimate of the source location to be provdied to firstguess()
+        do_firstguess : bool
+            whether to determine a first guess for the position and the flux of a planet (not NEGFC)
+        guess_xy : tuple
+            if do_firstguess = True, first estimate of the source location to be provdied to firstguess()
         mcmc_negfc : bool
             whether to run MCMC NEGFC sampling (computationally intensive)
         algo : pca_annulus, pca_annular, pca. default pca_annular
             select which routine to be used to model and subtract the stellar PSF
-        nwalkers : int, default 120
-            the number of Goodman & Weare 'walkers'
+        nwalkers_ini : int, default 120
+            for MCMC, the number of Goodman & Weare 'walkers'
+        niteration_min : int, default 25
+            for MCMC, the simulation will run at least this number of steps per walker
+        niteration_limit : int, default 10000
+            for MCMC, stops simulation if this many steps run without having reached the convergence criterion,
+        save_plot : bool, default True
+            the MCMC results are pickled and saved to the outpath
         verbose : bool
             prints more output when True
-
         """
 
         print("======= Starting NEGFC....=======")
