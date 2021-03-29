@@ -101,7 +101,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         mask_IWA_px = mask_IWA*self.fwhm
         if verbose:
             print("adopted mask size: {:.0f}".format(mask_IWA_px))
-        
+
         ann_sz=3                                                             # if PCA-ADI in a single annulus or in concentric annuli, this is the size of the annulus/i in FWHM
         svd_mode = 'lapack'                                                  # python package used for Singular Value Decomposition for PCA reductions
         n_randsvd = 3                                                        # if svd package is set to 'randsvd' number of times we do PCA rand-svd, before taking the median of all results (there is a risk of significant self-subtraction when just doing it once)
@@ -359,6 +359,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         elif algo == 'pca':
             label_pca = 'pca'
             algo = pca
+        else:
+            raise ValueError("Invalid algorithm. Select either pca_annular, pca_annulus or pca!")
         opt_npc = 15
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
@@ -400,15 +402,16 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                       (0, 5 * abs(ini_state[2]))]
 
             mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
-                                          initial_state=ini_state, fwhm=self.fwhm, weights=weights,
-                                          annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
-                                          svd_mode='lapack', scaling=None, fmerit='stddev',
-                                          imlib='opencv', interpolation='lanczos4', transmission=None,
-                                          collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
-                                          ac_c=50, mu_sigma=(0, 1),
-                                          burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac', # use autocorrelation to ensure sufficient sampling. sample around the aea of best likelihood to make distribution
-                                          niteration_min=niteration_min, niteration_limit=niteration_limit,
-                                          niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
-                                          output_dir=outpath_sub,
-                                          output_file="MCMC_results", display=False, verbosity=2,
-                                          save=save_plot)
+                                initial_state=ini_state, fwhm=self.fwhm, weights=weights,
+                                annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
+                                svd_mode='lapack', scaling=None, fmerit='stddev',
+                                imlib='opencv', interpolation='lanczos4', transmission=None,
+                                collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
+                                ac_c=50, mu_sigma=(0, 1),
+                                burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
+                                # use autocorrelation to ensure sufficient sampling. sample around the aea of best likelihood to make distribution
+                                niteration_min=niteration_min, niteration_limit=niteration_limit,
+                                niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
+                                output_dir=outpath_sub,
+                                output_file="MCMC_results", display=False, verbosity=2,
+                                save=save_plot)
