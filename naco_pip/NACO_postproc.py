@@ -287,7 +287,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
            if verbose:
                print("======= Completed PCA Annular =======")
 
-    def do_negfc(self,do_firstguess=True, guess_xy=(0,0),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
+    def do_negfc(self,do_firstguess=True, guess_xy=np.array([[62.136,53.31]]),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
                  niteration_limit=10000, weights=False, save_plot=True,verbose=True):
         """
         Module for estimating the location and flux of a planet.
@@ -364,7 +364,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         opt_npc = 15
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
-        #weights = starphot / np.median(starphot) # not needed because we don't have filters?
+        #weights = starphot / np.median(starphot)
 
         if not isfile(outpath_sub+label_pca+"_npc{}_simplex_results.fits".format(opt_npc)) and do_firstguess:
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
