@@ -287,7 +287,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
            if verbose:
                print("======= Completed PCA Annular =======")
 
-    def do_negfc(self,do_firstguess=True, guess_xy=np.array([[62.136,53.31]]),mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
+    def do_negfc(self,do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
                  niteration_limit=10000, weights=False, save_plot=True,verbose=True):
         """
         Module for estimating the location and flux of a planet.
