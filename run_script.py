@@ -12,9 +12,9 @@ pixel_scale = 0.02719  #arcsecs per pixel
 
 ###### source information: ######
 
-#source = 'Elias2-24'
+source = 'Elias2-24'
 #CQTau
-source = 'CQTau' # used in some saved filenames and plots
+#source = 'CQTau' # used in some saved filenames and plots
 details = '(NACO+AGPM)' # info displayed in plots and figures
 ndit_sci = [100] #number of frames per science cube
 ndit_sky = [100] # number of frames per sky cube
@@ -61,14 +61,14 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # preproc.crop_cube(arcsecond_diameter = 2, verbose = True, debug = False)
 # preproc.median_binning(binning_factor = 10, verbose = True)
 
-postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
-                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/', dataset_dict,
+postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc/', dataset_dict,
                            nproc=1, npc=15)
 
-postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=False, do_pca_ann=False, cropped=True,
-                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
-# postproc.do_negfc(do_firstguess=True, guess_xy=(62.136,53.31),mcmc_negfc=True, algo='pca_annular', nwalkers_ini=120, niteration_min = 25,
-#                  niteration_limit=10000, save_plot=True,verbose=True)
+#postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=False, do_pca_ann=False, cropped=True,
+#                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False)
+postproc.do_negfc(do_firstguess=True, guess_xy=(62.136,53.31),mcmc_negfc=True, algo='pca_annular', nwalkers_ini=120,
+                  niteration_min = 25,niteration_limit=10000, save_plot=True,verbose=True)
 
 # some previous data sets:
 
