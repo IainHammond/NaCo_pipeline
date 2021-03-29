@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Applys post-processing algorithms to the pre-processed cube
+
 Created on Thu 27 Aug 2020 15:45:23 
 
 @author: Iain
@@ -375,6 +377,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                    transmission=None, algo=pca_annular,
                                    f_range=f_range, simplex=True, simplex_options=None, plot=False,
                                    verbose=verbose, save=save_plot)
+                                    # when p_ini is set to None, it gets the value of planets_xy_coord
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
 
             write_fits(outpath_sub+label_pca+"_npc{}_simplex_results.fits".format(opt_npc), ini_state,verbose=verbose)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Classifies cubes and find derotation angles
+
 Created on Mon Mar 16 15:48:04 2020
 
 @author: lewis, iain
@@ -121,8 +123,7 @@ class input_dataset():
         #         bcm[j,i] = 1
 
         for fname in self.file_list:
-            tmp, header_fname = open_fits(self.inpath + fname,
-                                          header=True, verbose=debug)
+            tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
             print('Opened {} of type {}'.format(fname, header_fname['HIERARCH ESO DPR TYPE']))
             # ADD code here that checks for bad column and updates the mask
             if verbose:

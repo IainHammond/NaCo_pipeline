@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Apr  6 16:01:17 2020
+Applies necessary calibration to the cubes and corrects NACO biases
+
+Created on Mon Apr 6 16:01:17 2020
 
 @author: lewis, iain
 """
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
+
 import pdb
 import numpy as np
 import pyprind

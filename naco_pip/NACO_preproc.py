@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Recenters, detects bad frames, crops and bins
+
 Created on Thurs July 30 2020
 
 @author: Iain
