@@ -3,10 +3,7 @@
 """
 Fetching of NACO datasets
 
-Created on Mon March 29 2021
-
 @author: Iain
 """
 __author__ = 'Iain Hammond'
-__all__ = ['fetch_dataset']
-
+__all__ = ['']

@@ -3,8 +3,6 @@
 """
 Applies necessary calibration to the cubes and corrects NACO biases
 
-Created on Mon Apr 6 16:01:17 2020
-
 @author: lewis, iain
 """
 __author__ = 'Lewis Picker, Iain Hammond'

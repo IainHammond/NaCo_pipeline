@@ -3,8 +3,6 @@
 """
 Applys post-processing algorithms to the pre-processed cube
 
-Created on Thu 27 Aug 2020 15:45:23 
-
 @author: Iain
 """
 __author__ = 'Iain Hammond'

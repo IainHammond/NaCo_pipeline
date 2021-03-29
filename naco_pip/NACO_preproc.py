@@ -3,8 +3,6 @@
 """
 Recenters, detects bad frames, crops and bins
 
-Created on Thurs July 30 2020
-
 @author: Iain
 """
 __author__ = 'Iain Hammond'

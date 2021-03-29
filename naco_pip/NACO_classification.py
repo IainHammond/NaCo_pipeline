@@ -3,8 +3,6 @@
 """
 Classifies cubes and find derotation angles
 
-Created on Mon Mar 16 15:48:04 2020
-
 @author: lewis, iain
 """
 __author__ = 'Lewis Picker, Iain Hammond'
