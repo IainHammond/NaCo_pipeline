@@ -1,7 +1,0 @@
-vip_hci
-hciplot
-
-[dev]
-vip_hci
-hciplot
-pytest

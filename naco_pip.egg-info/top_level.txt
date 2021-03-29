@@ -1,2 +1,0 @@
-fits_info
-naco_pip
