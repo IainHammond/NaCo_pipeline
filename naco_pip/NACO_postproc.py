@@ -34,7 +34,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         self.pixel_scale = dataset_dict['pixel_scale']
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
-                       do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), plot=True, verbose=True, debug=False):
+                       do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, plot=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, PCA-ADI, PCA-ann. Includes constrast curves and SNR maps.
 
@@ -58,11 +58,14 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         delta_rot : tuple
             Threshold in rotation angle used in pca_annular to include frames in the PCA library (provided in terms of
             FWHM). See description of pca_annular() for more details
+        mask_IWA : int, default 1
+            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of fwhm
         plot : bool
             Whether to save plots to the output path (PDF file, print quality)
         verbose : bool
             prints more output when True                 
- 
+        debug : bool, default is False
+            Saves extra output files
         """
         # ensures the correct inpath to the pre-processed data using the provided method and model
         # if self.inpath != calib.outpath + '{}_{}/'.format(recenter_method, recenter_model):
@@ -97,7 +100,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
             starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
 
-        mask_IWA = 1                                                        # size of numerical mask hiding the inner part of post-processed images. Provided in terms of fwhm. 1px for NACO
+        mask_IWA = 1                                                        # size of numerical mask hiding the inner part of post-processed images. Provided in terms of fwhm
         mask_IWA_px = mask_IWA*self.fwhm
         if verbose:
             print("adopted mask size: {:.0f}".format(mask_IWA_px))
@@ -233,18 +236,29 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
            test_pcs_str = "npc" + "-".join(test_pcs_str_list)
 
            tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+           if debug:
+               array_der = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+               array_out = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
            if do_snr_map_opt:
                tmp_tmp_tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
 
            for pp, npc in enumerate(test_pcs_ann):
-               tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
+               if debug: # saves residuals and median
+                    array_out[pp], array_der[pp], tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
                                          radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz*self.fwhm,
                                          n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
                                          svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                          max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
                                          interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
-                                         full_output=False, verbose=verbose)
-
+                                         full_output=debug, verbose=verbose)
+               else:
+                   tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
+                                             radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz * self.fwhm,
+                                             n_segments=1, delta_rot=delta_rot, delta_sep=(0.1, 1), ncomp=int(npc),
+                                             svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
+                                             max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
+                                             interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
+                                             full_output=False, verbose=verbose)
                if do_snr_map_opt:
                    tmp_tmp_tmp_tmp[pp] = pca_annular(PCA_ADI_cube, -derot_angles, cube_ref=ref_cube,
                                                      scale_list=None, radius_int=mask_IWA_px, fwhm=self.fwhm,
@@ -256,6 +270,9 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                                      ifs_collapse_range='all', full_output=False, verbose=verbose)
 
            write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
+           if debug:
+               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals.fits', tmp_tmp, verbose=verbose)
+               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals-derot.fits', tmp_tmp, verbose=verbose)
            if do_snr_map_opt:
                write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
 
