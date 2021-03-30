@@ -287,8 +287,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
            if verbose:
                print("======= Completed PCA Annular =======")
 
-    def do_negfc(self,do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, algo=pca_annular, nwalkers_ini=120, niteration_min = 25,
-                 niteration_limit=10000, weights=False, save_plot=True,verbose=True):
+    def do_negfc(self,do_firstguess=True, guess_xy=None,mcmc_negfc=True, ncomp=1, algo=pca_annular,
+                 nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, save_plot=True,verbose=True):
         """
         Module for estimating the location and flux of a planet.
 
@@ -307,6 +307,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             if do_firstguess = True, first estimate of the source location to be provdied to firstguess()
         mcmc_negfc : bool
             whether to run MCMC NEGFC sampling (computationally intensive)
+        ncomp : int, default 1
+            number of prinicple components to subtract
         algo : 'pca_annulus', 'pca_annular', 'pca'. default 'pca_annular'
             select which routine to be used to model and subtract the stellar PSF
         nwalkers_ini : int, default 120
@@ -325,7 +327,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
         """
 
         print("======= Starting NEGFC....=======")
-        if guess_xy==(0,0):
+        if guess_xy==None:
             raise ValueError("Enter an approximate location into guess_xy!")
 
         outpath_sub = self.outpath + "negfc/"
@@ -361,10 +363,9 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             algo = pca
         else:
             raise ValueError("Invalid algorithm. Select either pca_annular, pca_annulus or pca!")
-        opt_npc = 15
+        opt_npc = ncomp
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
-        #weights = starphot / np.median(starphot)
 
         if not isfile(outpath_sub+label_pca+"_npc{}_simplex_results.fits".format(opt_npc)) and do_firstguess:
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
@@ -372,7 +373,7 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
                                    annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
                                    svd_mode='lapack', scaling=None, fmerit='stddev', imlib='opencv',
                                    interpolation='lanczos4', collapse='median', p_ini=None,
-                                   transmission=None, algo=pca_annular,
+                                   transmission=None, algo=algo,
                                    f_range=f_range, simplex=True, simplex_options=None, plot=False,
                                    verbose=verbose, save=save_plot)
                                     # when p_ini is set to None, it gets the value of planets_xy_coord
