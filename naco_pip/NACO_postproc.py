@@ -237,8 +237,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
            tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
            if debug:
-               array_der = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
-               array_out = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+               array_der = np.zeros([ntest_pcs, PCA_ADI_cube.shape[0], PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
+               array_out = np.zeros([ntest_pcs, PCA_ADI_cube.shape[0], PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
            if do_snr_map_opt:
                tmp_tmp_tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
 
