@@ -271,8 +271,8 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
 
            write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp, verbose=verbose)
            if debug:
-               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals.fits', tmp_tmp, verbose=verbose)
-               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals-derot.fits', tmp_tmp, verbose=verbose)
+               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals.fits', array_out, verbose=verbose)
+               write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_residuals-derot.fits', array_der, verbose=verbose)
            if do_snr_map_opt:
                write_fits(outpath_sub + 'neg_PCA-ADI_ann_' + test_pcs_str + '.fits', tmp_tmp_tmp_tmp,verbose=verbose)
 
