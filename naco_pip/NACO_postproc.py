@@ -100,7 +100,6 @@ class preproc_dataset:  #this class is for post-processing of the pre-processed 
             psfn = open_fits(self.inpath+psfn_name,verbose=verbose)
             starphot = open_fits(self.inpath+flux_psf_name,verbose=verbose)[1] # scaled fwhm flux is the second entry
 
-        mask_IWA = 1                                                        # size of numerical mask hiding the inner part of post-processed images. Provided in terms of fwhm
         mask_IWA_px = mask_IWA*self.fwhm
         if verbose:
             print("adopted mask size: {:.0f}".format(mask_IWA_px))
