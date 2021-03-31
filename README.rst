@@ -33,7 +33,7 @@ Under testing
 Known Issues:
 ------------
 - fast reduction doesnt work in some sections
-- some plots are messy
-- debug mode hasn't been used in a very long time and may throw bugs/walls of output
+- some calibration plots are messy
+- debug mode needs further testing in calibration
 - in some data sets the systematic horizontal bars weren't quite removed
 - bad pixel correction and sky subtraction is extremely slow for large data sets
