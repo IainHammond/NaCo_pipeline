@@ -97,8 +97,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             psfn_name = "master_unsat_psf_norm.fits"  # normalised PSF
             flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
             psfn = open_fits(self.inpath + psfn_name, verbose=verbose)
-            starphot = open_fits(self.inpath + flux_psf_name, verbose=verbose)[
-                1]  # scaled fwhm flux is the second entry
+            starphot = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
 
         mask_IWA_px = mask_IWA * self.fwhm
         if verbose:
