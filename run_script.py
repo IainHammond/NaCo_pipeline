@@ -63,7 +63,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc/', dataset_dict,
-                           nproc=1, npc=15)
+                           nproc=1, npc=10)
 
 postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=2, overwrite=True, plot=True,
