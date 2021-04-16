@@ -62,11 +62,11 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # preproc.median_binning(binning_factor = 10, verbose = True)
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
-                            '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc/', dataset_dict,
-                           nproc=1, npc=10)
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_smallmask/', dataset_dict,
+                           nproc=1, npc=20)
 
 postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
-                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=2, overwrite=True, plot=True,
+                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
                         verbose=True, debug=True)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, ncomp=1, algo='pca_annular',
 #                  nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, save_plot=True,verbose=True)
