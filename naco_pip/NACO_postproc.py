@@ -38,7 +38,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, plot=True,
                        verbose=True, debug=False):
         """ 
-        For post processing the master cube via median ADI, PCA-ADI, PCA-ann. Includes constrast curves and SNR maps.
+        For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes constrast
+        curves and SNR maps.
 
         Parameters:
         ***********
@@ -319,7 +320,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         Module for estimating the location and flux of a planet.
 
         Using a first guess from the (x,y) coordinates in pixels for the planet, we can estimate a preliminary guess for
-        the position and flux for each planet.
+        the position and flux for each planet. Saves the r, theta and flux
 
         If using MCMC, runs an affine invariant MCMC sampling algorithm in order to determine the position and the flux
         of the planet using the 'Negative Fake Companion' technique. The result of this procedure is a chain with the
@@ -406,7 +407,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
 
             write_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc), ini_state,
-                       verbose=verbose)
+                       verbose=verbose) # saves r, theta and flux
 
         if not isfile(outpath_sub + "MCMC_results") and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc),
@@ -414,8 +415,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
             if weights:
                 flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
-                weights = open_fits(self.inpath + flux_psf_name, verbose=verbose)[
-                    1]  # scaled fwhm flux is the second entry
+                weights = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
             else:
                 weights = None
 
