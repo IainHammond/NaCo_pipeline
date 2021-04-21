@@ -14,10 +14,10 @@ import os
 
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.pca import pca, pca_annular, pca_annulus
-from vip_hci.metrics import snrmap, contrast_curve
+from vip_hci.metrics import snrmap, contrast_curve, normalize_psf
 from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
-from vip_hci.negfc import mcmc_negfc_sampling, firstguess
+from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot
 
 
 class preproc_dataset:  # this class is for post-processing of the pre-processed data
@@ -407,17 +407,27 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
 
             write_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc), ini_state,
-                       verbose=verbose) # saves r, theta and flux
+                       verbose=verbose)  # saves r, theta and flux
 
         if not isfile(outpath_sub + "MCMC_results") and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc),
                                   verbose=verbose)
 
             if weights:
-                flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
-                weights = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
+                nfr = ADI_cube.shape[0]  # number of frames
+                star_flux = np.zeros([nfr])  # for storing the star flux found in each frame
+                crop_sz_tmp = min(int(10 * self.fwhm), ADI_cube.shape[1] - 2)  # crop around star, either 10*FWHM or size - 2
+                if crop_sz_tmp % 2 == 0:  # if it's not even, crop
+                    crop_sz_tmp -= 1
+                for ii in range(nfr):
+                    _, star_flux[ii], _ = normalize_psf(ADI_cube[ii], fwhm=self.fwhm, size=crop_sz_tmp,
+                                                        full_output=True)  # get star flux in 1*FWHM
+                weights = star_flux / np.median(star_flux)
+                star_flux = np.median(star_flux)  # for use after MCMC when turning the chain into contrast
             else:
                 weights = None
+                flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
+                star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
 
             cy, cx = frame_center(ADI_cube[0])
             dy_pl = guess_xy[0][1] - cy
@@ -432,17 +442,27 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                       (theta_pl - delta_theta, theta_pl + delta_theta),  # angle
                       (0, 5 * abs(ini_state[2]))]
 
-            mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
-                                initial_state=ini_state, fwhm=self.fwhm, weights=weights,
-                                annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
-                                svd_mode='lapack', scaling=None, fmerit='stddev',
-                                imlib='opencv', interpolation='lanczos4', transmission=None,
-                                collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
-                                ac_c=50, mu_sigma=(0, 1),
-                                burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
-                                # use autocorrelation to ensure sufficient sampling. sample around the aea of best likelihood to make distribution
-                                niteration_min=niteration_min, niteration_limit=niteration_limit,
-                                niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
-                                output_dir=outpath_sub,
-                                output_file="MCMC_results", display=False, verbosity=2,
-                                save=save_plot)
+            if ini_state[0] < bounds[0][0] or ini_state[0] > bounds[0][1] or ini_state[1] < bounds[1][0] or \
+                    ini_state[1] > bounds[1][1] or ini_state[2] < bounds[2][0] or ini_state[2] > bounds[2][1]:
+                print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!")
+                ini_state = np.array([r_pl,theta_pl,abs(ini_state[2])])
+
+            final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
+                                              initial_state=ini_state, fwhm=self.fwhm, weights=weights,
+                                              annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
+                                              svd_mode='lapack', scaling=None, fmerit='stddev',
+                                              imlib='opencv', interpolation='lanczos4', transmission=None,
+                                              collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
+                                              ac_c=50, mu_sigma=(0, 1),
+                                              burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
+                                              # use autocorrelation 'ac' to ensure sufficient sampling. sample around
+                                              # the area of best likelihood to make distribution
+                                              niteration_min=niteration_min, niteration_limit=niteration_limit,
+                                              niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
+                                              output_dir=outpath_sub,
+                                              output_file="MCMC_results", display=False, verbosity=2,
+                                              save=save_plot)
+
+            final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # converts to a contrast
+            show_walk_plot(final_chain, save=save_plot, output_dir=outpath_sub)
+            show_corner_plot(final_chain, burnin=0.3, save=save_plot, output_dir=outpath_sub)

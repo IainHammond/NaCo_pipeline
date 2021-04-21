@@ -2260,8 +2260,8 @@ class raw_dataset:
         psf_med_norm, flux_unsat, _ = normalize_psf(psf_med, fwhm=self.fwhm, full_output=True)
         if nd_filter:
             print('Neutral Density filter toggle is on... using a transmission of 0.0178 for 3.8 micrometers')
-            flux_psf = flux_unsat[0] * (self.dataset_dict['dit_sci'] / (self.dataset_dict['dit_unsat']*0.0178))
-            # scales flux by DIT ratio accounting for transmission of ND filter
+            flux_psf = (flux_unsat[0] * 0.0178) * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
+            # scales flux by DIT ratio accounting for transmission of ND filter (as unsat exposure time will be long)
         else:
             flux_psf = flux_unsat[0] * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
             # scales flux by DIT ratio
