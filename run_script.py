@@ -47,8 +47,8 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # calib.flat_field_correction(debug = False, plot = 'save')
 # calib.correct_nan(debug = False, plot = 'save')
 # calib.correct_bad_pixels(debug = False, plot = 'save')
-# calib.first_frames_removal(debug = False, plot = 'save')
-# calib.get_stellar_psf(debug = False, plot = 'save')
+# calib.first_frames_removal(nd_filter = False, verbose = True, debug = False, plot = 'save')
+# calib.get_stellar_psf(nd_filter = False, debug = False, plot = 'save')
 # calib.subtract_sky(npc = 1, debug = False, plot = 'save')
 
 # preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
@@ -65,11 +65,11 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_smallmask/', dataset_dict,
                            nproc=1, npc=20)
 
-postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
-                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
-                        verbose=True, debug=True)
-# postproc.do_negfc(do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, ncomp=1, algo='pca_annular',
-#                  nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, save_plot=True,verbose=True)
+# postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
+#                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
+#                         verbose=True, debug=True)
+postproc.do_negfc(do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, ncomp=1, algo='pca_annular',
+                 nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, save_plot=True,verbose=True)
 
 # some previous data sets:
 
