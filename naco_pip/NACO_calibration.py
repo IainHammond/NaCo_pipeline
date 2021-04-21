@@ -2100,8 +2100,13 @@ class raw_dataset:
     def get_stellar_psf(self, verbose = True, debug = False, plot = None, remove = False):
         """
         Obtain a PSF model of the star based off of the unsat cubes.
-        plot options: 'save', 'show', None. Show or save relevant plots for debugging
-        remove options: True, Flase. Cleans file for unused fits
+
+        nd_filter : bool, default = None
+            when a ND filter is used in L' the transmission is ~0.0178. Used for scaling
+        plot options : 'save', 'show', or default None.
+            Show or save relevant plots for debugging
+        remove options : bool, False by default
+            Cleans previous calibration files
         """
         unsat_list = []
         with open(self.inpath +"unsat_list.txt", "r") as f:
@@ -2253,7 +2258,13 @@ class raw_dataset:
                    verbose=debug)
 
         psf_med_norm, flux_unsat, _ = normalize_psf(psf_med, fwhm=self.fwhm, full_output=True)
-        flux_psf = flux_unsat[0] * self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'] # scale flux by DIT ratio
+        if nd_filter:
+            print('Neutral Density filter toggle is on... using a transmission of 0.0178 for 3.8 micrometers')
+            flux_psf = flux_unsat[0] * (self.dataset_dict['dit_sci'] / (self.dataset_dict['dit_unsat']*0.0178))
+            # scales flux by DIT ratio accounting for transmission of ND filter
+        else:
+            flux_psf = flux_unsat[0] * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
+            # scales flux by DIT ratio
 
         write_fits(self.outpath+'master_unsat_psf_norm.fits', psf_med_norm,verbose=debug)
         write_fits(self.outpath+'master_unsat-stellarpsf_fluxes.fits', np.array([flux_unsat[0],flux_psf]),verbose=debug)
