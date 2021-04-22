@@ -13,6 +13,7 @@ pixel_scale = 0.02719  #arcsecs per pixel
 ###### source information: ######
 
 source = 'Elias2-24'
+
 #CQTau
 #source = 'CQTau' # used in some saved filenames and plots
 details = '(NACO+AGPM)' # info displayed in plots and figures
@@ -63,12 +64,12 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_smallmask/', dataset_dict,
-                           nproc=1, npc=20)
+                           nproc=8, npc=20)
 
 # postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
 #                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
 #                         verbose=True, debug=True)
-postproc.do_negfc(do_firstguess=True, guess_xy=[(62.136,53.31)],mcmc_negfc=True, ncomp=1, algo='pca_annular',
+postproc.do_negfc(do_firstguess=True, guess_xy=[(63.136,54.31)],mcmc_negfc=False, ncomp=20, algo='pca_annular',
                  nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, save_plot=True,verbose=True)
 
 # some previous data sets:
