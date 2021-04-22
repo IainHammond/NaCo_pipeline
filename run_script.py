@@ -69,7 +69,7 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12
 # postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
 #                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
 #                         verbose=True, debug=True)
-postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)],mcmc_negfc=False, ncomp=20, algo='pca_annular',
+postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)],mcmc_negfc=True, ncomp=20, algo='pca_annular',
                   nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, weights=False, overwrite=True,
                   save_plot=True, verbose=True)
 
