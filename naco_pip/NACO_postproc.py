@@ -401,7 +401,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                    svd_mode='lapack', scaling=None, fmerit='stddev', imlib='opencv',
                                    interpolation='lanczos4', collapse='median', p_ini=None,
                                    transmission=None, algo=algo,
-                                   f_range=f_range, simplex=True, simplex_options=None, plot=False,
+                                   f_range=f_range, simplex=True, simplex_options=None, plot=save_plot,
                                    verbose=verbose, save=save_plot)
             # when p_ini is set to None, it gets the value of planets_xy_coord
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
