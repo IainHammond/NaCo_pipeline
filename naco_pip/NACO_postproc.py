@@ -314,8 +314,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 print("======= Completed PCA Annular =======")
 
     def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, ncomp=1, algo='pca_annular',
-                 nwalkers_ini=120, niteration_min=25, niteration_limit=10000, weights=False, save_plot=True,
-                 verbose=True):
+                 nwalkers_ini=120, niteration_min=25, niteration_limit=10000, weights=False, overwrite=True,
+                 save_plot=True, verbose=True):
         """
         Module for estimating the location and flux of a planet.
 
@@ -346,7 +346,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             for MCMC, stops simulation if this many steps run without having reached the convergence criterion
         weights : bool
             for MCMC, should only be used on unsaturated datasets, where the flux of the star can be measured in each
-            image of the cube
+            image of the cube'
+        overwrite : bool, default True
+            whether to and run a module and overwrite results if they already exist
         save_plot : bool, default True
             the MCMC results are pickled and saved to the outpath
         verbose : bool
@@ -394,7 +396,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
 
-        if not isfile(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc)) and do_firstguess:
+        if (not isfile(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc)) or overwrite) and do_firstguess:
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                    planets_xy_coord=guess_xy, fwhm=self.fwhm,
                                    annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
@@ -409,7 +411,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             write_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc), ini_state,
                        verbose=verbose)  # saves r, theta and flux
 
-        if not isfile(outpath_sub + "MCMC_results") and mcmc_negfc:
+        if (not isfile(outpath_sub + "MCMC_results") or overwrite) and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc),
                                   verbose=verbose)
 
