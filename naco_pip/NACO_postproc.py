@@ -313,7 +313,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if verbose:
                 print("======= Completed PCA Annular =======")
 
-    def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, ncomp=1, algo='pca_annular',
+    def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, inject_neg=True, ncomp=1, algo='pca_annular',
                  nwalkers_ini=120, niteration_min=25, niteration_limit=10000, weights=False, overwrite=True,
                  save_plot=True, verbose=True):
         """
@@ -334,6 +334,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if do_firstguess = True, first estimate of the source location to be provdied to firstguess()
         mcmc_negfc : bool
             whether to run MCMC NEGFC sampling (computationally intensive)
+        inject_neg : bool
+            whether to inject negative flux of the planet and post process the data without signal from the planet
         ncomp : int, default 1
             number of prinicple components to subtract
         algo : 'pca_annulus', 'pca_annular', 'pca'. default 'pca_annular'
@@ -468,3 +470,11 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # converts to a contrast
             show_walk_plot(final_chain, save=save_plot, output_dir=outpath_sub)
             show_corner_plot(final_chain, burnin=0.3, save=save_plot, output_dir=outpath_sub)
+
+        # if inject_neg:
+        #     ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles,
+        #                                           flevel=-planet_params[2, 0] * star_flux[ff, :], plsc=,
+        #                                           rad_dists=[planet_params[0, 0]],
+        #                                           n_branches=1, theta=planet_params[1, 0],
+        #                                           imlib=imlib, interpolation=interpolation,
+        #                                           verbose=False, transmission=transmission)
