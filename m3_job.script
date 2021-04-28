@@ -18,7 +18,7 @@
 #SBATCH --cpus-per-task=8
 
 # Memory usage (MB)
-#SBATCH --mem-per-cpu=24000
+#SBATCH --mem-per-cpu=2048
 
 # Set your minimum acceptable wall time, format: day-hours:minutes:seconds
 #SBATCH --time=3-0:00:00
