@@ -12,8 +12,8 @@
 #SBATCH --account=pd87
 
 # Request CPU resource for a openmp job, suppose it is a 12-thread job
-#SBATCH --ntasks=36            # multi-processing
-#SBATCH --ntasks-per-node=36   # to spread across multiple nodes, depending what is available with show_cluster
+#SBATCH --ntasks=8            # multi-processing
+#SBATCH --ntasks-per-node=8   # to spread across multiple nodes, depending what is available with show_cluster
 #SBATCH --cpus-per-task=1      # the number of CPUs, multiplied by ntasks
 
 # Memory usage (MB)
@@ -39,11 +39,11 @@
 # SBATCH --reservation=reservation_name
 
 # Command to run a openmp job
-# Set OMP_NUM_THREADS to the same value as: --cpus-per-task=2
+# Set OMP_NUM_THREADS to the same value as --cpus-per-task. One thread is best for CPU intensive tasks, more can actually slow it down
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 source /home/ihammond/miniconda3/etc/profile.d/conda.sh # supposed to fix conda activate error
-conda activate VIPenv # VIP environment
-ulimit -s unlimited # to fix stack size memory error but it doesnt really seem to work
-python run_script.py
+conda activate VIPenv # personal VIP conda environment
+ulimit -s unlimited # recommended by support team to fix stack size memory error (don't know if it actually works)
+python run_script.py # runs the script
