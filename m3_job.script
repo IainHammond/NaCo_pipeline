@@ -22,7 +22,7 @@
 # Set your minimum acceptable wall time, format: day-hours:minutes:seconds
 #SBATCH --time=5-0:00:00
 
-#SBATCH --partition=m3i        # select a specific partition
+# SBATCH --partition=m3i        # select a specific partition
 
 # To receive an email when job completes or fails
 #SBATCH --mail-user=<iain.hammond@monash.edu>
