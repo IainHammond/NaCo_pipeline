@@ -12,8 +12,8 @@
 #SBATCH --account=pd87
 
 # Request CPU resource for a openmp job, suppose it is a 12-thread job
-#SBATCH --ntasks=8            # multi-processing
-#SBATCH --ntasks-per-node=8   # to spread across multiple nodes, depending what is available with show_cluster
+#SBATCH --ntasks=1            # multi-processing
+#SBATCH --ntasks-per-node=1   # to spread across multiple nodes, depending what is available with show_cluster
 #SBATCH --cpus-per-task=1      # the number of CPUs, multiplied by ntasks
 
 # Memory usage (MB)
