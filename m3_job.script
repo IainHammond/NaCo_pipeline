@@ -8,8 +8,7 @@
 # To give your job a name, replace "MyJob" with an appropriate name
 #SBATCH --job-name=NACO-Elias2-24-negfc
 
-
-# To set a project account for credit charging, 
+# To set a project account for credit charging,
 #SBATCH --account=pd87
 
 # Request CPU resource for a openmp job, suppose it is a 12-thread job
@@ -23,7 +22,7 @@
 # Set your minimum acceptable wall time, format: day-hours:minutes:seconds
 #SBATCH --time=5-0:00:00
 
-#SBATCH --partition=m3i       # select a specific partition
+#SBATCH --partition=m3i        # select a specific partition
 
 # To receive an email when job completes or fails
 #SBATCH --mail-user=<iain.hammond@monash.edu>
