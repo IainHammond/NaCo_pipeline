@@ -43,7 +43,7 @@
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
-# source /home/ihammond/miniconda3/etc/profile.d/conda.sh # supposed to fix conda activate error
-conda activate VIPenv # personal VIP conda environment
+source /home/ihammond/miniconda3/etc/profile.d/conda.sh # initialise conda shell
+conda activate VIPenv # activate personal VIP conda environment
 # ulimit -s unlimited # recommended by support team to fix stack size memory error (don't know if it actually works)
 python run_script.py # runs the script
