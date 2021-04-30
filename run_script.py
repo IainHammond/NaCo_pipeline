@@ -4,6 +4,8 @@
 Created on Sun Apr 12 13:11:12 2020
 @author: lewis, iain
 """
+source = 'Elias2-24'
+print(source)
 from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6 #meters
@@ -12,8 +14,7 @@ pixel_scale = 0.02719  #arcsecs per pixel
 
 ###### source information: ######
 
-source = 'Elias2-24'
-print(source)
+
 #CQTau
 #source = 'CQTau' # used in some saved filenames and plots
 details = '(NACO+AGPM)' # info displayed in plots and figures
@@ -64,7 +65,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_smallmask/',
-                           dataset_dict, nproc=1, npc=20)
+                           dataset_dict, nproc=2, npc=20)
 
 # postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
 #                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
