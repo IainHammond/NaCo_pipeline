@@ -6,6 +6,11 @@ Created on Sun Apr 12 13:11:12 2020
 """
 source = 'Elias2-24'
 print(source)
+
+import os
+nproc = os.getenv('OMP_NUM_THREADS',default=1)
+print('Number of CPUS:',nproc)
+
 from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6 #meters
@@ -13,7 +18,6 @@ size_telescope = 8.2 #meters
 pixel_scale = 0.02719  #arcsecs per pixel
 
 ###### source information: ######
-
 
 #CQTau
 #source = 'CQTau' # used in some saved filenames and plots
@@ -57,7 +61,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 #                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
 #                         recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
 
-# preproc.recenter(nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = 251, verbose = True, debug = False, plot = 'save', coro = True)
+# preproc.recenter(nproc = nproc, sigfactor = 4, subi_size = 21, crop_sz = 251, verbose = True, debug = False, plot = 'save', coro = True)
 # preproc.bad_frame_removal(pxl_shift_thres = 0.4, sub_frame_sz = 31, verbose = True, debug = False, plot = 'save')
 # ### for PCA in concentric annuli, a cropped cube is needed at minimum ###
 # preproc.crop_cube(arcsecond_diameter = 2, verbose = True, debug = False)
@@ -65,7 +69,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_smallmask/',
-                           dataset_dict, nproc=1, npc=20)
+                           dataset_dict, nproc=nproc, npc=20)
 
 # postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
 #                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,

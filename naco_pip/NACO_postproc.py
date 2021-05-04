@@ -465,7 +465,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                               niteration_min=niteration_min, niteration_limit=niteration_limit,
                                               niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
                                               output_dir=outpath_sub,
-                                              output_file="MCMC_results", display=False, verbosity=2,
+                                              output_file="MCMC_results", display=False, verbosity=3,
                                               save=save_plot)
 
             final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # converts to a contrast
