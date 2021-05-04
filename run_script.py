@@ -8,7 +8,7 @@ source = 'Elias2-24'
 print(source)
 
 import os
-nproc = os.getenv('OMP_NUM_THREADS',default=1)
+nproc = os.getenv('SLURM_CPUS_PER_TASK',default=1)
 print('Number of CPUS:',nproc)
 
 from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
