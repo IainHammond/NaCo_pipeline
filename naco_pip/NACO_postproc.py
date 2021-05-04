@@ -451,7 +451,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!")
                 ini_state = np.array([r_pl,theta_pl,abs(ini_state[2])])
             print('we are at emcee now')
-            exit()
+
             final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                               initial_state=ini_state, fwhm=self.fwhm, weights=weights,
                                               annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
