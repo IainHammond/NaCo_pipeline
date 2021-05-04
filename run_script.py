@@ -6,7 +6,6 @@ Created on Sun Apr 12 13:11:12 2020
 """
 source = 'Elias2-24'
 print(source)
-exit()
 from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6 #meters
