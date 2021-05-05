@@ -13,11 +13,12 @@ from os.path import isfile, isdir
 import os
 
 from vip_hci.fits import open_fits, write_fits
+from vip_hci.metrics import snrmap, contrast_curve, normalize_psf, cube_inject_companions
+from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
 from vip_hci.pca import pca, pca_annular, pca_annulus
-from vip_hci.metrics import snrmap, contrast_curve, normalize_psf
+from vip_hci.preproc import cube_crop_frames
 from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
-from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot
 
 
 class preproc_dataset:  # this class is for post-processing of the pre-processed data
@@ -106,8 +107,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
         ann_sz = 3  # if PCA-ADI in a single annulus or in concentric annuli, this is the size of the annulus/i in FWHM
         svd_mode = 'lapack'  # python package used for Singular Value Decomposition for PCA reductions
-        n_randsvd = 3  # if svd package is set to 'randsvd' number of times we do PCA rand-svd, before taking the median of all results (there is a risk of significant self-subtraction when just doing it once)
-        ref_cube = None  # if any, load here a centered calibrated cube of reference star observations - would then be used for PCA instead of the SCI cube itself
+        n_randsvd = 3  # if svd package is set to 'randsvd' number of times we do PCA rand-svd, before taking the
+        # median of all results (there is a risk of significant self-subtraction when just doing it once)
+        ref_cube = None  # if any, load here a centered calibrated cube of reference star observations - would then be
+        # used for PCA instead of the SCI cube itself
 
         # TEST number of principal components
         # PCA-FULL
@@ -314,8 +317,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 print("======= Completed PCA Annular =======")
 
     def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, inject_neg=True, ncomp=1, algo='pca_annular',
-                 nwalkers_ini=120, niteration_min=25, niteration_limit=10000, weights=False, overwrite=True,
-                 save_plot=True, verbose=True):
+                 nwalkers_ini=120, niteration_min=25, niteration_limit=10000, delta_rot=(0.5, 3), weights=False,
+                 overwrite=True, save_plot=True, verbose=True):
         """
         Module for estimating the location and flux of a planet.
 
@@ -346,9 +349,11 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             for MCMC, the simulation will run at least this number of steps per walker
         niteration_limit : int, default 10000
             for MCMC, stops simulation if this many steps run without having reached the convergence criterion
+        delta_rot : tuple
+            same as for postprocessing module. Threshold rotation angle for PCA annular
         weights : bool
             for MCMC, should only be used on unsaturated datasets, where the flux of the star can be measured in each
-            image of the cube'
+            image of the cube
         overwrite : bool, default True
             whether to and run a module and overwrite results if they already exist
         save_plot : bool, default True
@@ -397,6 +402,15 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         opt_npc = ncomp
         ap_rad = 1 * self.fwhm
         f_range = np.geomspace(0.1, 201, 40)
+        asize = 3 * self.fwhm
+
+        # find r, theta based on the provided estimate location
+        cy, cx = frame_center(ADI_cube[0])
+        dy_pl = guess_xy[0][1] - cy
+        dx_pl = guess_xy[0][0] - cx
+        r_pl = np.sqrt(np.power(dx_pl, 2) + np.power(dy_pl, 2))  # pixel distance to the guess location
+        theta_pl = (np.rad2deg(np.arctan2(dy_pl, dx_pl))) % 360  # theta (angle) to the guess location
+        print("Estimated (r, PA) before first guess = ({:.1f},{:.1f})".format(r_pl, theta_pl))
 
         if (not isfile(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc)) or overwrite) and do_firstguess:
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
@@ -411,7 +425,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
 
             write_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc), ini_state,
-                       verbose=verbose)  # saves r, theta and flux
+                       verbose=verbose)  # saves r, theta and flux. No print statement as firstguess() does that for us
 
         if (not isfile(outpath_sub + "MCMC_results") or overwrite) and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc),
@@ -431,17 +445,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             else:
                 weights = None
                 flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
-                star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
+                star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux
 
-            cy, cx = frame_center(ADI_cube[0])
-            dy_pl = guess_xy[0][1] - cy
-            dx_pl = guess_xy[0][0] - cx
-            r_pl = np.sqrt(np.power(dx_pl, 2) + np.power(dy_pl, 2))
-            theta_pl = (np.rad2deg(np.arctan2(dy_pl, dx_pl))) % 360
-            print("Estimated (r, PA) = ({:.1f},{:.1f})".format(r_pl, theta_pl))
-            delta_theta_min = np.rad2deg(np.arctan(4. / r_pl))  # at least the angle corresponding to 2 azimuthal pixels
+            delta_theta_min = np.rad2deg(np.arctan(4./ r_pl))  # at least the angle corresponding to 2 azimuthal pixels
             delta_theta = max(delta_theta_min, 5.)
-            asize = 3 * self.fwhm
             bounds = [(max(r_pl - asize / 2., 1), r_pl + asize / 2.),  # radius
                       (theta_pl - delta_theta, theta_pl + delta_theta),  # angle
                       (0, 5 * abs(ini_state[2]))]
@@ -449,9 +456,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if ini_state[0] < bounds[0][0] or ini_state[0] > bounds[0][1] or ini_state[1] < bounds[1][0] or \
                     ini_state[1] > bounds[1][1] or ini_state[2] < bounds[2][0] or ini_state[2] > bounds[2][1]:
                 print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!")
-                ini_state = np.array([r_pl,theta_pl,abs(ini_state[2])])
-            print('we are at emcee now')
+                ini_state = np.array([r_pl, theta_pl, abs(ini_state[2])])
 
+            print('we are at mcmc now')
             final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                               initial_state=ini_state, fwhm=self.fwhm, weights=weights,
                                               annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
@@ -468,14 +475,60 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                               output_file="MCMC_results", display=False, verbosity=3,
                                               save=save_plot)
 
-            final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # converts to a contrast
+            final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # dividing by the star flux converts to a contrast
             show_walk_plot(final_chain, save=save_plot, output_dir=outpath_sub)
             show_corner_plot(final_chain, burnin=0.3, save=save_plot, output_dir=outpath_sub)
 
-        # if inject_neg:
-        #     ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles,
-        #                                           flevel=-planet_params[2, 0] * star_flux[ff, :], plsc=,
-        #                                           rad_dists=[planet_params[0, 0]],
-        #                                           n_branches=1, theta=planet_params[1, 0],
-        #                                           imlib=imlib, interpolation=interpolation,
-        #                                           verbose=False, transmission=transmission)
+        if inject_neg:
+            # ADI_cube_emp = ADI_cube.copy()  # why?
+            pca_res = np.zeros([ADI_cube.shape[1], ADI_cube.shape[2]])
+            planet_params = open_fits(outpath_sub+'MCMC_results')  # may need to do confidence stuff first
+            flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"
+            star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]
+            ref_cube = None
+
+            ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles,
+                                                  flevel=-planet_params[2, 0] * star_flux, plsc=self.pixel_scale,
+                                                  rad_dists=[planet_params[0, 0]],
+                                                  n_branches=1, theta=planet_params[1, 0],
+                                                  imlib='opencv', interpolation='lanczos4',
+                                                  verbose=verbose, transmission=None)
+            write_fits(outpath_sub+'final_cube_emp.fits', ADI_cube_emp)  # the cube with the negative flux injected
+
+            if algo == pca_annular:
+                radius_int = int(np.floor(r_pl-asize/2))  # asize is 3 * FWHM, rounds down. To skip the inner region
+                # crop the cube to just larger than the annulus to improve the speed of PCA
+                crop_sz = int(2*np.ceil(r_pl+asize+1))  # rounds up
+                if not crop_sz % 2:  # make sure the crop is odd
+                    crop_sz += 1
+                if crop_sz < ADI_cube.shape[1] and crop_sz < ADI_cube.shape[2]:  # crop if crop_sz is smaller than cube
+                    pad = int((ADI_cube.shape[1]-crop_sz)/2)
+                    crop_cube = cube_crop_frames(ADI_cube, crop_sz, verbose=verbose)
+                else:
+                    crop_cube = ADI_cube  # dont crop if the cube is already smaller
+
+                pca_res_tmp = pca_annular(crop_cube, derot_angles, cube_ref=ref_cube, radius_int=radius_int, fwhm=self.fwhm,
+                                          asize=asize, delta_rot=delta_rot, ncomp=opt_npc, svd_mode='lapack',
+                                          scaling=None, imlib='opencv', interpolation='lanczos4', nproc=self.nproc,
+                                          min_frames_lib=max(opt_npc, 10), verbose=verbose, full_output=False)
+
+                pca_res = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
+                write_fits(outpath_sub + 'pca_annular_res_npc{}.fits'.format(opt_npc), pca_res)
+
+                # emp
+                if crop_sz < ADI_cube_emp.shape[1] and crop_sz < ADI_cube_emp.shape[2]:
+                    pad = int((ADI_cube_emp.shape[1]-crop_sz)/2)
+                    crop_cube = cube_crop_frames(ADI_cube_emp, crop_sz, verbose=verbose)
+                else:
+                    crop_cube = ADI_cube_emp
+                del ADI_cube_emp
+                del ADI_cube
+
+                pca_res_tmp = pca_annular(crop_cube, derot_angles, radius_int=radius_int, fwhm=self.fwhm,
+                                          asize=asize, delta_rot=delta_rot, ncomp=opt_npc, svd_mode='lapack',
+                                          scaling=None, imlib='opencv', interpolation='lanczos4', nproc=self.nproc,
+                                          min_frames_lib=max(opt_npc, 10), verbose=verbose, full_output=False)
+
+                # pad again now
+                pca_res_emp = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
+                write_fits(outpath_sub+'pca_annular_res_emp_npc().fits'.format(opt_npc), pca_res_emp)
