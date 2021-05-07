@@ -76,7 +76,7 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12
 #                         verbose=True, debug=True)
 postproc.do_negfc(do_firstguess=False, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
-                  weights=False, overwrite=True, save_plot=True, verbose=True)
+                  weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
 
 # some previous data sets:
 

@@ -318,23 +318,28 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, inject_neg=True, ncomp=1, algo='pca_annular',
                  nwalkers_ini=120, niteration_min=25, niteration_limit=10000, delta_rot=(0.5, 3), weights=False,
-                 overwrite=True, save_plot=True, verbose=True):
+                 coronagraph=False, overwrite=True, save_plot=True, verbose=True):
         """
-        Module for estimating the location and flux of a planet.
+        Module for estimating the location and flux of a planet. A sub-folder 'negfc' is created for storing all
+        output files.
 
         Using a first guess from the (x,y) coordinates in pixels for the planet, we can estimate a preliminary guess for
-        the position and flux for each planet. Saves the r, theta and flux
+        the position and flux for each planet using a Nelder-Mead minimization. Saves the r, theta and flux
 
         If using MCMC, runs an affine invariant MCMC sampling algorithm in order to determine the position and the flux
         of the planet using the 'Negative Fake Companion' technique. The result of this procedure is a chain with the
         samples from the posterior distributions of each of the 3 parameters.
+
+        Finally, we can inject a negative flux of the planet found in MCMC into the original dataset and apply
+        post processing to determine the residuals in the data.
 
         Parameters:
         ***********
         do_firstguess : bool
             whether to determine a first guess for the position and the flux of a planet (not NEGFC)
         guess_xy : tuple
-            if do_firstguess = True, first estimate of the source location to be provdied to firstguess()
+            if do_firstguess=True, this estimate of the source (x,y) location to be provided to firstguess(). Note
+            Python's zero-based indexing
         mcmc_negfc : bool
             whether to run MCMC NEGFC sampling (computationally intensive)
         inject_neg : bool
@@ -352,19 +357,27 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         delta_rot : tuple
             same as for postprocessing module. Threshold rotation angle for PCA annular
         weights : bool
-            for MCMC, should only be used on unsaturated datasets, where the flux of the star can be measured in each
-            image of the cube
+            should only be used on unsaturated datasets, where the flux of the star can be measured in each image of
+            the cube. Applies a correction to each frame to account for variability of the adaptive optics, and hence
+            flux from the star (reference Christiaens et al. 2021 2021MNRAS.502.6117C)
+        coronagraph : bool
+            for MCMC and injecting a negative companion, True if the observation utilised a coronagraph (AGPM).
+            The known radial transmission of the NACO+AGPM coronagraph will be used
         overwrite : bool, default True
-            whether to and run a module and overwrite results if they already exist
+            whether to run a module and overwrite results if they already exist
         save_plot : bool, default True
-            the MCMC results are pickled and saved to the outpath
+            for firstguess the chi2 vs. flux plot is saved. For MCMC results are pickled and saved to the outpath
+            along with corner plots
         verbose : bool
-            prints more output when True
+            prints more output and interediate files when True
         """
 
         print("======= Starting NEGFC....=======")
-        if guess_xy == None:
+        if guess_xy is None and do_firstguess is True:
             raise ValueError("Enter an approximate location into guess_xy!")
+
+        if weights is True and coronagraph is True:
+            raise ValueError("Dataset cannot be both non-coronagraphic and coronagraphic!!")
 
         outpath_sub = self.outpath + "negfc/"
 
@@ -387,6 +400,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         ADI_cube = open_fits(self.inpath + ADI_cube_name.format(source), verbose=verbose)
         derot_angles = open_fits(self.inpath + derot_ang_name, verbose=verbose) + tn_shift
         psfn = open_fits(self.inpath + psfn_name, verbose=verbose)
+        ref_cube = None
 
         if algo == 'pca_annular':
             label_pca = 'pca_annular'
@@ -404,6 +418,34 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         f_range = np.geomspace(0.1, 201, 40)
         asize = 3 * self.fwhm
 
+        if coronagraph:  # radial transmission of the coronagraph, 2 columns (pixels from centre, off-axis transmission)
+            transmission = np.array([[3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
+                                    2.0244570e+00, 2.5305712e+00, 3.0366855e+00, 3.5427995e+00,
+                                    4.0489140e+00, 4.5550284e+00, 5.0611424e+00, 5.5672565e+00,
+                                    6.0733705e+00, 6.5794849e+00, 7.0855989e+00, 7.5917134e+00,
+                                    8.6039419e+00, 9.1100569e+00, 9.6161709e+00, 1.0628398e+01,
+                                    1.1134513e+01, 1.2146742e+01, 1.2652856e+01, 1.3665085e+01,
+                                    1.4677314e+01, 1.6195656e+01, 1.7207884e+01, 1.8220114e+01,
+                                    1.9738455e+01, 2.1256796e+01, 2.2775141e+01, 2.4293484e+01,
+                                    2.6317940e+01, 2.8342396e+01, 3.0366854e+01, 3.2897423e+01,
+                                    3.4921883e+01, 3.7452454e+01, 4.0489140e+01, 4.3525822e+01,
+                                    4.6562508e+01, 5.0105309e+01, 5.4154221e+01, 5.7697018e+01,
+                                    6.2252052e+01, 6.6807076e+01, 7.1868225e+01],
+                                    [6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
+                                    1.1413762e-01, 1.9890217e-01, 2.9460809e-01, 3.8605216e-01,
+                                    4.6217495e-01, 5.1963091e-01, 5.6185508e-01, 5.9548348e-01,
+                                    6.2670821e-01, 6.5912777e-01, 6.9335037e-01, 7.2783405e-01,
+                                    7.8866738e-01, 8.1227022e-01, 8.3128709e-01, 8.5912752e-01,
+                                    8.6968899e-01, 8.8677746e-01, 8.9409947e-01, 9.0848678e-01,
+                                    9.2426234e-01, 9.4704604e-01, 9.5787460e-01, 9.6538281e-01,
+                                    9.7379774e-01, 9.8088801e-01, 9.8751044e-01, 9.9255627e-01,
+                                    9.9640906e-01, 9.9917024e-01, 1.0009050e+00, 1.0021056e+00,
+                                    1.0026742e+00, 1.0027454e+00, 1.0027291e+00, 1.0023015e+00,
+                                    1.0016677e+00, 1.0009446e+00, 1.0000550e+00, 9.9953103e-01,
+                                    9.9917012e-01, 9.9915260e-01, 9.9922234e-01]])
+        else:
+            transmission = None
+
         # find r, theta based on the provided estimate location
         cy, cx = frame_center(ADI_cube[0])
         dy_pl = guess_xy[0][1] - cy
@@ -415,10 +457,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         if (not isfile(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc)) or overwrite) and do_firstguess:
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                    planets_xy_coord=guess_xy, fwhm=self.fwhm,
-                                   annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
+                                   annulus_width=12, aperture_radius=ap_rad, cube_ref=ref_cube,
                                    svd_mode='lapack', scaling=None, fmerit='stddev', imlib='opencv',
                                    interpolation='lanczos4', collapse='median', p_ini=None,
-                                   transmission=None, algo=algo,
+                                   transmission=transmission, weights=weights, algo=algo,
                                    f_range=f_range, simplex=True, simplex_options=None, plot=save_plot,
                                    verbose=verbose, save=save_plot)
             # when p_ini is set to None, it gets the value of planets_xy_coord
@@ -458,12 +500,17 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!")
                 ini_state = np.array([r_pl, theta_pl, abs(ini_state[2])])
 
-            print('we are at mcmc now')
+            if verbose is True:
+                verbosity = 2
+                print('MCMC NEGFC sampling is about to begin...')
+            else:
+                verbosity = 0
+
             final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                               initial_state=ini_state, fwhm=self.fwhm, weights=weights,
-                                              annulus_width=12, aperture_radius=ap_rad, cube_ref=None,
+                                              annulus_width=12, aperture_radius=ap_rad, cube_ref=ref_cube,
                                               svd_mode='lapack', scaling=None, fmerit='stddev',
-                                              imlib='opencv', interpolation='lanczos4', transmission=None,
+                                              imlib='opencv', interpolation='lanczos4', transmission=transmission,
                                               collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
                                               ac_c=50, mu_sigma=(0, 1),
                                               burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
@@ -472,7 +519,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                               niteration_min=niteration_min, niteration_limit=niteration_limit,
                                               niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
                                               output_dir=outpath_sub,
-                                              output_file="MCMC_results", display=False, verbosity=3,
+                                              output_file="MCMC_results", display=False, verbosity=verbosity,
                                               save=save_plot)
 
             final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # dividing by the star flux converts to a contrast
@@ -482,17 +529,17 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         if inject_neg:
             # ADI_cube_emp = ADI_cube.copy()  # why?
             pca_res = np.zeros([ADI_cube.shape[1], ADI_cube.shape[2]])
+            pca_res_emp = pca_res.copy()
             planet_params = open_fits(outpath_sub+'MCMC_results')  # may need to do confidence stuff first
             flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"
             star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]
-            ref_cube = None
 
             ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles,
                                                   flevel=-planet_params[2, 0] * star_flux, plsc=self.pixel_scale,
                                                   rad_dists=[planet_params[0, 0]],
                                                   n_branches=1, theta=planet_params[1, 0],
                                                   imlib='opencv', interpolation='lanczos4',
-                                                  verbose=verbose, transmission=None)
+                                                  verbose=verbose, transmission=transmission)
             write_fits(outpath_sub+'final_cube_emp.fits', ADI_cube_emp)  # the cube with the negative flux injected
 
             if algo == pca_annular:
@@ -507,10 +554,11 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 else:
                     crop_cube = ADI_cube  # dont crop if the cube is already smaller
 
-                pca_res_tmp = pca_annular(crop_cube, derot_angles, cube_ref=ref_cube, radius_int=radius_int, fwhm=self.fwhm,
-                                          asize=asize, delta_rot=delta_rot, ncomp=opt_npc, svd_mode='lapack',
-                                          scaling=None, imlib='opencv', interpolation='lanczos4', nproc=self.nproc,
-                                          min_frames_lib=max(opt_npc, 10), verbose=verbose, full_output=False)
+                pca_res_tmp = pca_annular(crop_cube, derot_angles, cube_ref=ref_cube, radius_int=radius_int,
+                                          fwhm=self.fwhm, asize=asize, delta_rot=delta_rot, ncomp=opt_npc,
+                                          svd_mode='lapack', scaling=None, imlib='opencv', interpolation='lanczos4',
+                                          nproc=self.nproc, min_frames_lib=max(opt_npc, 10), verbose=verbose,
+                                          full_output=False)
 
                 pca_res = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
                 write_fits(outpath_sub + 'pca_annular_res_npc{}.fits'.format(opt_npc), pca_res)
@@ -524,11 +572,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 del ADI_cube_emp
                 del ADI_cube
 
-                pca_res_tmp = pca_annular(crop_cube, derot_angles, radius_int=radius_int, fwhm=self.fwhm,
-                                          asize=asize, delta_rot=delta_rot, ncomp=opt_npc, svd_mode='lapack',
-                                          scaling=None, imlib='opencv', interpolation='lanczos4', nproc=self.nproc,
-                                          min_frames_lib=max(opt_npc, 10), verbose=verbose, full_output=False)
+                pca_res_tmp = pca_annular(crop_cube, derot_angles, cube_ref=ref_cube, radius_int=radius_int,
+                                          fwhm=self.fwhm, asize=asize, delta_rot=delta_rot, ncomp=opt_npc,
+                                          svd_mode='lapack', scaling=None, imlib='opencv', interpolation='lanczos4',
+                                          nproc=self.nproc, min_frames_lib=max(opt_npc, 10), verbose=verbose,
+                                          full_output=False)
 
                 # pad again now
                 pca_res_emp = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
-                write_fits(outpath_sub+'pca_annular_res_emp_npc().fits'.format(opt_npc), pca_res_emp)
+                write_fits(outpath_sub+'pca_annular_res_emp_npc{}.fits'.format(opt_npc), pca_res_emp)
