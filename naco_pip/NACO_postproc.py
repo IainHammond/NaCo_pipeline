@@ -419,7 +419,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         asize = 3 * self.fwhm
 
         if coronagraph:  # radial transmission of the coronagraph, 2 columns (pixels from centre, off-axis transmission)
-            transmission = np.array([[3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
+        #  data provided by Valentin Christiaens. First entry in both columns was not zero, but VIP adds it in anyway
+            transmission = np.array([[0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
                                     2.0244570e+00, 2.5305712e+00, 3.0366855e+00, 3.5427995e+00,
                                     4.0489140e+00, 4.5550284e+00, 5.0611424e+00, 5.5672565e+00,
                                     6.0733705e+00, 6.5794849e+00, 7.0855989e+00, 7.5917134e+00,
@@ -431,7 +432,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                     3.4921883e+01, 3.7452454e+01, 4.0489140e+01, 4.3525822e+01,
                                     4.6562508e+01, 5.0105309e+01, 5.4154221e+01, 5.7697018e+01,
                                     6.2252052e+01, 6.6807076e+01, 7.1868225e+01],
-                                    [6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
+                                    [0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
                                     1.1413762e-01, 1.9890217e-01, 2.9460809e-01, 3.8605216e-01,
                                     4.6217495e-01, 5.1963091e-01, 5.6185508e-01, 5.9548348e-01,
                                     6.2670821e-01, 6.5912777e-01, 6.9335037e-01, 7.2783405e-01,
@@ -524,10 +525,33 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
             final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # dividing by the star flux converts to a contrast
             show_walk_plot(final_chain, save=save_plot, output_dir=outpath_sub)
-            show_corner_plot(final_chain, burnin=0.3, save=save_plot, output_dir=outpath_sub)
+            show_corner_plot(final_chain, burnin=0.5, save=save_plot, output_dir=outpath_sub)
+
+            # determine the highly probable value for each model parameter and the 1-sigma confidence interval
+            isamples_flat = final_chain[:,int(final_chain.shape[1]//(1/0.3)):,:].reshape((-1,3))  # 0.3 is the burnin
+            vals, err = confidence(isamples_flat, cfd=68.27, bins=100, gaussian_fit=False, weights=weights,
+                                   verbose=verbose, save=True, outputdir=outpath_sub, filename='confidence.txt')
+
+            labels = ['r', 'theta', 'f']
+            mcmc_res = np.zeros([3,3])
+            # pull the values and confidence interval out for saving
+            for i in range(3):
+                mcmc_res[i,0] = vals[labels[i]]
+                mcmc_res[i,1] = err[labels[i]][0]
+                mcmc_res[i,2] = err[labels[i]][1]
+            write_fits(outpath_sub + 'mcmc_results.fits', mcmc_res)
+
+            # now gaussian fit
+            gvals, gerr = confidence(isamples_flat, cfd=68.27, bins=100, gaussian_fit=True, weights=weights,
+                                     verbose=verbose, save=True, output_dir=outpath_sub,filename='confidence_gauss.txt')
+
+            mcmc_res = np.zeros([3,2])
+            for i in range(3):
+                mcmc_res[i,0] = gvals[i]
+                mcmc_res[i,1] = gerr[i]
+            write_fits(outpath_sub + 'mcmc_results_gauss.fits', mcmc_res)
 
         if inject_neg:
-            # ADI_cube_emp = ADI_cube.copy()  # why?
             pca_res = np.zeros([ADI_cube.shape[1], ADI_cube.shape[2]])
             pca_res_emp = pca_res.copy()
             planet_params = open_fits(outpath_sub+'MCMC_results')  # may need to do confidence stuff first
@@ -540,7 +564,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                   n_branches=1, theta=planet_params[1, 0],
                                                   imlib='opencv', interpolation='lanczos4',
                                                   verbose=verbose, transmission=transmission)
-            write_fits(outpath_sub+'final_cube_emp.fits', ADI_cube_emp)  # the cube with the negative flux injected
+            write_fits(outpath_sub+'ADI_cube_empty.fits', ADI_cube_emp)  # the cube with the negative flux injected
 
             if algo == pca_annular:
                 radius_int = int(np.floor(r_pl-asize/2))  # asize is 3 * FWHM, rounds down. To skip the inner region
@@ -580,4 +604,4 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
                 # pad again now
                 pca_res_emp = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
-                write_fits(outpath_sub+'pca_annular_res_emp_npc{}.fits'.format(opt_npc), pca_res_emp)
+                write_fits(outpath_sub+'pca_annular_res_empty_npc{}.fits'.format(opt_npc), pca_res_emp)
