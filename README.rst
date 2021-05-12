@@ -1,10 +1,10 @@
-NACO Pipeline - planet detecting pipeline
+NaCo Pipeline - planet detecting pipeline
 =======================================================
 
 Introduction
 ------------
 
-``naco_pip`` is a Python based pipeline for processing any VLT/NaCo + AGPM data set from ESO, incorporating a vast array of functions from VIP Python package with optimal settings. 
+``naco_pip`` is a Python based pipeline for processing (most) VLT/NaCo + AGPM data sets from ESO, incorporating a vast array of functions from VIP Python package with optimal settings. 
 Only the run script needs to be modified with the information of your target system, some file information and file directories
 
 Capability
@@ -24,11 +24,13 @@ Capability
 - median ADI 
 - PCA in full frame and PCA annular
 - S/N map
+- contrast curves
+- Nelder-Mead minimisation and MCMC Sampling for source location (new)
+- NEGFC injection and post-processing (new)
 
 Under testing
 ------------
 - fast reduction
-- NEGFC
 
 Known Issues:
 ------------
