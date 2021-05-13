@@ -510,17 +510,17 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             final_chain = mcmc_negfc_sampling(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                               initial_state=ini_state, fwhm=self.fwhm, weights=weights,
                                               annulus_width=12, aperture_radius=ap_rad, cube_ref=ref_cube,
-                                              svd_mode='lapack', scaling=None, fmerit='stddev',
+                                              svd_mode='lapack', scaling=None, fmerit='sum',
                                               imlib='opencv', interpolation='lanczos4', transmission=transmission,
                                               collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
                                               ac_c=50, mu_sigma=(0, 1),
-                                              burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
+                                              burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='gb',
                                               # use autocorrelation 'ac' to ensure sufficient sampling. sample around
                                               # the area of best likelihood to make distribution
                                               niteration_min=niteration_min, niteration_limit=niteration_limit,
                                               niteration_supp=0, check_maxgap=50, nproc=self.nproc, algo=algo,
                                               output_dir=outpath_sub,
-                                              output_file="MCMC_results", display=False, verbosity=verbosity,
+                                              output_file="MCMC_results_gb", display=False, verbosity=verbosity,
                                               save=save_plot)
 
             final_chain[:, :, 2] = final_chain[:, :, 2] / star_flux  # dividing by the star flux converts to a contrast
