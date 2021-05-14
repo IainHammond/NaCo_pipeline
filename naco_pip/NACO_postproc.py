@@ -554,7 +554,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         if inject_neg:
             pca_res = np.zeros([ADI_cube.shape[1], ADI_cube.shape[2]])
             pca_res_emp = pca_res.copy()
-            planet_params = open_fits(outpath_sub+'MCMC_results')  # may need to do confidence stuff first
+            planet_params = open_fits(outpath_sub+'mcmc_results.fits')
             flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"
             star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]
 
