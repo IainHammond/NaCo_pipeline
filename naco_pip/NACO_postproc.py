@@ -530,7 +530,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             # determine the highly probable value for each model parameter and the 1-sigma confidence interval
             isamples_flat = final_chain[:,int(final_chain.shape[1]//(1/0.3)):,:].reshape((-1,3))  # 0.3 is the burnin
             vals, err = confidence(isamples_flat, cfd=68.27, bins=100, gaussian_fit=False, weights=weights,
-                                   verbose=verbose, save=True, output_dir=outpath_sub, filename='confidence.txt')
+                                   verbose=verbose, save=True, output_dir=outpath_sub, filename='confidence.txt',
+                                   plsc=self.pixel_scale)
 
             labels = ['r', 'theta', 'f']
             mcmc_res = np.zeros([3,3])
@@ -543,7 +544,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
             # now gaussian fit
             gvals, gerr = confidence(isamples_flat, cfd=68.27, bins=100, gaussian_fit=True, weights=weights,
-                                     verbose=verbose, save=True, output_dir=outpath_sub,filename='confidence_gauss.txt')
+                                     verbose=verbose, save=True, output_dir=outpath_sub,filename='confidence_gauss.txt',
+                                     plsc=self.pixel_scale)
 
             mcmc_res = np.zeros([3,2])
             for i in range(3):
