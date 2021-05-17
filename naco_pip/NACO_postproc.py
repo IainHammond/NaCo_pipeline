@@ -381,8 +381,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
         outpath_sub = self.outpath + "negfc/"
 
-        if not isdir(self.outpath):
-            os.system("mkdir " + self.outpath)
         if not isdir(outpath_sub):
             os.system("mkdir " + outpath_sub)
 
