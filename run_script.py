@@ -74,7 +74,7 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12
                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_fixbkg/',
                            dataset_dict, nproc=nproc, npc=30)
 
-postproc.postprocessing(do_adi=True, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, cropped=True,
+postproc.postprocessing(do_adi=False, do_adi_contrast=False, do_pca_full=False, do_pca_ann=True, cropped=True,
                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
                         verbose=True, debug=True)
 postproc.do_negfc(do_firstguess=False, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
