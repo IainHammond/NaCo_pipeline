@@ -6,7 +6,7 @@
 # NOTE: To activate a SLURM option, remove the whitespace between the '#' and 'SBATCH'
 
 # To give your job a name, replace "MyJob" with an appropriate name
-#SBATCH --job-name=NACO-Elias2-24-negfc_gb
+#SBATCH --job-name=NACO-Elias2-24-negfc_fixbkg
 
 # To set a project account for credit charging,
 #SBATCH --account=pd87
