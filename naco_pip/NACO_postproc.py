@@ -34,6 +34,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             self.fwhm = 4.2
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
+        if not isdir(self.outpath):
+            os.system("mkdir " + self.outpath)
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, cropped=True,
                        do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, plot=True,
@@ -78,8 +80,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         print("======= Starting post-processing....=======")
         outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
 
-        if not isdir(self.outpath):
-            os.system("mkdir " + self.outpath)
         if not isdir(outpath_sub):
             os.system("mkdir " + outpath_sub)
 
