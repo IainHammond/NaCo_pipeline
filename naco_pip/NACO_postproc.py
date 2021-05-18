@@ -416,6 +416,23 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         f_range = np.geomspace(0.1, 201, 40)
         asize = 3 * self.fwhm
 
+        if weights:
+            nfr = ADI_cube.shape[0]  # number of frames
+            star_flux = np.zeros([nfr])  # for storing the star flux found in each frame
+            crop_sz_tmp = min(int(10 * self.fwhm),
+                              ADI_cube.shape[1] - 2)  # crop around star, either 10*FWHM or size - 2
+            if crop_sz_tmp % 2 == 0:  # if it's not even, crop
+                crop_sz_tmp -= 1
+            for ii in range(nfr):
+                _, star_flux[ii], _ = normalize_psf(ADI_cube[ii], fwhm=self.fwhm, size=crop_sz_tmp,
+                                                    full_output=True)  # get star flux in 1*FWHM
+            weights = star_flux / np.median(star_flux)
+            star_flux = np.median(star_flux)  # for use after MCMC when turning the chain into contrast
+        else:
+            weights = None
+            flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
+            star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux
+
         if coronagraph:  # radial transmission of the coronagraph, 2 columns (pixels from centre, off-axis transmission)
         #  data provided by Valentin Christiaens. First entry in both columns was not zero, but VIP adds it in anyway
             transmission = np.array([[0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
@@ -471,22 +488,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         if (not isfile(outpath_sub + "MCMC_results") or overwrite) and mcmc_negfc:
             ini_state = open_fits(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc),
                                   verbose=verbose)
-
-            if weights:
-                nfr = ADI_cube.shape[0]  # number of frames
-                star_flux = np.zeros([nfr])  # for storing the star flux found in each frame
-                crop_sz_tmp = min(int(10 * self.fwhm), ADI_cube.shape[1] - 2)  # crop around star, either 10*FWHM or size - 2
-                if crop_sz_tmp % 2 == 0:  # if it's not even, crop
-                    crop_sz_tmp -= 1
-                for ii in range(nfr):
-                    _, star_flux[ii], _ = normalize_psf(ADI_cube[ii], fwhm=self.fwhm, size=crop_sz_tmp,
-                                                        full_output=True)  # get star flux in 1*FWHM
-                weights = star_flux / np.median(star_flux)
-                star_flux = np.median(star_flux)  # for use after MCMC when turning the chain into contrast
-            else:
-                weights = None
-                flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"  # flux in a FWHM aperture found in calibration
-                star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux
 
             delta_theta_min = np.rad2deg(np.arctan(4./ r_pl))  # at least the angle corresponding to 2 azimuthal pixels
             delta_theta = max(delta_theta_min, 5.)
