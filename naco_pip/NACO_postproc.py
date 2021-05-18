@@ -141,7 +141,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if (not isfile(outpath_sub + 'final_ADI_simple_snrmap.fits') or overwrite) and do_snr_map:
                 tmp = open_fits(outpath_sub + 'final_ADI_simple.fits', verbose=verbose)
                 tmp = mask_circle(tmp, mask_IWA_px)
-                tmp_tmp = snrmap(tmp, self.fwhm, nproc=self.nproc, verbose=verbose)
+                tmp_tmp = snrmap(tmp, self.fwhm, nproc=self.nproc, verbose=debug)
                 write_fits(outpath_sub + 'final_ADI_simple_snrmap.fits', tmp_tmp, verbose=verbose)
 
             ## Contrast curve
@@ -208,7 +208,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     and do_snr_map:
                 tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=verbose)
                 for pp in range(ntest_pcs):
-                    tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=verbose)
+                    tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=debug)
                     tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap.fits', tmp, verbose=verbose)
 
@@ -218,7 +218,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=verbose)
                 for pp in range(ntest_pcs):
                     tmp[pp] = snrmap(tmp[pp], self.fwhm, array2=tmp_tmp_tmp_tmp[pp], incl_neg_lobes=False,
-                                     nproc=self.nproc, verbose=verbose)
+                                     nproc=self.nproc, verbose=debug)
                     tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits', tmp,
                            verbose=verbose)
@@ -300,7 +300,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap.fits') or overwrite) and do_snr_map:
                 tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=verbose)
                 for pp in range(ntest_pcs):
-                    tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=verbose)
+                    tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=debug)
                     tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                 write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap.fits', tmp, verbose=verbose)
             ### SNR map optimized
@@ -309,7 +309,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=verbose)
                 for pp in range(ntest_pcs):
                     tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
-                                     verbose=verbose)
+                                     verbose=debug)
                     tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                 write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap_opt.fits', tmp, verbose=verbose)
 
