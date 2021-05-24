@@ -462,15 +462,16 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         else:
             transmission = None
 
-        # find r, theta based on the provided estimate location
-        cy, cx = frame_center(ADI_cube[0])
-        dy_pl = guess_xy[0][1] - cy
-        dx_pl = guess_xy[0][0] - cx
-        r_pl = np.sqrt(np.power(dx_pl, 2) + np.power(dy_pl, 2))  # pixel distance to the guess location
-        theta_pl = (np.rad2deg(np.arctan2(dy_pl, dx_pl))) % 360  # theta (angle) to the guess location
-        print("Estimated (r, PA) before first guess = ({:.1f},{:.1f})".format(r_pl, theta_pl))
-
         if (not isfile(outpath_sub + label_pca + "_npc{}_simplex_results.fits".format(opt_npc)) or overwrite) and do_firstguess:
+
+            # find r, theta based on the provided estimate location
+            cy, cx = frame_center(ADI_cube[0])
+            dy_pl = guess_xy[0][1] - cy
+            dx_pl = guess_xy[0][0] - cx
+            r_pl = np.sqrt(np.power(dx_pl, 2) + np.power(dy_pl, 2))  # pixel distance to the guess location
+            theta_pl = (np.rad2deg(np.arctan2(dy_pl, dx_pl))) % 360  # theta (angle) to the guess location
+            print("Estimated (r, theta) before first guess = ({:.1f},{:.1f})".format(r_pl, theta_pl))
+
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                    planets_xy_coord=guess_xy, fwhm=self.fwhm,
                                    annulus_width=12, aperture_radius=ap_rad, cube_ref=ref_cube,
