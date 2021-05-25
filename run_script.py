@@ -18,7 +18,7 @@ from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6 #meters
 size_telescope = 8.2 #meters
-pixel_scale = 0.02719  #arcsecs per pixel
+pixel_scale = 0.027193  #arcsecs per pixel, Launhardt et al. 2020
 
 ###### source information: ######
 
