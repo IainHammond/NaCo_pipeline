@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Apr 12 13:11:12 2020
-@author: lewis, iain
+@author: iain, lewis
 """
 source = 'Elias2-24'
 print(source)
