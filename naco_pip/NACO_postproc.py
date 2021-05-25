@@ -88,7 +88,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             print('Output path is {}'.format(outpath_sub))
 
         source = self.dataset_dict['source']
-        tn_shift = 0.58  # Milli et al. 2017, true North offset for NACO
+        tn_shift = 0.568  # Launhardt et al. 2020, true North offset for NACO
 
         ADI_cube_name = '{}_master_cube.fits'  # template name for input master cube
         derot_ang_name = 'derot_angles.fits'  # template name for corresponding input derotation angles
@@ -389,7 +389,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             print('Output path is {}'.format(outpath_sub))
 
         source = self.dataset_dict['source']
-        tn_shift = 0.58  # Milli et al. 2017, true North offset for NACO
+        tn_shift = 0.568  # Launhardt et al. 2020, true North offset for NACO
 
         ADI_cube_name = '{}_master_cube.fits'  # template name for input master cube
         derot_ang_name = 'derot_angles.fits'  # template name for corresponding input derotation angles
