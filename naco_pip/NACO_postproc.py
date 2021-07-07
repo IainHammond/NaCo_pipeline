@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Applys post-processing algorithms to the pre-processed cube
+Applies post-processing algorithms to the pre-processed cube
 
 @author: Iain
 """
