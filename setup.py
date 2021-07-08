@@ -52,15 +52,15 @@ with open(resource('naco_pip', '__init__.py')) as version_file:
     VERSION = VERSION.group(1)
 
 
-PACKAGES = ['naco_pip','fits_info']
+PACKAGES = ['naco_pip']
 setup(
     name='naco_pip',
     version=VERSION,
-    description='Package for reducing naco data.',
+    description='Package for reducing NACO data.',
     long_description=README,
     license='MIT',
-    author='Val/Lewis',
-    author_email='lpic0002@student.monash.edu',
+    author='Val/Iain/Lewis',
+    author_email='iain.hammond@monash.edu',
     #url='https://github.com/vortex-exoplanet/VIP',
     cmdclass={'install': InstallReqs,
               'develop': InstallDevReqs},
