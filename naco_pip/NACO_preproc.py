@@ -100,6 +100,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
             tmp = None
             bar.update()
+        write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
