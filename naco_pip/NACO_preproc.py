@@ -11,12 +11,13 @@ __all__ = ['calib_dataset']
 import numpy as np
 import pyprind
 import os
+import gc
 import pathlib
 from matplotlib import pyplot as plt
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_crop_frames, frame_crop
+from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, \
+    cube_crop_frames, frame_crop
 from vip_hci.stats import cube_distance
-#from vip_hci.conf import check_enough_memory
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
@@ -43,7 +44,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
-    def recenter(self, nproc=1, sigfactor=4, subi_size=21, crop_sz=None, verbose=True, debug=False, plot=False, coro=True):
+    def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=None, verbose=True, debug=False, plot=False, coro=True):
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
@@ -86,8 +87,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         fwhm = fwhm_all[0] # fwhm is the first entry in the file 
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
-            print('fwhm:',fwhm,'of type',type(fwhm))
-        #mem = np.zeros(len(self.sci_list))
+            print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)))
+
         # Creates a master science cube with just the median of each cube
         bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
@@ -95,27 +96,22 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             if sc == 0: 
                 self.ndit, ny, nx = tmp.shape #dimensions of cube
                 tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
-                #mem_msg = 'Set check_memory=False to override this memory check'
             tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
-            #input_bytes = tmp.nbytes
-            #memory = check_enough_memory(input_bytes, verbose=True)
             tmp = None
-            #mem[sc] = memory
             bar.update()
-        #write_fits(self.outpath+'memory.fits',mem,verbose=debug)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
                 print('##### Recentering via speckle pattern #####',flush=True)
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
                 tmp_tmp,cube_sci_lpf,cube_stret,sx,sy = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
-                                                                alignment_iter = 5, gammaval = 1,
-                                                                min_spat_freq = 0.5, max_spat_freq = 3,
-                                                                fwhm = fwhm, debug = debug,
-                                                                recenter_median = True, negative = coro,
-                                                                fit_type='gaus', crop=False, subframesize = subi_size,
-                                                                imlib='opencv',interpolation='lanczos4',plot = plot, full_output = True)
-
+                                                                alignment_iter=5, gammaval=1,
+                                                                min_spat_freq=0.5, max_spat_freq=3,
+                                                                fwhm=fwhm, debug=debug,
+                                                                recenter_median=True, negative=coro,
+                                                                fit_type='gaus', crop=True, subframesize=subi_size,
+                                                                imlib='opencv',interpolation='lanczos4',plot=plot, full_output=True)
+                get_available_memory()
                 del cube_sci_lpf
                 del cube_stret
         elif self.recenter_method == '2dfit':	
@@ -165,7 +161,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 # sc*ndit+dd i don't think this line works for variable sized cubes
             tmp = None  # memory management
         pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
-
 
         if crop_sz is not None:
             if not crop_sz % 2:

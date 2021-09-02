@@ -68,7 +68,7 @@ preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQ
                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
                         recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
 
-preproc.recenter(nproc=nproc, sigfactor=4, subi_size=21, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
+preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
 preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot='save')
 ### for PCA in concentric annuli, a cropped cube is needed at minimum ###
 preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)
