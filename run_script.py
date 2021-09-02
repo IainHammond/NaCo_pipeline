@@ -11,13 +11,13 @@ import os
 from vip_hci.conf import get_available_memory
 
 sep = '―' * 45  # used in printing functions
-print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2021)'+'\n'+sep+'\n', flush=True)
+print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2021)'+'\n'+sep+'\n')
 try:
     nproc = int(os.getenv('SLURM_CPUS_PER_TASK',default=1))
 except:
     nproc=1
 get_available_memory()
-print('Number of CPUS: {} \n'.format(nproc))
+print('Number of CPUS: {} \n'.format(nproc),flush=True)
 
 # NaCo info
 wavelength = 3.8e-6  # meters
