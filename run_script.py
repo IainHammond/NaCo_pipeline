@@ -17,7 +17,7 @@ try:
 except:
     nproc=1
 get_available_memory()
-print('Number of CPUS: {} \n'.format(nproc),flush=True)
+print('Number of CPUs: {} \n'.format(nproc),flush=True)
 
 # NaCo info
 wavelength = 3.8e-6  # meters

@@ -18,7 +18,7 @@
 
 # Memory usage (MB)
 # SBATCH --mem-per-cpu=3000
-#SBATCH --mem=16000
+#SBATCH --mem=64000
 
 # Set your minimum acceptable wall time, format: day-hours:minutes:seconds
 #SBATCH --time=1-0:00:00
