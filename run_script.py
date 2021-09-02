@@ -4,17 +4,21 @@
 Created on Sun Apr 12 13:11:12 2020
 @author: iain, lewis
 """
-sep = '―' * 45  # used in printing functions
-print(sep + '\n' + 'Starting NaCo pipeline (Hammond et al. 2021)' + '\n' + sep, flush=True)
+from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 
+# quick basic checks
 import os
+from vip_hci.conf import get_available_memory
+
+sep = '―' * 45  # used in printing functions
+print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2021)'+'\n'+sep+'\n', flush=True)
 try:
     nproc = int(os.getenv('SLURM_CPUS_PER_TASK',default=1))
 except:
     nproc=1
-print('Number of CPUS:',nproc)
+get_available_memory()
+print('Number of CPUS: {} \n'.format(nproc))
 
-from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 # NaCo info
 wavelength = 3.8e-6  # meters
 size_telescope = 8.2  # meters

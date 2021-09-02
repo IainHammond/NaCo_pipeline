@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, cube_crop_frames, frame_crop
 from vip_hci.stats import cube_distance
-from vip_hci.conf import check_enough_memory
+#from vip_hci.conf import check_enough_memory
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
@@ -87,26 +87,26 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
             print('fwhm:',fwhm,'of type',type(fwhm))
-        mem = np.zeros(len(self.sci_list))
+        #mem = np.zeros(len(self.sci_list))
         # Creates a master science cube with just the median of each cube
-        #bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
+        bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug) #open cube as tmp
+            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=True) #open cube as tmp
             if sc == 0: 
                 self.ndit, ny, nx = tmp.shape #dimensions of cube
-                tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube. np.zeros is array filled with zeros
+                tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
                 #mem_msg = 'Set check_memory=False to override this memory check'
             tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
-            input_bytes = tmp.nbytes
-            memory = check_enough_memory(input_bytes, verbose=True)
+            #input_bytes = tmp.nbytes
+            #memory = check_enough_memory(input_bytes, verbose=True)
             tmp = None
-            mem[sc] = memory
-            #bar.update()
-        write_fits(self.outpath+'memory.fits',mem,verbose=debug)
+            #mem[sc] = memory
+            bar.update()
+        #write_fits(self.outpath+'memory.fits',mem,verbose=debug)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
-                print('##### Recentering via speckle pattern #####')
+                print('##### Recentering via speckle pattern #####',flush=True)
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
                 tmp_tmp,cube_sci_lpf,cube_stret,sx,sy = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
                                                                 alignment_iter = 5, gammaval = 1,
@@ -120,7 +120,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 del cube_stret
         elif self.recenter_method == '2dfit':	
                 # DOUBLE GAUSSIAN
-                print('##### Recentering via 2dfit #####')         	
+                print('##### Recentering via 2dfit #####',flush=True)
                 params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
                 res = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
                                       model=self.recenter_model, nproc=nproc, imlib='opencv',
@@ -180,7 +180,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),tmp_tmp) #makes the master cube
         write_fits(self.outpath+'derot_angles.fits',angles_1dvector) # writes the 1D array of derotation angles
         if verbose:
-            print('Shifts applied, master cube saved')
+            print('Shifts applied, master cube saved',flush=True)
         tmp_tmp = None
 
 
@@ -202,7 +202,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if verbose:
             print('\n')
-            print('Beginning bad frame removal...')
+            print('Beginning bad frame removal...',flush=True)
             print('\n')
         angle_file = open_fits(self.outpath+'derot_angles.fits',verbose=debug) #opens the rotation file
         recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),verbose=debug) # loads the master cube
@@ -300,10 +300,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold)
         write_fits(self.outpath+'derot_angles.fits', angle_threshold)
         if verbose: 
-            print('Saved good frames and their respective rotations to file')	
+            print('Saved good frames and their respective rotations to file',flush=True)
         frames_threshold = None
 
-    def crop_cube(self, arcsecond_diameter = 3.5, verbose = True, debug = False):
+    def crop_cube(self, arcsecond_diameter=3.5, verbose=True, debug=False):
     
         """
         Crops frames in the master cube after recentering and bad frame removal. Recommended for post-processing ie.
@@ -346,7 +346,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         else:
             if verbose:
-                print('######### Running frame cropping #########')
+                print('######### Running frame cropping #########',flush=True)
             master_cube = cube_crop_frames(master_cube, crop_size, force = False, verbose = debug, full_output = False)
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube)
 
@@ -386,7 +386,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 print('Binning factor is 1 or 0 (cant bin any frames). Skipping binning...')
             else:
                 if verbose:
-                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor))
+                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor),flush=True)
                 nframes,ny,nx = master_cube.shape
                 derot_angles_binned = np.zeros([int(nframes/binning_factor)])
                 master_cube_binned = np.zeros([int(nframes/binning_factor),ny,nx])
