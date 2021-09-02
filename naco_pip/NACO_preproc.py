@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Recenters, detects bad frames, crops and bins
@@ -43,7 +43,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
-    def recenter(self, nproc = 1, sigfactor = 4, subi_size = 21, crop_sz = None, verbose = True, debug = False, plot = False, coro = True):
+    def recenter(self, nproc=1, sigfactor=4, subi_size=21, crop_sz=None, verbose=True, debug=False, plot=False, coro=True):
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
