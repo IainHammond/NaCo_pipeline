@@ -5,7 +5,7 @@ Created on Sun Apr 12 13:11:12 2020
 @author: iain, lewis
 """
 sep = '―' * 45  # used in printing functions
-print(sep + '\n' + 'Starting NaCo pipeline (Hammond et al. 2021)' + '\n' + sep)
+print(sep + '\n' + 'Starting NaCo pipeline (Hammond et al. 2021)' + '\n' + sep, flush=True)
 
 import os
 try:
