@@ -93,7 +93,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # Creates a master science cube with just the median of each cube
         bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=True) #open cube as tmp
+            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
             if sc == 0: 
                 self.ndit, ny, nx = tmp.shape #dimensions of cube
                 tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
