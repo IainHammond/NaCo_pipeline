@@ -89,7 +89,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('fwhm:',fwhm,'of type',type(fwhm))
         mem = np.zeros(len(self.sci_list))
         # Creates a master science cube with just the median of each cube
-        bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
+        #bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
         for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
             tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug) #open cube as tmp
             if sc == 0: 
@@ -101,7 +101,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             memory = check_enough_memory(input_bytes, verbose=True)
             tmp = None
             mem[sc] = memory
-            bar.update()
+            #bar.update()
         write_fits(self.outpath+'memory.fits',mem,verbose=debug)
 
         if self.recenter_method == 'speckle':
