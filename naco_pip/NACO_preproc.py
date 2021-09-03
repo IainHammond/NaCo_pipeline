@@ -91,16 +91,19 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)))
 
         # Creates a master science cube with just the median of each cube
-        bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
-        for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
-            if sc == 0: 
-                self.ndit, ny, nx = tmp.shape #dimensions of cube
-                tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
-            tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
-            tmp = None
-            bar.update()
-        write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
+        if not os.isfile(self.outpath+'median_calib_cube.fits'):
+            bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
+            for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
+                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
+                if sc == 0:
+                    self.ndit, ny, nx = tmp.shape #dimensions of cube
+                    tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
+                tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
+                tmp = None
+                bar.update()
+            write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
+        else:
+            tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits',verbose=debug)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
