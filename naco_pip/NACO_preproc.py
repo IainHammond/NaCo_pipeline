@@ -34,11 +34,11 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             tmp = f.readlines()
             for line in tmp:
                 self.sci_list.append(line.split('\n')[0])
-        self.sci_list.sort() # make sure they are in order so derotation doesn't make a mess of the frames
+        self.sci_list.sort()  # make sure they are in order so derotation doesn't make a mess of the frames
         self.real_ndit_sci = [] 
-        for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
+        for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
             tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)
-            self.real_ndit_sci.append(tmp.shape[0]) # gets length of each cube for later use
+            self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
             del tmp
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
@@ -97,14 +97,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
                 tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
                 if sc == 0:
-                    self.ndit, ny, nx = tmp.shape #dimensions of cube
-                    tmp_tmp = np.zeros([ncubes,ny,nx]) # template cube with the median of each SCI cube
-                tmp_tmp[sc]= np.median(tmp, axis=0) # median frame of cube tmp
+                    _, ny, nx = tmp.shape  # dimensions of cube
+                    tmp_tmp = np.zeros([ncubes, ny, nx])  # template cube with the median of each SCI cube
+                tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
                 tmp = None
                 bar.update()
             write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
         else:
             tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits',verbose=debug)
+            _, ny, nx = tmp_tmp.shape
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
@@ -156,7 +157,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 #			                                        verbose=verbose, debug=debug, plot=plot)		
         # LOAD IN REAL_NDIT_SCI
         # Load original cubes, shift them, and create master cube
-        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore		   
+        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore
         angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))]) # makes empty array for derot angles, length of number of frames 
         for sc, fits_name in enumerate(self.sci_list):
             tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug) #opens science cube
@@ -216,6 +217,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         y_shifts = open_fits(self.outpath+"y_shifts.fits",verbose=debug)
         median_sy = np.median(y_shifts) #median of y shifts    
 
+        # self.ndit came from the z dimension of the first calibrated science cube above in recentring
         #x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
         #y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
         if not self.fast_reduction: # long are shifts to be apply to each frame in each cube. fast reduction only has one cube
@@ -226,7 +228,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 ndit = self.real_ndit_sci[i] # gets the dimensions of the cube
                 x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i] # sets the average shifts of all frames in that cube
                 y_shifts_long[i*ndit:(i+1)*ndit] = y_shifts[i]
-
 
             write_fits(self.outpath+'x_shifts_long.fits',x_shifts_long,verbose=debug) # saves shifts to file
             write_fits(self.outpath+'y_shifts_long.fits',y_shifts_long,verbose=debug)
