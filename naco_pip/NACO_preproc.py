@@ -11,6 +11,7 @@ __all__ = ['calib_dataset']
 import numpy as np
 import pyprind
 import os
+from os.path import isfile
 import gc
 import pathlib
 from matplotlib import pyplot as plt
