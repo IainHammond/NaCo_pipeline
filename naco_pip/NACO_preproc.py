@@ -100,6 +100,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     _, ny, nx = tmp.shape  # dimensions of cube
                     tmp_tmp = np.zeros([ncubes, ny, nx])  # template cube with the median of each SCI cube
                 tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
+                get_available_memory()
                 tmp = None
                 bar.update()
             write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
