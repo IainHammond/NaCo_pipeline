@@ -12,12 +12,12 @@ import numpy as np
 import pyprind
 import os
 from os.path import isfile
-import gc
+
 import pathlib
 from matplotlib import pyplot as plt
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, \
-    cube_crop_frames, frame_crop
+    cube_crop_frames
 from vip_hci.stats import cube_distance
 from vip_hci.conf import get_available_memory
 
@@ -30,16 +30,22 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         self.recenter_model = recenter_model
         self.sci_list = []
         # get all the science cubes into a list
-        with open(self.inpath +"sci_list.txt", "r") as f:
+        with open(self.inpath+'sci_list.txt', "r") as f:
             tmp = f.readlines()
             for line in tmp:
                 self.sci_list.append(line.split('\n')[0])
         self.sci_list.sort()  # make sure they are in order so derotation doesn't make a mess of the frames
-        self.real_ndit_sci = [] 
-        for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)
-            self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
-            del tmp
+        print(len(self.sci_list), 'science cubes')
+        # read the dimensions of each science cube from calibration, or get from each fits file
+        if isfile(self.inpath+'new_ndit_sci_sky_unsat.fits'):
+            nframes = open_fits(self.inpath+'new_ndit_sci_sky_unsat.fits', verbose=False)
+            self.real_ndit_sci = [int(nframes[0])] * len(self.sci_list)
+        else:
+            self.real_ndit_sci = []
+            for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
+                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)
+                self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
+                del tmp
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
         os.system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath) # for use later
@@ -63,7 +69,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             To provide extra information about the progress and results of the pipeline
         plot: True or False
             Set to False when running on M3
-        coro: True for coronagraph data. False otherwise. Recentering requires coronagraphic data
+        coro: True for coronagraph data. False otherwise. Recentring requires coronagraphic data
         
         Writes fits to file:
         ***********  
@@ -77,11 +83,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             if self.recenter_method != '2dfit':
                 raise ValueError('Recentering method invalid')
             if self.recenter_model == '2gauss':
-                raise ValueError('2Gauss requires coronagraphic data')        
-        if verbose:
-            print(len(self.sci_list),'science cubes')
-            if debug:
-                print(self.sci_list)
+                raise ValueError('2Gauss requires coronagraphic data')
         
         ncubes = len(self.sci_list)     
          
@@ -93,7 +95,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         # Creates a master science cube with just the median of each cube
         if not isfile(self.outpath+'median_calib_cube.fits'):
-            #bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
+            bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
             for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
                 tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
                 if sc == 0:
@@ -101,7 +103,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     tmp_tmp = np.zeros([ncubes, ny, nx])  # template cube with the median of each SCI cube
                 tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
                 get_available_memory()
-                #bar.update()
+                bar.update()
             write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
         else:
             tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits',verbose=debug)
@@ -119,6 +121,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                                                                 fit_type='gaus', crop=True, subframesize=subi_size,
                                                                 imlib='opencv',interpolation='lanczos4',plot=plot, full_output=True)
                 get_available_memory()
+                del tmp_tmp
                 del cube_sci_lpf
                 del cube_stret
         elif self.recenter_method == '2dfit':	
@@ -174,7 +177,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 crop_sz += 1
                 print('Crop size not odd, increased to {}'.format(crop_sz))
             print('Cropping to {} pixels'.format(crop_sz))
-            tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force = False, verbose = debug, full_output = False)
+            tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
 
         # write all the shifts
         write_fits(self.outpath+'x_shifts.fits', sx) # writes the x shifts to the file
