@@ -38,17 +38,19 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         print(len(self.sci_list), 'science cubes')
         # read the dimensions of each science cube from calibration, or get from each fits file
         if isfile(self.inpath+'new_ndit_sci_sky_unsat.fits'):
+            print('Using SCI cube dimensions from calibration')
             nframes = open_fits(self.inpath+'new_ndit_sci_sky_unsat.fits', verbose=False)
             self.real_ndit_sci = [int(nframes[0])] * len(self.sci_list)
         else:
             self.real_ndit_sci = []
+            print('Re-evaluating SCI cube dimensions')
             for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
                 tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)
                 self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
                 del tmp
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
-        os.system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath) # for use later
+        os.system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
@@ -93,50 +95,64 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)))
 
+        if not subi_size % 2:
+            subi_size -= 1
+            print('WARNING: Recentring sub image size not odd. Adjusted to {} px'.format(subi_size))
+
         # Creates a master science cube with just the median of each cube
         if not isfile(self.outpath+'median_calib_cube.fits'):
-            bar = pyprind.ProgBar(len(self.sci_list), stream=1,title='Creating master science cube (median of each science cube)....')
-            for sc, fits_name in enumerate(self.sci_list): # enumerate over the list of all science cubes
-                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)  # open cube as tmp
+            bar = pyprind.ProgBar(len(self.sci_list), stream=1, title='Creating master science cube (median of each science cube)....')
+            for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
+                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug)  # open cube as tmp
                 if sc == 0:
                     _, ny, nx = tmp.shape  # dimensions of cube
-                    tmp_tmp = np.zeros([ncubes, ny, nx])  # template cube with the median of each SCI cube
+                    if subi_size > ny:  # check if bigger than science frame
+                        subi_size = ny  # ny should be odd already from calibration
+                        print('WARNING: Recentring sub image size larger than frame. Adjusted to {} px'.format(subi_size))
+                    tmp_tmp = np.zeros([ncubes, ny, ny])  # template cube with the median of each SCI cube
                 tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
                 get_available_memory()
                 bar.update()
-            write_fits(self.outpath+'median_calib_cube.fits',tmp_tmp,verbose=False)
+            write_fits(self.outpath+'median_calib_cube.fits', tmp_tmp, verbose=debug)
+            if verbose:
+                print('Median science cube created for recentring')
         else:
-            tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits',verbose=debug)
+            tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits', verbose=debug)
             _, ny, nx = tmp_tmp.shape
+            if verbose:
+                print('Median science cube read from memory for recentring')
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
-                print('##### Recentering via speckle pattern #####',flush=True)
+                print('##### Recentering via speckle pattern #####', flush=True)
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
-                tmp_tmp,cube_sci_lpf,cube_stret,sx,sy = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
-                                                                alignment_iter=5, gammaval=1,
-                                                                min_spat_freq=0.5, max_spat_freq=3,
-                                                                fwhm=fwhm, debug=debug,
-                                                                recenter_median=True, negative=coro,
-                                                                fit_type='gaus', crop=True, subframesize=subi_size,
-                                                                imlib='opencv',interpolation='lanczos4',plot=plot, full_output=True)
                 get_available_memory()
-                del tmp_tmp
-                del cube_sci_lpf
-                del cube_stret
+                recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
+                                                      alignment_iter=5, gammaval=1,
+                                                      min_spat_freq=0.5, max_spat_freq=3,
+                                                      fwhm=fwhm, debug=debug,
+                                                      recenter_median=True, negative=coro,
+                                                      fit_type='gaus', crop=True, subframesize=subi_size,
+                                                      imlib='opencv', interpolation='lanczos4', plot=plot, full_output=True)
+                print('Recentring complete', flush=True)
+                get_available_memory()
+                sy = recenter[4]
+                sx = recenter[3]
         elif self.recenter_method == '2dfit':	
                 # DOUBLE GAUSSIAN
-                print('##### Recentering via 2dfit #####',flush=True)
+                print('##### Recentering via 2dfit #####', flush=True)
+                get_available_memory()
                 params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
-                res = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
-                                      model=self.recenter_model, nproc=nproc, imlib='opencv',
-                                      interpolation='lanczos4', offset=None,
-                                      negative=False, threshold=True, sigfactor=sigfactor,
-                                      fix_neg=False, params_2g=params_2g,
-                                      save_shifts=False, full_output=True, verbose=verbose,
-                                      debug=debug, plot=plot)
-                sy = res[1]
-                sx = res[2]	                              
+                recenter = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
+                                               model=self.recenter_model, nproc=nproc, imlib='opencv',
+                                               interpolation='lanczos4', offset=None,
+                                               negative=False, threshold=True, sigfactor=sigfactor,
+                                               fix_neg=False, params_2g=params_2g,
+                                               save_shifts=False, full_output=True, verbose=verbose,
+                                               debug=debug, plot=plot)
+                print('Recentring complete', flush=True)
+                sy = recenter[1]
+                sx = recenter[2]
 #                true_agpm_cen = (res[4][0],res[3][0])
 #                true_fwhm_pos = (res[5][0],res[6][0])
 #                true_fwhm_neg = (res[7][0],res[8][0])
@@ -160,13 +176,13 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 #			                                        verbose=verbose, debug=debug, plot=plot)		
         # LOAD IN REAL_NDIT_SCI
         # Load original cubes, shift them, and create master cube
-        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)),ny,nx]) #makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore
-        angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))]) # makes empty array for derot angles, length of number of frames 
+        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), ny, nx])  # makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore
+        angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))])  # makes empty array for derot angles, length of number of frames
         for sc, fits_name in enumerate(self.sci_list):
             tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug) #opens science cube
             dim = int(self.real_ndit_sci[sc]) #gets the integer dimensions of this science cube
             for dd in range(dim): #dd goes from 0 to the largest dimension
-                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd],shift_y=sy[sc],shift_x=sx[sc],imlib='opencv') #this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
+                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv') #this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
                 angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd] # turn 2d rotation file into a vector here same as for the mastercube above
                 # sc*ndit+dd i don't think this line works for variable sized cubes
             tmp = None  # memory management
@@ -180,16 +196,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
 
         # write all the shifts
-        write_fits(self.outpath+'x_shifts.fits', sx) # writes the x shifts to the file
-        write_fits(self.outpath+'y_shifts.fits', sy) # writes the y shifts to the file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),tmp_tmp) #makes the master cube
-        write_fits(self.outpath+'derot_angles.fits',angles_1dvector) # writes the 1D array of derotation angles
+        write_fits(self.outpath+'x_shifts.fits', sx)  # writes the x shifts to the file
+        write_fits(self.outpath+'y_shifts.fits', sy)  # writes the y shifts to the file
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), tmp_tmp)  # makes the master cube
+        write_fits(self.outpath+'derot_angles.fits',angles_1dvector)  # writes the 1D array of derotation angles
         if verbose:
-            print('Shifts applied, master cube saved',flush=True)
+            print('Shifts applied, master cube saved', flush=True)
         tmp_tmp = None
 
-
-    def bad_frame_removal(self, pxl_shift_thres = 0.5, sub_frame_sz = 31, verbose = True, debug = False, plot = 'save'):
+    def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot='save'):
         """
         For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the
         recentered mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
@@ -207,39 +222,44 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if verbose:
             print('\n')
-            print('Beginning bad frame removal...',flush=True)
+            print('Beginning bad frame removal...', flush=True)
             print('\n')
+
+        if not sub_frame_sz % 2:
+            sub_frame_sz -= 1
+            print('WARNING: Bad frame sub image size not odd. Adjusted to {} px'.format(sub_frame_sz))
+
         angle_file = open_fits(self.outpath+'derot_angles.fits',verbose=debug) #opens the rotation file
         recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),verbose=debug) # loads the master cube
 
-        #open x shifts file for the respective method
-        x_shifts = open_fits(self.outpath+"x_shifts.fits",verbose=debug)
-        median_sx = np.median(x_shifts) #median of x shifts 
+        # open x shifts file for the respective method
+        x_shifts = open_fits(self.outpath+"x_shifts.fits", verbose=debug)
+        median_sx = np.median(x_shifts)  # median of x shifts
 
-        #opens y shifts file for the respective method
-        y_shifts = open_fits(self.outpath+"y_shifts.fits",verbose=debug)
-        median_sy = np.median(y_shifts) #median of y shifts    
+        # opens y shifts file for the respective method
+        y_shifts = open_fits(self.outpath+"y_shifts.fits", verbose=debug)
+        median_sy = np.median(y_shifts)  # median of y shifts
 
         # self.ndit came from the z dimension of the first calibrated science cube above in recentring
-        #x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
-        #y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
-        if not self.fast_reduction: # long are shifts to be apply to each frame in each cube. fast reduction only has one cube
+        # x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
+        # y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
+        if not self.fast_reduction:  # long are shifts to be apply to each frame in each cube. fast reduction only has one cube
             x_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
             y_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
 
-            for i in range(len(self.sci_list)): # from 0 to the length of sci_list
-                ndit = self.real_ndit_sci[i] # gets the dimensions of the cube
-                x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i] # sets the average shifts of all frames in that cube
+            for i in range(len(self.sci_list)):  # from 0 to the length of sci_list
+                ndit = self.real_ndit_sci[i]  # gets the dimensions of the cube
+                x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i]  # sets the average shifts of all frames in that cube
                 y_shifts_long[i*ndit:(i+1)*ndit] = y_shifts[i]
 
-            write_fits(self.outpath+'x_shifts_long.fits',x_shifts_long,verbose=debug) # saves shifts to file
-            write_fits(self.outpath+'y_shifts_long.fits',y_shifts_long,verbose=debug)
+            write_fits(self.outpath+'x_shifts_long.fits', x_shifts_long, verbose=debug)  # saves shifts to file
+            write_fits(self.outpath+'y_shifts_long.fits', y_shifts_long, verbose=debug)
             x_shifts = x_shifts_long
             y_shifts = y_shifts_long
 
         if verbose:
-            print("x shift median:",median_sx)
-            print("y shift median:",median_sy)
+            print("x shift median:", median_sx)
+            print("y shift median:", median_sy)
 
         bad = []
         good = []
@@ -248,56 +268,54 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         i = 0 
         shifts = list(zip(x_shifts,y_shifts))
         bar = pyprind.ProgBar(len(x_shifts), stream=1,title='Running pixel shift check...')
-        for sx,sy in shifts: #iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
+        for sx, sy in shifts:  # iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
             if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
                 good.append(i)
             else:   		
                 bad.append(i)
-            i+=1
+            i += 1
             bar.update()
 
         # only keeps the files that weren't shifted above the threshold
         frames_pxl_threshold = recentered_cube[good]
         recentered_cube = None
         if verbose:
-            print('Frames within pixel shift threshold:',len(frames_pxl_threshold))
-        #recentered_cube = None
+            print('Frames within pixel shift threshold:', len(frames_pxl_threshold))
         # only keeps the corresponding derotation entry for the frames that were kept
         angle_pxl_threshold = angle_file[good]
 
         if verbose:
             print('########### Median combining {} frames for correlation check... ###########'.format(len(frames_pxl_threshold)))
 
-        #makes array of good frames from the recentered mastercube
-        subarray = cube_crop_frames(frames_pxl_threshold, size=sub_frame_sz,verbose=verbose)  # crops all the frames to a common size
-        frame_ref = np.median(subarray, axis=0)  #median frame of remaining cropped frames, can be sped up with multi-processing
+        # makes array of good frames from the recentered mastercube
+        subarray = cube_crop_frames(frames_pxl_threshold, size=sub_frame_sz, verbose=verbose)  # crops all the frames to a common size
+        frame_ref = np.median(subarray, axis=0)  # median frame of remaining cropped frames, can be sped up with multi-processing
 
         if verbose:
             print('Running frame correlation check...')
 
         # calculates correlation threshold using the median of the Pearson correlation of all frames, minus 1 standard deviation 
 
-        #frame_ref = frame_crop(tmp_median, size = sub_frame_sz, verbose=verbose) # crops the median of all frames to a common size
-        distances = cube_distance(subarray, frame_ref, mode = 'full', dist = 'pearson', plot=True) # calculates the correlation of each frame to the median and saves as a list    
-        if plot == 'save': # save a plot of distances compared to the median for each frame if set to 'save'
+        # frame_ref = frame_crop(tmp_median, size = sub_frame_sz, verbose=verbose) # crops the median of all frames to a common size
+        distances = cube_distance(subarray, frame_ref, mode='full', dist='pearson', plot=True)  # calculates the correlation of each frame to the median and saves as a list
+        if plot == 'save':  # save a plot of distances compared to the median for each frame if set to 'save'
             plt.savefig(self.outpath+'distances.pdf')
-        correlation_thres = np.median(distances) - np.std(distances) # threshold is the median of the distances minus one stddev
+        correlation_thres = np.median(distances) - np.std(distances)  # threshold is the median of the distances minus one stddev
         
         good_frames, bad_frames = cube_detect_badfr_correlation(subarray,
-                                                            frame_ref = frame_ref,
-                                                            dist='pearson',
-                                                            threshold=correlation_thres,
-                                                            plot=True,
-                                                            verbose=False)
-        if plot =='save':
+                                                                frame_ref=frame_ref,
+                                                                dist='pearson',
+                                                                threshold=correlation_thres,
+                                                                plot=True,
+                                                                verbose=False)
+        if plot == 'save':
             plt.savefig(self.outpath+'frame_correlation.pdf')
 
-        #only keeps the files that were above the correlation threshold
+        # only keeps the files that were above the correlation threshold
         frames_threshold = frames_pxl_threshold[good_frames]
         frames_pxl_threshold = None
         if verbose:
             print('Frames within correlation threshold:',len(frames_threshold))
-        #frames_pxl_threshold = None
         # only keeps the derotation entries for the good frames above the correlation threshold     
         angle_threshold = angle_pxl_threshold[good_frames]
 
@@ -305,7 +323,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold)
         write_fits(self.outpath+'derot_angles.fits', angle_threshold)
         if verbose: 
-            print('Saved good frames and their respective rotations to file',flush=True)
+            print('Saved good frames and their respective rotations to file', flush=True)
         frames_threshold = None
 
     def crop_cube(self, arcsecond_diameter=3.5, verbose=True, debug=False):
@@ -351,11 +369,11 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         else:
             if verbose:
-                print('######### Running frame cropping #########',flush=True)
-            master_cube = cube_crop_frames(master_cube, crop_size, force = False, verbose = debug, full_output = False)
+                print('######### Running frame cropping #########', flush=True)
+            master_cube = cube_crop_frames(master_cube, crop_size, force=False, verbose=debug, full_output=False)
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube)
 
-    def median_binning(self, binning_factor = 10, verbose = True, debug = False):
+    def median_binning(self, binning_factor=10, verbose=True, debug=False):
         """ 
         Median combines the frames within the master science cube as per the binning factor, and makes the necessary
         changes to the derotation file
@@ -373,8 +391,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         the binned derotation angles
              
         """
-        if isinstance(binning_factor, int) == False and isinstance(binning_factor,list) == False and \
-                isinstance(binning_factor,tuple) == False:  # if it isnt int, tuple or list then raise an error
+        if isinstance(binning_factor, int) == False and isinstance(binning_factor, list) == False and \
+                isinstance(binning_factor, tuple) == False:  # if it isnt int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
@@ -383,32 +401,32 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if not os.path.isfile(self.outpath + 'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentering and bad frame removal!') 
         
-        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose = debug)
-        derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose = debug)
+        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
+        derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose=debug)
         
         def _binning(self,binning_factor,master_cube,derot_angles):
-            if binning_factor == 1 or binning_factor == 0: # doesn't bin with 1 but will loop over the other factors in the list or tuple
+            if binning_factor == 1 or binning_factor == 0:  # doesn't bin with 1 but will loop over the other factors in the list or tuple
                 print('Binning factor is 1 or 0 (cant bin any frames). Skipping binning...')
             else:
                 if verbose:
-                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor),flush=True)
-                nframes,ny,nx = master_cube.shape
+                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor), flush=True)
+                nframes, ny, nx = master_cube.shape
                 derot_angles_binned = np.zeros([int(nframes/binning_factor)])
-                master_cube_binned = np.zeros([int(nframes/binning_factor),ny,nx])
+                master_cube_binned = np.zeros([int(nframes/binning_factor), ny, nx])
                
-                for idx,frame in enumerate(range(binning_factor,nframes,binning_factor)):
+                for idx, frame in enumerate(range(binning_factor, nframes, binning_factor)):
                     if idx == (int(nframes/binning_factor)-1):
                         master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:],axis=0)
                         derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
                     master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame],axis=0)
                     derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
                 
-                write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'],binning_factor),master_cube_binned)
+                write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'], binning_factor), master_cube_binned)
                 write_fits(self.outpath+'derot_angles.fits'.format(binning_factor), derot_angles_binned)
             
         if isinstance(binning_factor, int):
-            _binning(self,binning_factor,master_cube,derot_angles)
+            _binning(self, binning_factor, master_cube, derot_angles)
 
-        if isinstance(binning_factor,list) or isinstance(binning_factor,tuple):
+        if isinstance(binning_factor, list) or isinstance(binning_factor, tuple):
             for binning_factor in binning_factor:
-                _binning(self,binning_factor,master_cube,derot_angles)
+                _binning(self, binning_factor, master_cube, derot_angles)
