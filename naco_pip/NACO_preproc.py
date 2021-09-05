@@ -60,13 +60,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
         
         Parameters:
-        ***********  
+        ----------
         sigfactor: float, default = 4
-            If thresholding is performed during 2gauss fitting, set the threshold in terms of gaussian sigma in the subimage (will depend on your cropping size)
+            If thresholding is performed during 2gauss fitting, set the threshold in terms of gaussian sigma in the
+            subimage (will depend on your cropping size)
         subi_size: int, default = 21
             Size of the square subimage sides in pixels.
         crop_sz: int, optional, in units of pixels. None by default
-            Crops to this size after recentering for memory management purposes. Useful for very large datasets
+            Crops to this size after recentring for memory management purposes. Useful for very large datasets
         verbose: True for False
             To provide extra information about the progress and results of the pipeline
         plot: True or False
@@ -74,7 +75,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         coro: True for coronagraph data. False otherwise. Recentring requires coronagraphic data
         
         Writes fits to file:
-        ***********  
+        ----------
         x_shifts.fits # writes the x shifts to the file
         y_shifts.fits # writes the y shifts to the file
         {source}_master_cube.fits # makes the recentered master cube
@@ -176,12 +177,23 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 #			                                        verbose=verbose, debug=debug, plot=plot)		
         # LOAD IN REAL_NDIT_SCI
         # Load original cubes, shift them, and create master cube
-        tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), ny, nx])  # makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore
+        if crop_sz is not None:
+            crop = True
+            if not crop_sz % 2:
+                crop_sz -= 1
+                print('Crop size not odd, adapted to {}'.format(crop_sz), flush=True)
+            print('Cropping to {} pixels'.format(crop_sz), flush=True)
+            tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), crop_sz, crop_sz])
+        else:
+            tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), ny, nx])
+
         angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))])  # makes empty array for derot angles, length of number of frames
         if verbose:
             print('Shifting frames and creating master science cube', flush=True)
         for sc, fits_name in enumerate(self.sci_list):
             tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug)  # opens science cube
+            if crop:
+                tmp = cube_crop_frames(tmp, crop_sz, force=False, verbose=debug, full_output=False)
             dim = int(self.real_ndit_sci[sc])  # gets the integer dimensions of this science cube
             for dd in range(dim):  # dd goes from 0 to the largest dimension
                 tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
@@ -192,12 +204,12 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             tmp = None  # memory management
         pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
 
-        if crop_sz is not None:
-            if not crop_sz % 2:
-                crop_sz += 1
-                print('Crop size not odd, increased to {}'.format(crop_sz), flush=True)
-            print('Cropping to {} pixels'.format(crop_sz), flush=True)
-            tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
+        # if crop_sz is not None:
+        #     if not crop_sz % 2:
+        #         crop_sz += 1
+        #         print('Crop size not odd, increased to {}'.format(crop_sz), flush=True)
+        #     print('Cropping to {} pixels'.format(crop_sz), flush=True)
+        #     tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
 
         # write all the shifts
         write_fits(self.outpath+'x_shifts.fits', sx)  # writes the x shifts to the file
