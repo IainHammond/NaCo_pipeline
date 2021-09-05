@@ -178,21 +178,25 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # Load original cubes, shift them, and create master cube
         tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), ny, nx])  # makes an array full of zeros, length of the sum of each entry in the sci dimensions file. we dont need our old tmp_tmp anymore
         angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))])  # makes empty array for derot angles, length of number of frames
+        if verbose:
+            print('Shifting frames and creating master science cube', flush=True)
         for sc, fits_name in enumerate(self.sci_list):
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug) #opens science cube
-            dim = int(self.real_ndit_sci[sc]) #gets the integer dimensions of this science cube
-            for dd in range(dim): #dd goes from 0 to the largest dimension
-                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv') #this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
-                angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd] # turn 2d rotation file into a vector here same as for the mastercube above
+            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug)  # opens science cube
+            dim = int(self.real_ndit_sci[sc])  # gets the integer dimensions of this science cube
+            for dd in range(dim):  # dd goes from 0 to the largest dimension
+                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
+                angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd]  # turn 2d rotation file into a vector here same as for the mastercube above
                 # sc*ndit+dd i don't think this line works for variable sized cubes
+                get_available_memory()
+                print(dd, flush=True)
             tmp = None  # memory management
         pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
 
         if crop_sz is not None:
             if not crop_sz % 2:
                 crop_sz += 1
-                print('Crop size not odd, increased to {}'.format(crop_sz))
-            print('Cropping to {} pixels'.format(crop_sz))
+                print('Crop size not odd, increased to {}'.format(crop_sz), flush=True)
+            print('Cropping to {} pixels'.format(crop_sz), flush=True)
             tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
 
         # write all the shifts
