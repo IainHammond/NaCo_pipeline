@@ -187,8 +187,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
                 angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd]  # turn 2d rotation file into a vector here same as for the mastercube above
                 # sc*ndit+dd i don't think this line works for variable sized cubes
-                get_available_memory()
-                print(dd, flush=True)
+            get_available_memory()
+            print(sc, flush=True)
             tmp = None  # memory management
         pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
 
