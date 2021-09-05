@@ -352,7 +352,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             Cube with cropped frames
 
         """
-        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
+        if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
             raise NameError('Missing master cube from recentering and bad frame removal!')
 
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
@@ -399,10 +399,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 isinstance(binning_factor, tuple) == False:  # if it isnt int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
-        if not os.path.isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
+        if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
             raise NameError('Missing master cube from recentering and bad frame removal!') 
             
-        if not os.path.isfile(self.outpath + 'derot_angles.fits'):
+        if not isfile(self.outpath + 'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentering and bad frame removal!') 
         
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
