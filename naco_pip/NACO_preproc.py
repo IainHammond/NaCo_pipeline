@@ -25,7 +25,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
         self.inpath = inpath
         self.outpath = outpath
-        self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits',verbose=False)
+        self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits', verbose=False)
         self.recenter_method = recenter_method
         self.recenter_model = recenter_model
         self.sci_list = []
@@ -91,7 +91,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         
         ncubes = len(self.sci_list)     
          
-        fwhm_all = open_fits(self.inpath+'fwhm.fits',verbose=debug) # changed this to open the file as sometimes we wont run get_stellar_psf() or it may have already run   
+        fwhm_all = open_fits(self.inpath+'fwhm.fits', verbose=debug) # changed this to open the file as sometimes we wont run get_stellar_psf() or it may have already run
         fwhm = fwhm_all[0] # fwhm is the first entry in the file 
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
@@ -208,21 +208,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 get_available_memory()
                 print('Science cube number: {}'.format(sc+1), flush=True)
 
-        # if crop_sz is not None:
-        #     if not crop_sz % 2:
-        #         crop_sz += 1
-        #         print('Crop size not odd, increased to {}'.format(crop_sz), flush=True)
-        #     print('Cropping to {} pixels'.format(crop_sz), flush=True)
-        #     tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, force=False, verbose=debug, full_output=False)
-
         # write all the shifts
-        write_fits(self.outpath+'x_shifts.fits', sx)  # writes the x shifts to the file
-        write_fits(self.outpath+'y_shifts.fits', sy)  # writes the y shifts to the file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), tmp_tmp)  # makes the master cube
-        write_fits(self.outpath+'derot_angles.fits', angles_1dvector)  # writes the 1D array of derotation angles
+        write_fits(self.outpath+'x_shifts.fits', sx, verbose=debug)  # writes the x shifts to the file
+        write_fits(self.outpath+'y_shifts.fits', sy, verbose=debug)  # writes the y shifts to the file
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), tmp_tmp, verbose=debug)  # makes the master cube
+        write_fits(self.outpath+'derot_angles.fits', angles_1dvector, verbose=debug)  # writes the 1D array of derotation angles
         if verbose:
             print('Shifts applied, master cube saved', flush=True)
-        del tmp_tmp
+        del tmp_tmp, sx, sy, angles_1dvector
 
     def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot='save'):
         """
@@ -241,16 +234,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         """
 
         if verbose:
-            print('\n')
-            print('Beginning bad frame removal...', flush=True)
-            print('\n')
+            print('######### Beginning bad frame removal #########', flush=True)
 
         if not sub_frame_sz % 2:
             sub_frame_sz -= 1
             print('WARNING: Bad frame sub image size not odd. Adjusted to {} px'.format(sub_frame_sz))
 
-        angle_file = open_fits(self.outpath+'derot_angles.fits',verbose=debug) #opens the rotation file
-        recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),verbose=debug) # loads the master cube
+        angle_file = open_fits(self.outpath+'derot_angles.fits', verbose=debug)  # opens the rotation file
+        recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)  # loads the master cube
 
         # open x shifts file for the respective method
         x_shifts = open_fits(self.outpath+"x_shifts.fits", verbose=debug)
@@ -298,18 +289,18 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         # only keeps the files that weren't shifted above the threshold
         frames_pxl_threshold = recentered_cube[good]
-        recentered_cube = None
-        if verbose:
-            print('Frames within pixel shift threshold:', len(frames_pxl_threshold))
         # only keeps the corresponding derotation entry for the frames that were kept
         angle_pxl_threshold = angle_file[good]
+        del recentered_cube, angle_file
 
         if verbose:
-            print('########### Median combining {} frames for correlation check... ###########'.format(len(frames_pxl_threshold)))
+            print('Frames within pixel shift threshold:', len(frames_pxl_threshold))
+            print('########### Median combining {} frames for correlation check... ###########'.format(
+                len(frames_pxl_threshold)))
 
         # makes array of good frames from the recentered mastercube
         subarray = cube_crop_frames(frames_pxl_threshold, size=sub_frame_sz, verbose=verbose)  # crops all the frames to a common size
-        frame_ref = np.median(subarray, axis=0)  # median frame of remaining cropped frames, can be sped up with multi-processing
+        frame_ref = np.nanmedian(subarray, axis=0)  # median frame of remaining cropped frames, can be sped up with multi-processing
 
         if verbose:
             print('Running frame correlation check...')
@@ -333,15 +324,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         # only keeps the files that were above the correlation threshold
         frames_threshold = frames_pxl_threshold[good_frames]
-        frames_pxl_threshold = None
+        del frames_pxl_threshold
         if verbose:
             print('Frames within correlation threshold:', len(frames_threshold))
         # only keeps the derotation entries for the good frames above the correlation threshold     
         angle_threshold = angle_pxl_threshold[good_frames]
 
         # saves the good frames to a new file, and saves the derotation angles to a new file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold)
-        write_fits(self.outpath+'derot_angles.fits', angle_threshold)
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold, verbose=debug)
+        write_fits(self.outpath+'derot_angles.fits', angle_threshold, verbose=debug)
         if verbose: 
             print('Saved good frames and their respective rotations to file', flush=True)
         del frames_threshold
@@ -385,12 +376,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('Input crop size is {} pixels'.format(crop_size))
 
         if ny <= crop_size:
-            print('Crop size is larger than the frame size. Skipping cropping...')
+            print('Crop size is larger than the frame size. Skipping cropping...', flush=True)
         else:
             if verbose:
                 print('######### Running frame cropping #########', flush=True)
             master_cube = cube_crop_frames(master_cube, crop_size, force=False, verbose=debug, full_output=False)
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube)
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube, verbose=debug)
+        if verbose:
+            print('Cropping complete', flush=True)
+        del master_cube
 
     def median_binning(self, binning_factor=10, verbose=True, debug=False):
         """ 
@@ -446,30 +440,3 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if verbose:
             timing(start_time)
-
-        # def _binning(self, binning_factor, master_cube, derot_angles):
-        #     if binning_factor == 1 or binning_factor == 0:  # doesn't bin with 1 but will loop over the other factors in the list or tuple
-        #         print('Binning factor is 1 or 0 (cant bin any frames). Skipping binning...')
-        #     else:
-        #         if verbose:
-        #             print('##### Median binning frames with binning factor = {} #####'.format(binning_factor), flush=True)
-        #         nframes, ny, nx = master_cube.shape
-        #         derot_angles_binned = np.zeros([int(nframes/binning_factor)])
-        #         master_cube_binned = np.zeros([int(nframes/binning_factor), ny, nx])
-        #
-        #         for idx, frame in enumerate(range(binning_factor, nframes, binning_factor)):
-        #             if idx == (int(nframes/binning_factor)-1):
-        #                 master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:], axis=0)
-        #                 derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
-        #             master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame], axis=0)
-        #             derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
-        #
-        #         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'], binning_factor), master_cube_binned)
-        #         write_fits(self.outpath+'derot_angles.fits'.format(binning_factor), derot_angles_binned)
-        #
-        # if isinstance(binning_factor, int):
-        #     _binning(self, binning_factor, master_cube, derot_angles)
-        #
-        # if isinstance(binning_factor, list) or isinstance(binning_factor, tuple):
-        #     for binning_factor in binning_factor:
-        #         _binning(self, binning_factor, master_cube, derot_angles)
