@@ -128,7 +128,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 # FOR GAUSSIAN
                 print('##### Recentering via speckle pattern #####', flush=True)
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
-                get_available_memory()
+                if debug:
+                    get_available_memory()
                 recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
                                                       alignment_iter=5, gammaval=1,
                                                       min_spat_freq=0.5, max_spat_freq=3,
@@ -141,7 +142,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         elif self.recenter_method == '2dfit':	
                 # DOUBLE GAUSSIAN
                 print('##### Recentering via 2dfit #####', flush=True)
-                get_available_memory()
+                if debug:
+                    get_available_memory()
                 params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
                 recenter = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
                                                model=self.recenter_model, nproc=nproc, imlib='opencv',
@@ -412,11 +414,11 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if not isfile(self.outpath+'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentring and bad frame removal!')
 
-        if verbose:
-            start_time = time_ini(verbose=False)
-
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
         derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose=debug)
+
+        if verbose:
+            start_time = time_ini(verbose=False)
 
         ntot = master_cube.shape[0]
         if binning_factor != 1 and binning_factor != 0:
@@ -436,7 +438,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('Binning factor is {}, skipping binning...'.format(binning_factor), flush=True)
         if verbose:
             print('Binning complete', flush=True)
+        if verbose:
+            timing(start_time)  # prints how long median binning took
         del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
 
-        if verbose:
-            timing(start_time)
+
