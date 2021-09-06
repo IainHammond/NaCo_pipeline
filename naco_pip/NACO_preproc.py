@@ -22,7 +22,7 @@ from vip_hci.stats import cube_distance
 from vip_hci.conf import get_available_memory, time_ini, timing
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
-    def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
+    def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro=True):
         self.inpath = inpath
         self.outpath = outpath
         self.derot_angles_cropped = open_fits(self.inpath+'derot_angles_cropped.fits', verbose=False)
@@ -405,7 +405,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         """
 
         if not isinstance(binning_factor, int) and not isinstance(binning_factor, list) and \
-                not isinstance(binning_factor, tuple):  # if it isnt int, tuple or list then raise an error
+                not isinstance(binning_factor, tuple):  # if it isn't int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
@@ -441,5 +441,3 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             timing(start_time)  # prints how long median binning took
         del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
-
-
