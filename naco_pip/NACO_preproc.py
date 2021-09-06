@@ -81,7 +81,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         {source}_master_cube.fits # makes the recentered master cube
         derot_angles.fits # makes a vector of derotation angles
         """  	
-        
+        pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
+
         if not coro:
             if self.recenter_method != '2dfit':
                 raise ValueError('Recentering method invalid')
@@ -121,7 +122,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits', verbose=debug)
             _, ny, nx = tmp_tmp.shape
             if verbose:
-                print('Median science cube read from memory for recentring')
+                print('Median science cube for recentring has been read from file')
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
@@ -135,8 +136,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                                                       recenter_median=True, negative=coro,
                                                       fit_type='gaus', crop=True, subframesize=subi_size,
                                                       imlib='opencv', interpolation='lanczos4', plot=plot, full_output=True)
-                print('Recentring complete', flush=True)
-                get_available_memory()
                 sy = recenter[4]
                 sx = recenter[3]
         elif self.recenter_method == '2dfit':	
@@ -151,9 +150,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                                                fix_neg=False, params_2g=params_2g,
                                                save_shifts=False, full_output=True, verbose=verbose,
                                                debug=debug, plot=plot)
-                print('Recentring complete', flush=True)
                 sy = recenter[1]
                 sx = recenter[2]
+        else:
+            raise ValueError('Recentring method is not recognised. Use either speckle or 2dfit.')
+
+        del recenter
+        print('Recentring complete', flush=True)
+        if debug:
+            get_available_memory()
 #                true_agpm_cen = (res[4][0],res[3][0])
 #                true_fwhm_pos = (res[5][0],res[6][0])
 #                true_fwhm_neg = (res[7][0],res[8][0])
@@ -187,7 +192,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         else:
             tmp_tmp = np.zeros([int(np.sum(self.real_ndit_sci)), ny, nx])
 
-        angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))])  # makes empty array for derot angles, length of number of frames
+        angles_1dvector = np.zeros([int(np.sum(self.real_ndit_sci))])  # empty array for derot angles, length of number of frames
         if verbose:
             print('Shifting frames and creating master science cube', flush=True)
         for sc, fits_name in enumerate(self.sci_list):
@@ -199,10 +204,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
                 angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd]  # turn 2d rotation file into a vector here same as for the mastercube above
                 # sc*ndit+dd i don't think this line works for variable sized cubes
-            get_available_memory()
-            print(sc, flush=True)
-            tmp = None  # memory management
-        pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
+            if debug:
+                get_available_memory()
+                print('Science cube number: {}'.format(sc+1), flush=True)
 
         # if crop_sz is not None:
         #     if not crop_sz % 2:
@@ -215,10 +219,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'x_shifts.fits', sx)  # writes the x shifts to the file
         write_fits(self.outpath+'y_shifts.fits', sy)  # writes the y shifts to the file
         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), tmp_tmp)  # makes the master cube
-        write_fits(self.outpath+'derot_angles.fits',angles_1dvector)  # writes the 1D array of derotation angles
+        write_fits(self.outpath+'derot_angles.fits', angles_1dvector)  # writes the 1D array of derotation angles
         if verbose:
             print('Shifts applied, master cube saved', flush=True)
-        tmp_tmp = None
+        del tmp_tmp
 
     def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot='save'):
         """
@@ -331,7 +335,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         frames_threshold = frames_pxl_threshold[good_frames]
         frames_pxl_threshold = None
         if verbose:
-            print('Frames within correlation threshold:',len(frames_threshold))
+            print('Frames within correlation threshold:', len(frames_threshold))
         # only keeps the derotation entries for the good frames above the correlation threshold     
         angle_threshold = angle_pxl_threshold[good_frames]
 
@@ -340,7 +344,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         write_fits(self.outpath+'derot_angles.fits', angle_threshold)
         if verbose: 
             print('Saved good frames and their respective rotations to file', flush=True)
-        frames_threshold = None
+        del frames_threshold
 
     def crop_cube(self, arcsecond_diameter=3.5, verbose=True, debug=False):
     
@@ -358,7 +362,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         verbose : bool optional
             If True extra messages of completion are showed.
 
-        Writes to fits file
+        Writes to FITS file
         -------
         cropped cube : numpy ndarray
             Cube with cropped frames
@@ -370,19 +374,18 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
                                 verbose=debug)
 
-        nz,ny,nx= master_cube.shape
+        nz, ny, nx = master_cube.shape
 
-        crop_size = int((arcsecond_diameter)/(self.dataset_dict['pixel_scale']))
+        crop_size = int(arcsecond_diameter / (self.dataset_dict['pixel_scale']))
 
-        if not crop_size %2:
-            crop_size+=1
-            print('Crop size not odd, increased to {}'.format(crop_size))
+        if not crop_size % 2:
+            crop_size -= 1
+            print('Crop size not odd, adapted to {}'.format(crop_size))
         if debug:
             print('Input crop size is {} pixels'.format(crop_size))
 
         if ny <= crop_size:
             print('Crop size is larger than the frame size. Skipping cropping...')
-
         else:
             if verbose:
                 print('######### Running frame cropping #########', flush=True)
@@ -392,57 +395,75 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
     def median_binning(self, binning_factor=10, verbose=True, debug=False):
         """ 
         Median combines the frames within the master science cube as per the binning factor, and makes the necessary
-        changes to the derotation file
+        changes to the derotation file.
         
         Parameters:
-        ***********        
-
-        binning_factor: int,list or tuple
-            Defines how many frames to median combine. Use a list or tuple to run binning multiple times with different
-            factors. Default = 10
+        ----------
+        binning_factor: int, default = 10
+            Defines how many frames to median combine
                   
-        Writes to fits file:
-        ********
+        Writes to FITS file:
+        ----------
         the binned master cube
         the binned derotation angles
-             
         """
-        if isinstance(binning_factor, int) == False and isinstance(binning_factor, list) == False and \
-                isinstance(binning_factor, tuple) == False:  # if it isnt int, tuple or list then raise an error
+
+        if not isinstance(binning_factor, int) and not isinstance(binning_factor, list) and \
+                not isinstance(binning_factor, tuple):  # if it isnt int, tuple or list then raise an error
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
-            raise NameError('Missing master cube from recentering and bad frame removal!') 
+            raise NameError('Missing master cube from recentring and bad frame removal!')
             
-        if not isfile(self.outpath + 'derot_angles.fits'):
-            raise NameError('Missing derotation angles files from recentering and bad frame removal!') 
+        if not isfile(self.outpath+'derot_angles.fits'):
+            raise NameError('Missing derotation angles files from recentring and bad frame removal!')
         
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
         derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose=debug)
-        
-        def _binning(self,binning_factor,master_cube,derot_angles):
-            if binning_factor == 1 or binning_factor == 0:  # doesn't bin with 1 but will loop over the other factors in the list or tuple
-                print('Binning factor is 1 or 0 (cant bin any frames). Skipping binning...')
-            else:
-                if verbose:
-                    print('##### Median binning frames with binning_factor = {} #####'.format(binning_factor), flush=True)
-                nframes, ny, nx = master_cube.shape
-                derot_angles_binned = np.zeros([int(nframes/binning_factor)])
-                master_cube_binned = np.zeros([int(nframes/binning_factor), ny, nx])
-               
-                for idx, frame in enumerate(range(binning_factor, nframes, binning_factor)):
-                    if idx == (int(nframes/binning_factor)-1):
-                        master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:],axis=0)
-                        derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
-                    master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame],axis=0)
-                    derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
-                
-                write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'], binning_factor), master_cube_binned)
-                write_fits(self.outpath+'derot_angles.fits'.format(binning_factor), derot_angles_binned)
-            
-        if isinstance(binning_factor, int):
-            _binning(self, binning_factor, master_cube, derot_angles)
 
-        if isinstance(binning_factor, list) or isinstance(binning_factor, tuple):
-            for binning_factor in binning_factor:
-                _binning(self, binning_factor, master_cube, derot_angles)
+        ntot = master_cube.shape[0]
+        if binning_factor != 1 and binning_factor != 0:
+            bin_fac = int(binning_factor)  # ensure integer
+            ntot_bin = int(np.ceil(ntot / bin_fac))  # in case ntot is not divisible by the binning factor
+            cube_bin = np.zeros([ntot_bin, master_cube.shape[1], master_cube.shape[2]])  # define empty array
+            derot_angles_bin = np.zeros(ntot_bin)
+            if verbose:
+                print('Median binning master cube with binning factor {}'.format(bin_fac), flush=True)
+            for nn in range(ntot_bin):  # median binning
+                cube_bin[nn] = np.nanmedian(master_cube[nn * bin_fac:(nn + 1) * bin_fac], axis=0)
+                derot_angles_bin[nn] = np.median(derot_angles[nn * bin_fac:(nn + 1) * bin_fac])
+            write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), cube_bin,
+                       verbose=debug)
+            write_fits(self.outpath+'derot_angles.fits', derot_angles_bin, verbose=debug)
+        else:
+            print('Binning factor is {}, skipping binning...'.format(binning_factor), flush=True)
+        if verbose:
+            print('Binning complete', flush=True)
+        del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
+
+        # def _binning(self, binning_factor, master_cube, derot_angles):
+        #     if binning_factor == 1 or binning_factor == 0:  # doesn't bin with 1 but will loop over the other factors in the list or tuple
+        #         print('Binning factor is 1 or 0 (cant bin any frames). Skipping binning...')
+        #     else:
+        #         if verbose:
+        #             print('##### Median binning frames with binning factor = {} #####'.format(binning_factor), flush=True)
+        #         nframes, ny, nx = master_cube.shape
+        #         derot_angles_binned = np.zeros([int(nframes/binning_factor)])
+        #         master_cube_binned = np.zeros([int(nframes/binning_factor), ny, nx])
+        #
+        #         for idx, frame in enumerate(range(binning_factor, nframes, binning_factor)):
+        #             if idx == (int(nframes/binning_factor)-1):
+        #                 master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:], axis=0)
+        #                 derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:])
+        #             master_cube_binned[idx] = np.median(master_cube[frame-binning_factor:frame], axis=0)
+        #             derot_angles_binned[idx] = np.median(derot_angles[frame-binning_factor:frame])
+        #
+        #         write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'], binning_factor), master_cube_binned)
+        #         write_fits(self.outpath+'derot_angles.fits'.format(binning_factor), derot_angles_binned)
+        #
+        # if isinstance(binning_factor, int):
+        #     _binning(self, binning_factor, master_cube, derot_angles)
+        #
+        # if isinstance(binning_factor, list) or isinstance(binning_factor, tuple):
+        #     for binning_factor in binning_factor:
+        #         _binning(self, binning_factor, master_cube, derot_angles)
