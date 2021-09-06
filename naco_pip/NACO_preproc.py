@@ -19,7 +19,7 @@ from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, \
     cube_crop_frames
 from vip_hci.stats import cube_distance
-from vip_hci.conf import get_available_memory
+from vip_hci.conf import get_available_memory, time_ini, timing
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro = True):
@@ -417,7 +417,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             
         if not isfile(self.outpath+'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentring and bad frame removal!')
-        
+
+        if verbose:
+            start_time = time_ini(verbose=False)
+
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
         derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose=debug)
 
@@ -440,6 +443,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             print('Binning complete', flush=True)
         del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
+
+        if verbose:
+            timing(start_time)
 
         # def _binning(self, binning_factor, master_cube, derot_angles):
         #     if binning_factor == 1 or binning_factor == 0:  # doesn't bin with 1 but will loop over the other factors in the list or tuple
