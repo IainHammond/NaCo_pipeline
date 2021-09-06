@@ -27,7 +27,7 @@ pixel_scale = 0.027208  # arcsecs per pixel, Launhardt et al. 2020, +/- 0.000008
 # ***************************************** PARAMETERS TO CHANGE *******************************************************
 
 # CQTau
-source = 'CQTau' # used in some saved filenames and plots
+source = 'CQTau' # used in some saved filenames and plots, without spaces
 details = '(NACO+AGPM)' # info displayed in plots and figures
 ndit_sci = [100] # number of frames per science cube
 ndit_sky = [100] # number of frames per sky cube
