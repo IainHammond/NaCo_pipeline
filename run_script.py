@@ -56,7 +56,6 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 #                     '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/', dataset_dict,final_sz = None)
 
 # calib.dark_subtract(bad_quadrant = [3], debug = False, plot = 'save')
-# ##calib.fix_sporadic_columns(quadrant='topright', xpixels_from_center = 7, interval = 8, verbose = True, debug = False)
 # calib.flat_field_correction(debug = False, plot = 'save')
 # calib.correct_nan(debug = False, plot = 'save')
 # calib.correct_bad_pixels(debug = False, plot = 'save')
@@ -66,21 +65,20 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
-                        recenter_method = 'speckle', recenter_model = 'gauss', coro=True)
+                        recenter_method='speckle', recenter_model='gauss', coro=True)
 
 preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
 preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot='save')
-### for PCA in concentric annuli, a cropped cube is needed at minimum ###
-preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)
-preproc.median_binning(binning_factor=10, verbose=True)
+preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)  # required for PCA-ADI annular
+preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
 
-# postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/preproc/',
-#                             '/home/ihammond/pd87_scratch/products/NACO_archive/12_Elias2-24/postproc_fixbkg/',
-#                            dataset_dict, nproc=nproc, npc=30)
-#
-# postproc.postprocessing(do_adi=False, do_adi_contrast=False, do_pca_full=False, do_pca_ann=True, cropped=True,
-#                         do_snr_map=True, do_snr_map_opt=True, delta_rot=(0.5,3), mask_IWA=1, overwrite=True, plot=True,
-#                         verbose=True, debug=True)
+postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/',
+                           dataset_dict, nproc=nproc, npc=20)
+
+postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
+                       fcp_pos=[0.3,0.6], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
+                       delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, plot=True, verbose=True, debug=True)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
 #                   weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
