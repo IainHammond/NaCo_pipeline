@@ -63,14 +63,14 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # calib.get_stellar_psf(nd_filter = False, debug = False, plot = 'save')
 # calib.subtract_sky(npc = 1, debug = False, plot = 'save')
 
-preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
-                        '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
-                        recenter_method='speckle', recenter_model='gauss', coro=True)
-
-preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
-preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot='save')
-preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)  # required for PCA-ADI annular
-preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
+# preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
+#                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
+#                         recenter_method='speckle', recenter_model='gauss', coro=True)
+#
+# preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
+# preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot='save')
+# preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)  # required for PCA-ADI annular
+# preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/',
