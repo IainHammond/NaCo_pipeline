@@ -82,7 +82,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
                        fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
-                       delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, plot=True, verbose=True, debug=False):
+                       delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
         curves, SNR maps and fake planet injection for optimizing the number of principle components
@@ -92,7 +92,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         do_adi : bool
             Whether to do a median-ADI processing
         do_adi_contrast : bool
-            Whether to compute a simple contrast curve associated to median-ADI
+            Whether to compute a simple contrast curve associated to median-ADI, saved as PDF (print quality)
         do_pca_full : bool
             Whether to apply PCA-ADI on full frame
         do_pca_ann : bool, default is False
@@ -118,8 +118,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of fwhm
         overwrite : bool, default True
             whether to overwrite pre-exisiting output files from previous reductions
-        plot : bool
-            Whether to save plots to the output path (PDF file, print quality)
         verbose : bool
             prints more output when True                 
         debug : bool, default is False
@@ -231,7 +229,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             ## SNR map
             if (not isfile(outpath_sub + 'final_ADI_simple_snrmap.fits') or overwrite) and do_snr_map:
                 tmp = open_fits(outpath_sub + 'final_ADI_simple.fits', verbose=verbose)
-                tmp_tmp = snrmap(tmp, self.fwhm, nproc=self.nproc, verbose=debug)
+                tmp_tmp = snrmap(tmp, self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
                 tmp_tmp = mask_circle(tmp_tmp, mask_IWA_px)
                 write_fits(outpath_sub + 'final_ADI_simple_snrmap.fits', tmp_tmp, verbose=verbose)
 
@@ -240,8 +238,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 _ = contrast_curve(ADI_cube, derot_angles, psfn, self.fwhm, pxscale=self.pixel_scale, starphot=starphot,
                                    algo=median_sub, sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                    wedge=(0, 360), fc_snr=fc_snr, student=True, transmission=transmission, smooth=True,
-                                   plot=plot, dpi=300, debug=debug, save_plot=outpath_sub+'contrast_simple_madi.pdf',
+                                   plot=True, dpi=300, debug=debug, save_plot=outpath_sub+'contrast_simple_madi.pdf',
                                    verbose=verbose, nproc=self.nproc)
+                plt.close('all')
             if verbose:
                 print("======= Completed Median-ADI =======", flush=True)
 
@@ -258,7 +257,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                         starphot=starphot, algo=pca, sigma=3, nbranch=nbranch, theta=0,
                                                         inner_rad=mask_IWA, wedge=(0, 360), fc_snr=fc_snr,
                                                         cube_ref=ref_cube, student=True, transmission=transmission,
-                                                        plot=True, dpi=300, verbose=verbose, ncomp=int(npc),
+                                                        plot=False, verbose=verbose, ncomp=int(npc),
                                                         svd_mode='lapack', nproc=self.nproc)
                 df_list.append(pn_contr_curve_full_rr)
             pn_contr_curve_full_first_opt = pn_contr_curve_full_rr.copy()
@@ -289,7 +288,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             PCA_ADI_cube = ADI_cube.copy()  # in case the above doesn't run, we need to get the ADI cube
             if verbose:
                 print("======= Injecting fake planets =======", flush=True)
-            for ns in range(nspi):  # iterate over separations to inject
+            for ns in range(nspi):  # iterate over PA separations to inject
                 theta0 = ns * th_step  # changing PA (forms a spiral if there are >1 separations to inject)
                 for ff in range(nfcp):  # iterate over separations
                     # inject the companions
@@ -368,7 +367,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         and do_snr_map:
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=debug)
                     for pp in range(ntest_pcs):
-                        tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=debug)
+                        tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap.fits', tmp,
                                verbose=debug)
@@ -379,7 +378,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=verbose)
                     for pp in range(ntest_pcs):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, array2=tmp_tmp_tmp_tmp[pp], incl_neg_lobes=False,
-                                         nproc=self.nproc, verbose=debug)
+                                         plot=False, nproc=self.nproc, verbose=debug)
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits', tmp,
                                verbose=verbose)
@@ -526,7 +525,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap.fits') or overwrite) and do_snr_map:
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=debug)
                     for pp in range(ntest_pcs):
-                        tmp[pp] = snrmap(tmp[pp], self.fwhm, nproc=self.nproc, verbose=debug)
+                        tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap.fits', tmp, verbose=debug)
                 ### SNR map optimized
@@ -534,7 +533,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap_opt.fits') or overwrite) and do_snr_map_opt:
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=debug)
                     for pp in range(ntest_pcs):
-                        tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=plot, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
+                        tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
                                          verbose=debug)
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap_opt.fits', tmp, verbose=debug)
@@ -621,7 +620,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                             self.pixel_scale, starphot=starphot, algo=pca, sigma=5,
                                                             nbranch=nbranch, theta=0, inner_rad=mask_IWA, wedge=(0,360),
                                                             fc_snr=fc_snr, student=True, transmission=transmission,
-                                                            plot=True, dpi=300, cube_ref=ref_cube, scaling=None,
+                                                            plot=False, cube_ref=ref_cube, scaling=None,
                                                             verbose=verbose, ncomp=int(id_npc_full_df[rr]),
                                                             svd_mode='lapack', nproc=self.nproc)
                     Df.to_csv(pn_contr_curve_full_rr, path_or_buf=outpath_sub+'contrast_curve_PCA-ADI-full_optimal_at_{:.1f}as.csv'.format(rad*self.pixel_scale),
@@ -655,7 +654,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                            self.pixel_scale, starphot=starphot, algo=pca_annular,
                                                            sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                                            wedge=(0,360), fc_snr=fc_snr, student=True,
-                                                           transmission=transmission, plot=True, dpi=300,
+                                                           transmission=transmission, plot=False,
                                                            verbose=verbose, ncomp=int(id_npc_ann_df[rr]),
                                                            svd_mode='lapack', radius_int=mask_IWA_px,
                                                            asize=ann_sz*self.fwhm, delta_rot=delta_rot,
@@ -687,7 +686,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     sensitivity_5sig_ann_df[ff] = arr_contrast[idx]
 
                 # plot final contrast curve
-                plt.close()
+                plt.close('all')
                 plt.figure(dpi=300)
                 plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
                 plt.ylabel('Contrast')
@@ -710,7 +709,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 except:
                     pass
 
-                plt.close()
+                plt.close('all')
                 plt.figure(dpi=300)
                 plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
                 plt.ylabel('Contrast [mag]')
