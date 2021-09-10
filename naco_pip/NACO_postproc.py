@@ -8,20 +8,22 @@ Applies post-processing algorithms to the pre-processed cube
 __author__ = 'Iain Hammond'
 __all__ = ['preproc_dataset']
 
-import numpy as np
 import os
 from os.path import isfile, isdir
-from pandas import DataFrame as Df
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
+from pandas import DataFrame as Df
 
 from vip_hci.fits import open_fits, write_fits
+from vip_hci.medsub import median_sub
 from vip_hci.metrics import snrmap, contrast_curve, normalize_psf, cube_inject_companions, snr
 from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
 from vip_hci.pca import pca, pca_annular, pca_annulus
 from vip_hci.preproc import cube_crop_frames
-from vip_hci.medsub import median_sub
 from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
+
 mpl.use('Agg')
 
 
@@ -71,7 +73,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         try:
             self.fwhm = open_fits(self.inpath + 'fwhm.fits', verbose=False)[0]  # fwhm is first entry
         except:
-            print("Alert: No FWHM file found. Setting to median value of 4.2")
+            print("Alert: No FWHM file found. Setting to median value of 4.2", flush=True)
             self.fwhm = 4.2
         self.dataset_dict = dataset_dict
         self.pixel_scale = dataset_dict['pixel_scale']
@@ -82,13 +84,13 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
                        fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
-                       delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False):
+                       delta_rot=(1, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
         curves, SNR maps and fake planet injection for optimizing the number of principle components
 
         Parameters:
-        ***********
+        ----------
         do_adi : bool
             Whether to do a median-ADI processing
         do_adi_contrast : bool
@@ -99,7 +101,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             Whether to apply annular PCA-ADI (more computer intensive). Only runs if cropped=True
         fake_planet : bool
             Will inject fake planets into the cube to optimize number of principle components and produce contrast
-            curves for PCA-ADI and PCA-ADI annular. Increases run time
+            curves for PCA-ADI and/or PCA-ADI annular, depending on above. Increases run time
         firstguess_pcs : list of 3 elements
             If fake planet is True, this is the guess principle components to explore [start, stop, step]
         fcp_pos : list or 1D array, default [0.3]
@@ -115,7 +117,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             Threshold in rotation angle used in pca_annular to include frames in the PCA library (provided in terms of
             FWHM). See description of pca_annular() for more details
         mask_IWA : int, default 1
-            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of fwhm
+            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of FWHM
         overwrite : bool, default True
             whether to overwrite pre-exisiting output files from previous reductions
         verbose : bool
@@ -125,15 +127,15 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         """
 
         # make directories if they don't exist
-        print("======= Starting post-processing....=======")
+        print("======= Starting post-processing....=======", flush=True)
         outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
 
         if not isdir(outpath_sub):
             os.system("mkdir " + outpath_sub)
 
         if verbose:
-            print('Input path is {}'.format(self.inpath))
-            print('Output path is {}'.format(outpath_sub))
+            print('Input path is {}'.format(self.inpath), flush=True)
+            print('Output path is {}'.format(outpath_sub), flush=True)
 
         source = self.dataset_dict['source']
         tn_shift = 0.572  # ± 0.178 Launhardt et al. 2020, true North offset for NACO
@@ -156,10 +158,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             th_step = 360 / nspi  # PA separation between companions determined by number of companions
             if isinstance(fcp_pos, list):
                 fcp_pos = np.array(fcp_pos)
-            rad_arr = fcp_pos / self.pixel_scale  # px
-            while rad_arr[-1] >= ADI_cube.shape[2]:  # ensure injection radius is not bigger than the frame
+            rad_arr = fcp_pos / self.pixel_scale  # separation in px
+            while rad_arr[-1] >= ADI_cube.shape[-1]:  # ensure largest injection radius is not bigger than the frame
                 rad_arr = rad_arr[:-1]
-            nfcp = len(rad_arr)  # number of radii to inject companions
+            nfcp = len(rad_arr)  # number of radii/separations to inject companions
             # AGPM off-axis transmission, has to be a list of vectors for VIP contrast_curve(). It's also in a different
             # order compared VIP firstguess() transmission (here it is attenuation, pixel distance)
             transmission = ([0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
@@ -189,7 +191,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
         mask_IWA_px = mask_IWA * self.fwhm
         if verbose:
-            print("adopted mask size: {:.0f}".format(mask_IWA_px))
+            print("adopted mask size: {:.0f}".format(mask_IWA_px), flush=True)
 
         ann_sz = 3  # if PCA-ADI in concentric annuli, this is the size of the annulus/i in FWHM
         svd_mode = 'lapack'  # python package used for Singular Value Decomposition for PCA reductions
@@ -264,8 +266,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             for jj in range(pn_contr_curve_full_first_opt.shape[0]):  # iterate over distance from centre
                 sensitivities = []
                 for nn, npc in enumerate(firstguess_pcs):  # iterate over tested principle components
-                    sensitivities.append(df_list[nn]['sensitivity_student'][jj])  # sensitivity at that distance
-                print("Sensitivities at {}: ".format(df_list[nn]['distance'][jj]), sensitivities, flush=True)
+                    sensitivities.append(df_list[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
+                print("Sensitivities at {} px: ".format(df_list[nn]['distance'][jj]), sensitivities, flush=True)
                 idx_min = np.argmin(sensitivities)  # minimum sensitivity at that distance
                 pn_contr_curve_full_first_opt['sensitivity_student'][jj] = df_list[idx_min]['sensitivity_student'][jj]
                 pn_contr_curve_full_first_opt['sensitivity_gaussian'][jj] = df_list[idx_min]['sensitivity_gaussian'][jj]
@@ -280,7 +282,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
             sensitivity_3sig_full_df = np.zeros(nfcp)
             for ff in range(nfcp):
-                idx = find_nearest(arr_dist, rad_arr[ff])  # closest radial separation from each companion to inject
+                idx = find_nearest(arr_dist, rad_arr[ff])  # closest radial px separation from each companion to inject
                 sensitivity_3sig_full_df[ff] = arr_contrast[idx]  # optimal contrast at that separation
             write_fits(outpath_sub+'TMP_first_guess_3sig_sensitivity.fits', sensitivity_3sig_full_df, verbose=debug)
 
@@ -471,14 +473,14 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         array_out[pp], array_der[pp], tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles,
                                                                                 cube_ref=ref_cube, scale_list=None,
                                                                                 radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                                                                asize=ann_sz*self.fwhm,
-                                                                                n_segments=1, delta_rot=delta_rot,
-                                                                                ncomp=int(npc),
+                                                                                asize=ann_sz*self.fwhm, n_segments=1,
+                                                                                delta_rot=delta_rot, ncomp=int(npc),
                                                                                 svd_mode=svd_mode, nproc=self.nproc,
                                                                                 min_frames_lib=max(npc, 10),
-                                                                                max_frames_lib=200, tol=1e-1, scaling=None,
-                                                                                imlib='opencv',
-                                                                                interpolation='lanczos4', collapse='median',
+                                                                                max_frames_lib=200, tol=1e-1,
+                                                                                scaling=None, imlib='opencv',
+                                                                                interpolation='lanczos4',
+                                                                                collapse='median',
                                                                                 ifs_collapse_range='all',
                                                                                 full_output=debug, verbose=verbose)
                     else:
@@ -632,7 +634,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     sensitivities = []
                     for rr, rad in enumerate(rad_arr):
                         sensitivities.append(df_list[rr]['sensitivity_student'][jj])  # sensitivity at sampled separation
-                    print("Sensitivities at {}: ".format(df_list[rr]['distance'][jj]), sensitivities)
+                    print("Sensitivities at {} px: ".format(df_list[rr]['distance'][jj]), sensitivities, flush=True)
                     idx_min = np.argmin(sensitivities)  # best sensitivity out of all sampled separations
                     pn_contr_curve_full_opt['sensitivity_student'][jj] = df_list[idx_min]['sensitivity_student'][jj]
                     pn_contr_curve_full_opt['sensitivity_gaussian'][jj] = df_list[idx_min]['sensitivity_gaussian'][jj]
@@ -649,12 +651,13 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     sensitivity_5sig_full_df[ff] = arr_contrast[idx]
 
             if do_pca_ann:
+                PCA_ADI_cube = ADI_cube.copy()  # ensure a fresh cube
                 df_list = []
                 for rr, rad in enumerate(rad_arr):
                     pn_contr_curve_ann_rr = contrast_curve(PCA_ADI_cube, derot_angles, psfn,  self.fwhm,
                                                            self.pixel_scale, starphot=starphot, algo=pca_annular,
                                                            sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
-                                                           wedge=(0,360), fc_snr=fc_snr, student=True,
+                                                           wedge=(0, 360), fc_snr=fc_snr, student=True,
                                                            transmission=transmission, plot=False,
                                                            verbose=verbose, ncomp=int(id_npc_ann_df[rr]),
                                                            svd_mode='lapack', radius_int=mask_IWA_px,
@@ -671,8 +674,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     sensitivities = []
                     for rr, rad in enumerate(rad_arr):
                         sensitivities.append(df_list[rr]['sensitivity_student'][jj])
-                    print("Sensitivities at {}: ".format(df_list[rr]['distance'][jj]), sensitivities)
-                    idx_min = np.argmin(sensitivities)
+                    print("Sensitivities at {} px: ".format(df_list[rr]['distance'][jj]), sensitivities, flush=True)
+                    idx_min = np.argmin(sensitivities)  # absolute best overall principle component
                     pn_contr_curve_ann_opt['sensitivity_student'][jj] = df_list[idx_min]['sensitivity_student'][jj]
                     pn_contr_curve_ann_opt['sensitivity_gaussian'][jj] = df_list[idx_min]['sensitivity_gaussian'][jj]
                     pn_contr_curve_ann_opt['throughput'][jj] = df_list[idx_min]['throughput'][jj]
@@ -686,54 +689,54 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     idx = find_nearest(arr_dist, rad_arr[ff])
                     sensitivity_5sig_ann_df[ff] = arr_contrast[idx]
 
-                # plot final contrast curve
-                plt.close('all')
-                plt.figure(dpi=300)
-                plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
-                plt.ylabel('Contrast')
-                plt.xlabel('Separation ["]')
-                # if do_adi:
-                #     plt.semilogy(pn_contr_curve_adi['distance'] * plsc, pn_contr_curve_adi['sensitivity_student'],
-                #                  'r', linewidth=2, label='median-ADI (Student correction)')
-                if do_pca_full:
-                    plt.semilogy(pn_contr_curve_full_opt['distance'] * self.pixel_scale,
-                                 pn_contr_curve_full_opt['sensitivity_student'], 'b', linewidth=2,
-                                 label='PCA-ADI full frame (Student, optimal)')
-
-                if do_pca_ann:
-                    plt.semilogy(pn_contr_curve_ann_opt['distance'] * self.pixel_scale,
-                                 pn_contr_curve_ann_opt['sensitivity_student'], 'g', linewidth=2,
-                                 label='PCA-ADI annular (Student, optimal)')
-                plt.legend()
-                try:
-                    plt.savefig(outpath_sub+'contr_curves.pdf', format='pdf')
-                except:
-                    pass
-
-                plt.close('all')
-                plt.figure(dpi=300)
-                plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
-                plt.ylabel('Contrast [mag]')
-                plt.gca().invert_yaxis()
-                plt.xlabel('Separation ["]')
-                # if do_adi:
-                #     plt.plot(pn_contr_curve_adi['distance'] * plsc,
-                #              -2.5 * np.log10(pn_contr_curve_adi['sensitivity_student']), 'r', linewidth=2,
-                #              label='median-ADI (Student correction)')
-                if do_pca_full:
-                    plt.plot(pn_contr_curve_full_opt['distance'] * self.pixel_scale,
-                             -2.5 * np.log10(pn_contr_curve_full_opt['sensitivity_student']), 'b', linewidth=2,
+            # plot final contrast curve
+            plt.close('all')
+            plt.figure(dpi=300)
+            plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
+            plt.ylabel('Contrast')
+            plt.xlabel('Separation ["]')
+            # if do_adi:
+            #     plt.semilogy(pn_contr_curve_adi['distance'] * plsc, pn_contr_curve_adi['sensitivity_student'],
+            #                  'r', linewidth=2, label='median-ADI (Student correction)')
+            if do_pca_full:
+                plt.semilogy(pn_contr_curve_full_opt['distance'] * self.pixel_scale,
+                             pn_contr_curve_full_opt['sensitivity_student'], 'b', linewidth=2,
                              label='PCA-ADI full frame (Student, optimal)')
 
-                if do_pca_ann:
-                    plt.plot(pn_contr_curve_ann_opt['distance'] * self.pixel_scale,
-                             -2.5 * np.log10(pn_contr_curve_ann_opt['sensitivity_student']), 'g', linewidth=2,
-                             label='PCA-ADI annular - npc={:.0f} (Student, optimal)'.format(id_npc_ann_df[rr])) # why is rr here
-                plt.legend()
-                try:
-                    plt.savefig(outpath_sub+'contr_curves_app_magnitude.pdf', format='pdf')
-                except:
-                    pass
+            if do_pca_ann:
+                plt.semilogy(pn_contr_curve_ann_opt['distance'] * self.pixel_scale,
+                             pn_contr_curve_ann_opt['sensitivity_student'], 'r', linewidth=2,
+                             label='PCA-ADI annular (Student, optimal)')
+            plt.legend()
+            try:
+                plt.savefig(outpath_sub+'contr_curves.pdf', format='pdf')
+            except:
+                pass
+
+            plt.close('all')
+            plt.figure(dpi=300)
+            plt.title('5\u03C3 contrast curve for {} {}'.format(self.source, self.details))
+            plt.ylabel('Contrast [mag]')
+            plt.gca().invert_yaxis()
+            plt.xlabel('Separation ["]')
+            # if do_adi:
+            #     plt.plot(pn_contr_curve_adi['distance'] * plsc,
+            #              -2.5 * np.log10(pn_contr_curve_adi['sensitivity_student']), 'r', linewidth=2,
+            #              label='median-ADI (Student correction)')
+            if do_pca_full:
+                plt.plot(pn_contr_curve_full_opt['distance'] * self.pixel_scale,
+                         -2.5 * np.log10(pn_contr_curve_full_opt['sensitivity_student']), 'b', linewidth=2,
+                         label='PCA-ADI full frame (Student, optimal)')
+
+            if do_pca_ann:
+                plt.plot(pn_contr_curve_ann_opt['distance'] * self.pixel_scale,
+                         -2.5 * np.log10(pn_contr_curve_ann_opt['sensitivity_student']), 'r', linewidth=2,
+                         label='PCA-ADI annular (Student, optimal)')
+            plt.legend()
+            try:
+                plt.savefig(outpath_sub+'contr_curves_app_magnitude.pdf', format='pdf')
+            except:
+                pass
 
         if verbose:
             print("======= Finished post-processing =======", flush=True)
