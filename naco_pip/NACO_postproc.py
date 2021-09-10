@@ -285,12 +285,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             write_fits(outpath_sub+'TMP_first_guess_3sig_sensitivity.fits', sensitivity_3sig_full_df, verbose=debug)
 
         if fake_planet:  # do this to inject the companions
-            PCA_ADI_cube = ADI_cube.copy()  # in case the above doesn't run, we need to get the ADI cube
             if verbose:
                 print("======= Injecting fake planets =======", flush=True)
             for ns in range(nspi):  # iterate over PA separations to inject
                 theta0 = ns * th_step  # changing PA (forms a spiral if there are >1 separations to inject)
-                for ff in range(nfcp):  # iterate over separations
+                PCA_ADI_cube = ADI_cube.copy()  # refresh the cube so we don't accumulate fake companions
+                for ff in range(nfcp):  # iterate over separations to inject
                     # inject the companions
                     flevel = np.median(starphot) * sensitivity_3sig_full_df[ff] * injection_fac
                     PCA_ADI_cube = cube_inject_companions(PCA_ADI_cube, psfn, derot_angles, flevel, self.pixel_scale,
@@ -382,8 +382,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits', tmp,
                                verbose=verbose)
-                if verbose:
-                    print("======= Completed PCA Full Frame =======", flush=True)
 
             elif fake_planet:
                 snr_tmp = np.zeros([nspi, ntest_pcs, nfcp])
@@ -392,7 +390,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     theta0 = ns * th_step
                     PCA_ADI_cube = open_fits(outpath_sub+'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
                     for pp, npc in enumerate(test_pcs_full):
-                        tmp_tmp[ns] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
+                        tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
                                           mask_center_px=mask_IWA_px, ncomp=int(npc), scaling=None, delta_rot=delta_rot,
                                           fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose,
                                           nproc=self.nproc, svd_mode='lapack')
@@ -400,9 +398,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                             xx_fcp = cx + rad_arr[ff] * np.cos(np.deg2rad(theta0 + ff * th_step))
                             yy_fcp = cy + rad_arr[ff] * np.sin(np.deg2rad(theta0 + ff * th_step))
                             snr_tmp[ns, pp, ff] = snr(tmp_tmp[pp], (xx_fcp, yy_fcp), self.fwhm, plot=False,
-                                                      exclude_negative_lobes=True, verbose=True)
-                    write_fits(outpath_sub+'TMP_PCA-ADI_full_' + test_pcs_str + '_fcp_spi{:.0f}.fits'.format(ns),
-                               tmp_tmp, verbose=debug)
+                                                      exclude_negative_lobes=True, verbose=verbose)
+                    write_fits(outpath_sub+'TMP_PCA-ADI_full_'+test_pcs_str+'_fcp_spi{:.0f}.fits'.format(ns), tmp_tmp,
+                               verbose=debug)
                 snr_fcp = np.median(snr_tmp, axis=0)
                 write_fits(outpath_sub+'final_PCA-ADI_full_SNR_fcps_'+test_pcs_str+'.fits', snr_fcp, verbose=debug)
 
@@ -446,6 +444,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
                     write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
                                '_snrmap.fits', tmp, verbose=debug)
+
+            if verbose:
+                print("======= Completed PCA Full Frame =======", flush=True)
 
         ######################## PCA-ADI annular #######################
         if do_pca_ann:
