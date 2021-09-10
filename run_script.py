@@ -67,17 +67,17 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 #                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
 #                         recenter_method='speckle', recenter_model='gauss', coro=True)
 #
-# preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot='save', coro=True)
-# preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot='save')
-# preproc.crop_cube(arcsecond_diameter=2.5, verbose=True, debug=False)  # required for PCA-ADI annular
-# preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
+preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
+preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
+preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular
+preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/',
-                           dataset_dict, nproc=nproc, npc=20)
+                           dataset_dict, nproc=nproc, npc=5)
 
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
-                       fcp_pos=[0.3,0.6], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
+                       fcp_pos=[0.3,0.6], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
                        delta_rot=(1, 3), mask_IWA=1, overwrite=True, verbose=True, debug=True)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),

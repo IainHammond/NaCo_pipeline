@@ -56,7 +56,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
-    def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=None, verbose=True, debug=False, plot=False, coro=True):
+    def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
@@ -68,13 +68,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             subimage (will depend on your cropping size)
         subi_size: int, default = 21
             Size of the square subimage sides in pixels.
-        crop_sz: int, optional, in units of pixels. None by default
+        crop_sz: int, optional, in units of pixels. 251 by default
             Crops to this size after recentring for memory management purposes. Useful for very large datasets
-        verbose: True for False
+        verbose: bool
             To provide extra information about the progress and results of the pipeline
-        plot: True or False
-            Set to False when running on M3
-        coro: True for coronagraph data. False otherwise. Recentring requires coronagraphic data
+        plot: bool
+            If True, a plot of the shifts is saved (PDF)
+        coro: bool
+            For coronagraph data. False otherwise. Recentring requires coronagraphic data
         
         Writes fits to file:
         ----------
@@ -158,7 +159,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 sx = recenter[2]
         else:
             raise ValueError('Recentring method is not recognised. Use either speckle or 2dfit.')
-
+        if plot:  # save the shift plot
+            plt.savefig(self.outpath+'shifts-xy.pdf', format='pdf')
+            plt.close('all')
         del recenter
         print('Recentring complete', flush=True)
         if debug:
@@ -221,20 +224,25 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('Shifts applied, master cube saved', flush=True)
         del tmp_tmp, sx, sy, angles_1dvector
 
-    def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot='save'):
+    def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot=True):
         """
-        For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the
-        recentered mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
+        For removing outlier frames often caused by AO errors. To be run after recentring is complete. Takes the
+        recentred mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
         the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube.
         Removes all those frames below the threshold from the mastercube and rotation file, then saves both as new files
         for use in post processing
 
-        pxl_shift_thres: decimal, in units of pixels. Default is 0.5 pixels.
+        Parameters:
+        ----------
+        pxl_shift_thres : float, in units of pixels. Default is 0.5 pixels.
             Any shifts in the x or y direction greater than this threshold will cause the frame/s
-            to be labelled as bad and thus removed
-        sub_frame_sz: integer, must be odd. Default is 31.
+            to be labelled as bad and thus removed. May required a stricter threshold depending on the dataset
+        sub_frame_sz : integer, must be odd. Default is 31.
             This sets the cropping during frame correlation to the median
-        plot: 'save' to write to file the correlation plot, None will not
+        debug : bool
+            Will show open and save messages for FITS files
+        plot : bool
+            Will write the correlation plot to file if True, False will not
         """
 
         if verbose:
@@ -279,10 +287,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         bad = []
         good = []
 
-        # this system works, however it can let a couple of wild frames slip through at a 0.5 pixel threshold. may need a stricter threshold depending on the data and crop size
         i = 0 
         shifts = list(zip(x_shifts,y_shifts))
-        bar = pyprind.ProgBar(len(x_shifts), stream=1,title='Running pixel shift check...')
+        bar = pyprind.ProgBar(len(x_shifts), stream=1, title='Running pixel shift check...')
         for sx, sy in shifts:  # iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
             if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
                 good.append(i)
@@ -312,19 +319,21 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # calculates correlation threshold using the median of the Pearson correlation of all frames, minus 1 standard deviation 
 
         # frame_ref = frame_crop(tmp_median, size = sub_frame_sz, verbose=verbose) # crops the median of all frames to a common size
-        distances = cube_distance(subarray, frame_ref, mode='full', dist='pearson', plot=True)  # calculates the correlation of each frame to the median and saves as a list
-        if plot == 'save':  # save a plot of distances compared to the median for each frame if set to 'save'
-            plt.savefig(self.outpath+'distances.pdf')
+        distances = cube_distance(subarray, frame_ref, mode='full', dist='pearson', plot=plot)  # calculates the correlation of each frame to the median and saves as a list
+        if plot:  # save a plot of distances compared to the median for each frame if set to 'save'
+            plt.savefig(self.outpath+'distances.pdf', format='pdf')
+            plt.close('all')
         correlation_thres = np.median(distances) - np.std(distances)  # threshold is the median of the distances minus one stddev
         
         good_frames, bad_frames = cube_detect_badfr_correlation(subarray,
                                                                 frame_ref=frame_ref,
                                                                 dist='pearson',
                                                                 threshold=correlation_thres,
-                                                                plot=True,
-                                                                verbose=False)
-        if plot == 'save':
-            plt.savefig(self.outpath+'frame_correlation.pdf')
+                                                                plot=plot,
+                                                                verbose=verbose)
+        if plot:
+            plt.savefig(self.outpath+'frame_correlation.pdf', format='pdf')
+            plt.close('all')
 
         # only keeps the files that were above the correlation threshold
         frames_threshold = frames_pxl_threshold[good_frames]
@@ -335,7 +344,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         angle_threshold = angle_pxl_threshold[good_frames]
 
         # saves the good frames to a new file, and saves the derotation angles to a new file
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold, verbose=debug)
+        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), frames_threshold,
+                   verbose=debug)
         write_fits(self.outpath+'derot_angles.fits', angle_threshold, verbose=debug)
         if verbose: 
             print('Saved good frames and their respective rotations to file', flush=True)
@@ -344,9 +354,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
     def crop_cube(self, arcsecond_diameter=3, verbose=True, debug=False):
     
         """
-        Crops frames in the master cube after recentering and bad frame removal. Recommended for post-processing ie.
+        Crops frames in the master cube after recentring and bad frame removal. Recommended for post-processing ie.
         PCA in concentric annuli. If the provided arcsecond diameter happens to be larger than the cropping provided in
-        recentering, no cropping will occur.
+        recentring, no cropping will occur.
 
         Parameters
         ----------
@@ -356,7 +366,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         verbose : bool optional
             If True extra messages of completion are shown.
         debug : bool
-            Prints extra information during cropping, and when FITS are opened or saved
+            Prints extra information during cropping, and when FITS are opened or saved.
 
         Writes to FITS file
         -------
