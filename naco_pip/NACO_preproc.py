@@ -379,7 +379,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
                                 verbose=debug)
         _, ny, _ = master_cube.shape
-        crop_size = np.ceil(arcsecond_diameter / self.dataset_dict['pixel_scale'])
+        crop_size = int(np.ceil(arcsecond_diameter / self.dataset_dict['pixel_scale']))  # rounds up
 
         if not crop_size % 2:
             crop_size += 1
