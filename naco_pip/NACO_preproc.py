@@ -339,7 +339,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             print('Saved good frames and their respective rotations to file', flush=True)
         del frames_threshold
 
-    def crop_cube(self, arcsecond_diameter=3.5, verbose=True, debug=False):
+    def crop_cube(self, arcsecond_diameter=3, verbose=True, debug=False):
     
         """
         Crops frames in the master cube after recentering and bad frame removal. Recommended for post-processing ie.
@@ -351,41 +351,43 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         arcsecond_diameter : float or int
             Size of the frames diameter in arcseconds. Default of 3" for NaCO corresponds to 111x111 (x,y) pixel frames.
             Note this is a diameter, not a radius.
-
         verbose : bool optional
-            If True extra messages of completion are showed.
+            If True extra messages of completion are shown.
+        debug : bool
+            Prints extra information during cropping, and when FITS are opened or saved
 
         Writes to FITS file
         -------
         cropped cube : numpy ndarray
             Cube with cropped frames
-
         """
         if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
-            raise NameError('Missing master cube from recentering and bad frame removal!')
+            raise NameError('Missing master cube from recentring and bad frame removal!')
 
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
                                 verbose=debug)
-
-        nz, ny, nx = master_cube.shape
-
-        crop_size = int(arcsecond_diameter / (self.dataset_dict['pixel_scale']))
+        _, ny, _ = master_cube.shape
+        crop_size = np.ceil(arcsecond_diameter / self.dataset_dict['pixel_scale'])
 
         if not crop_size % 2:
-            crop_size -= 1
-            print('Crop size not odd, adapted to {}'.format(crop_size))
+            crop_size += 1
+            print('Crop size not odd, increased to {}'.format(crop_size))
         if debug:
             print('Input crop size is {} pixels'.format(crop_size))
 
-        if ny <= crop_size:
+        if crop_size >= ny:
             print('Crop size is larger than the frame size. Skipping cropping...', flush=True)
+
         else:
             if verbose:
                 print('######### Running frame cropping #########', flush=True)
+                start_time = time_ini(verbose=False)
             master_cube = cube_crop_frames(master_cube, crop_size, force=False, verbose=debug, full_output=False)
-        write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube, verbose=debug)
-        if verbose:
-            print('Cropping complete', flush=True)
+            if verbose:
+                timing(start_time)
+                print('Cropping complete', flush=True)
+            write_fits(self.outpath + '{}_master_cube.fits'.format(self.dataset_dict['source']), master_cube,
+                       verbose=debug)
         del master_cube
 
     def median_binning(self, binning_factor=10, verbose=True, debug=False):
