@@ -224,7 +224,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm, delta_rot=delta_rot, full_output=False,
                                      verbose=verbose, nproc=self.nproc)
                 tmp_tmp = mask_circle(tmp_tmp, mask_IWA_px)  # we mask the IWA
-                write_fits(outpath_sub + 'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
+                write_fits(outpath_sub+'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
 
             ## SNR map
             if (not isfile(outpath_sub + 'final_ADI_simple_snrmap.fits') or overwrite) and do_snr_map:
@@ -368,7 +368,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=debug)
                     for pp in range(ntest_pcs):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap.fits', tmp,
                                verbose=debug)
 
@@ -379,7 +379,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     for pp in range(ntest_pcs):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, array2=tmp_tmp_tmp_tmp[pp], incl_neg_lobes=False,
                                          plot=False, nproc=self.nproc, verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits', tmp,
                                verbose=verbose)
 
@@ -441,7 +441,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                     , verbose=debug)
                     for pp in range(tmp.shape[0]):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
                                '_snrmap.fits', tmp, verbose=debug)
 
@@ -527,7 +527,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=debug)
                     for pp in range(ntest_pcs):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap.fits', tmp, verbose=debug)
                 ### SNR map optimized
                 if (not isfile(
@@ -536,7 +536,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     for pp in range(ntest_pcs):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, array2=tmp_tmp_tmp_tmp[pp], nproc=self.nproc,
                                          verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap_opt.fits', tmp, verbose=debug)
 
             elif fake_planet:
@@ -602,7 +602,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                     , verbose=debug)
                     for pp in range(tmp.shape[0]):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
-                        tmp[pp] = mask_circle(tmp[pp], mask_IWA_px)
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
                                '_snrmap.fits', tmp, verbose=debug)
 
