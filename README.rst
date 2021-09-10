@@ -21,15 +21,16 @@ Capability
 - automatic bad frame detection 
 - cropping
 - binning 
-- median ADI 
+- median ADI and contrast curve
 - PCA in full frame and PCA annular
 - S/N map
-- contrast curves
-- Nelder-Mead minimisation and MCMC Sampling for source location (new)
-- NEGFC injection and post-processing (new)
+- fake companion injection and principle component optimisation (new)
+- Nelder-Mead minimisation and MCMC Sampling for source location
+- NEGFC injection and post-processing
 
 Under testing
 ------------
+- optimised contrast curve for full frame and annular PCA-ADI
 - fast reduction
 
 Known Issues:
@@ -38,4 +39,3 @@ Known Issues:
 - some calibration plots are messy
 - debug mode needs further testing in calibration
 - in some data sets the systematic horizontal bars weren't quite removed
-- bad pixel correction and sky subtraction is extremely slow for large data sets
