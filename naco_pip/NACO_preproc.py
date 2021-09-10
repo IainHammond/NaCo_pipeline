@@ -8,18 +8,20 @@ Recenters, detects bad frames, crops and bins
 __author__ = 'Iain Hammond'
 __all__ = ['calib_dataset']
 
-import numpy as np
-import pyprind
 import os
+import pathlib
 from os.path import isfile
 
-import pathlib
+import numpy as np
+import pyprind
 from matplotlib import pyplot as plt
+
+from vip_hci.conf import get_available_memory, time_ini, timing
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit,frame_shift, cube_detect_badfr_correlation, \
+from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, cube_detect_badfr_correlation, \
     cube_crop_frames
 from vip_hci.stats import cube_distance
-from vip_hci.conf import get_available_memory, time_ini, timing
+
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro=True):
