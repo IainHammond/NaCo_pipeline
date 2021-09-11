@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame as Df
 
+from vip_hci.conf import time_ini, timing
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.medsub import median_sub
 from vip_hci.metrics import snrmap, contrast_curve, normalize_psf, cube_inject_companions, snr
@@ -247,12 +248,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 print("======= Completed Median-ADI =======", flush=True)
 
         ################# Estimate sensitivity and inject planets ###################
-        if fake_planet and not isfile(outpath_sub+'TMP_first_guess_3sig_sensitivity.fits') and not \
-                isfile(outpath_sub+'TMP_first_guess_contrast_curve_PCA-ADI-full.csv'):
+        if fake_planet:
             df_list = []
             PCA_ADI_cube = ADI_cube.copy()
             if verbose:
                 print("======= Determining contrast to inject fake planets =======", flush=True)
+                start_time = time_ini(verbose=False)
             # 3 sigma is to evaluate which contrast to inject the companion, final contrast curve is 5 sigma
             for nn, npc in enumerate(firstguess_pcs):
                 pn_contr_curve_full_rr = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm, self.pixel_scale,
@@ -286,9 +287,11 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 sensitivity_3sig_full_df[ff] = arr_contrast[idx]  # optimal contrast at that separation
             write_fits(outpath_sub+'TMP_first_guess_3sig_sensitivity.fits', sensitivity_3sig_full_df, verbose=debug)
 
-        if fake_planet:  # do this to inject the companions
+            # do this to inject the companions
             if verbose:
+                timing(start_time)
                 print("======= Injecting fake planets =======", flush=True)
+                start_time = time_ini(verbose=False)
             for ns in range(nspi):  # iterate over PA separations to inject
                 theta0 = ns * th_step  # changing PA (forms a spiral if there are >1 separations to inject)
                 PCA_ADI_cube = ADI_cube.copy()  # refresh the cube so we don't accumulate fake companions
@@ -311,6 +314,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 sensitivity_5sig_ann_df = np.zeros(nfcp)
 
             if verbose:
+                timing(start_time)
                 print("======= Injected fake planets =======", flush=True)
 
         ####################### PCA-ADI full ###########################
