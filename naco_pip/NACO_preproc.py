@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from vip_hci.conf import get_available_memory, time_ini, timing
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, cube_detect_badfr_correlation, \
-    cube_crop_frames
+    cube_crop_frames, cube_subsample
 from vip_hci.stats import cube_distance
 
 
@@ -352,7 +352,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         del frames_threshold
 
     def crop_cube(self, arcsecond_diameter=3, verbose=True, debug=False):
-    
         """
         Crops frames in the master cube after recentring and bad frame removal. Recommended for post-processing ie.
         PCA in concentric annuli. If the provided arcsecond diameter happens to be larger than the cropping provided in
@@ -411,6 +410,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         ----------
         binning_factor: int, default = 10
             Defines how many frames to median combine
+        verbose : bool
+            Whether to print completion, timing and binning information
+        debug : bool
+            Prints when FITS files are opened and saved
                   
         Writes to FITS file:
         ----------
@@ -434,24 +437,24 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             start_time = time_ini(verbose=False)
 
-        ntot = master_cube.shape[0]
-        if binning_factor != 1 and binning_factor != 0:
-            bin_fac = int(binning_factor)  # ensure integer
-            ntot_bin = int(np.ceil(ntot / bin_fac))  # in case ntot is not divisible by the binning factor
-            cube_bin = np.zeros([ntot_bin, master_cube.shape[1], master_cube.shape[2]])  # define empty array
-            derot_angles_bin = np.zeros(ntot_bin)
-            if verbose:
-                print('Median binning master cube with binning factor {}'.format(bin_fac), flush=True)
-            for nn in range(ntot_bin):  # median binning
-                cube_bin[nn] = np.nanmedian(master_cube[nn * bin_fac:(nn + 1) * bin_fac], axis=0)
-                derot_angles_bin[nn] = np.median(derot_angles[nn * bin_fac:(nn + 1) * bin_fac])
+        # ntot = master_cube.shape[0]
+        bin_fac = int(binning_factor)  # ensure integer
+        if bin_fac != 1 and bin_fac != 0:
+            cube_bin, derot_angles_bin = cube_subsample(master_cube, n=bin_fac, mode="median", parallactic=derot_angles,
+                                                        verbose=verbose)
+            # ntot_bin = int(np.ceil(ntot / bin_fac))  # in case ntot is not divisible by the binning factor
+            # cube_bin = np.zeros([ntot_bin, master_cube.shape[1], master_cube.shape[2]])  # define empty array
+            # derot_angles_bin = np.zeros(ntot_bin)
+            # if verbose:
+            #     print('Median binning master cube with binning factor {}'.format(bin_fac), flush=True)
+            # for nn in range(ntot_bin):  # median binning
+            #     cube_bin[nn] = np.nanmedian(master_cube[nn * bin_fac:(nn + 1) * bin_fac], axis=0)
+            #     derot_angles_bin[nn] = np.median(derot_angles[nn * bin_fac:(nn + 1) * bin_fac])
             write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), cube_bin,
                        verbose=debug)
             write_fits(self.outpath+'derot_angles.fits', derot_angles_bin, verbose=debug)
         else:
             print('Binning factor is {}, skipping binning...'.format(binning_factor), flush=True)
-        if verbose:
-            print('Binning complete', flush=True)
         if verbose:
             timing(start_time)  # prints how long median binning took
         del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
