@@ -46,7 +46,6 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 # clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/raw/',
 #                      '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/', dataset_dict,coro = True)
-
 # clas.bad_columns()
 # clas.mk_dico()
 # clas.find_sky_in_sci_cube(plot = 'save')
@@ -54,7 +53,6 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 # calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/classified/',
 #                     '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/', dataset_dict,final_sz = None)
-
 # calib.dark_subtract(bad_quadrant = [3], debug = False, plot = 'save')
 # calib.flat_field_correction(debug = False, plot = 'save')
 # calib.correct_nan(debug = False, plot = 'save')
@@ -66,19 +64,17 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
 #                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
 #                         recenter_method='speckle', recenter_model='gauss', coro=True)
-#
-preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
-preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
-preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular
-preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular
+# preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
+# preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
+# preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
+# preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular and contrast curves
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
                             '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/',
                            dataset_dict, nproc=nproc, npc=5)
-
-postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
-                       fcp_pos=[0.3,0.6], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=True, do_snr_map_opt=True,
-                       delta_rot=(1, 3), mask_IWA=1, overwrite=True, verbose=True, debug=True)
+postproc.postprocessing(do_adi=False, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, fake_planet=False,
+                       first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=False,
+                       do_snr_map_opt=False, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
 #                   weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
