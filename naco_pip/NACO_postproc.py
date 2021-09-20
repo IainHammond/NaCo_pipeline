@@ -341,7 +341,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                           svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
                                           delta_rot=delta_rot, fwhm=self.fwhm, collapse='median', check_memory=True,
                                           full_output=False, verbose=verbose, nproc=self.nproc)
-                    if not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite and \
+                    if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
                         contr_curve_full = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
                                                           self.pixel_scale,
@@ -363,7 +363,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                   delta_rot=delta_rot, fwhm=self.fwhm, collapse='median',
                                                   check_memory=True,
                                                   full_output=False, verbose=verbose, nproc=self.nproc)
-                if not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite and \
+                if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                         (fake_planet and first_guess_skip):
                     # get best sensitivity at each sampled distance by looping npcs
                     contr_curve_full_opt = contr_curve_full.copy()  # gets last data frame
@@ -526,7 +526,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                       interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
                                                       full_output=False, verbose=verbose)
 
-                    if not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite and \
+                    if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
                         contr_curve_ann = contrast_curve(PCA_ADI_cube, derot_angles, psfn,  self.fwhm,
                                                          self.pixel_scale, starphot=starphot, algo=pca_annular,
@@ -552,7 +552,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                           interpolation='lanczos4', collapse='median',
                                                           ifs_collapse_range='all', full_output=False, verbose=verbose)
 
-                if not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite and \
+                if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
                         (fake_planet and first_guess_skip):
                     # similar loop to before, get best sensitivity at each distance sampled by looping npcs
                     contr_curve_ann_opt = contr_curve_ann.copy()  # gets last data frame
