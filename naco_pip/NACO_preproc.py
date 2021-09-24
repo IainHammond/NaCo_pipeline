@@ -433,14 +433,13 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if not isfile(self.outpath+'derot_angles.fits'):
             raise NameError('Missing derotation angles files from recentring and bad frame removal!')
 
-        master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)
-        derot_angles = open_fits(self.outpath+'derot_angles.fits', verbose=debug)
-
-        if verbose:
-            start_time = time_ini(verbose=False)
-
         bin_fac = int(binning_factor)  # ensure integer
         if bin_fac != 1 and bin_fac != 0:
+            master_cube = open_fits(self.outpath + '{}_master_cube.fits'.format(self.dataset_dict['source']),
+                                    verbose=debug)
+            derot_angles = open_fits(self.outpath + 'derot_angles.fits', verbose=debug)
+            if verbose:
+                start_time = time_ini(verbose=False)
             cube_bin, derot_angles_bin = cube_subsample(master_cube, n=bin_fac, mode="median", parallactic=derot_angles,
                                                         verbose=verbose)
             if verbose:
@@ -448,6 +447,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), cube_bin,
                        verbose=debug)
             write_fits(self.outpath+'derot_angles.fits', derot_angles_bin, verbose=debug)
+            del master_cube, derot_angles, cube_bin, derot_angles_bin
         else:
             print('Binning factor is {}, skipping binning...'.format(binning_factor), flush=True)
-        del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
