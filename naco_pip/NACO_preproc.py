@@ -404,7 +404,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
     def median_binning(self, binning_factor=10, verbose=True, debug=False):
         """ 
         Median combines the frames within the master science cube as per the binning factor, and makes the necessary
-        changes to the derotation file.
+        changes to the derotation file. Temporal sub-sampling of data is useful to significantly reduce
+        post-processing computation time, however we risk using a temporal window that equates to the decorrelation
+        rate of the PSF. This is generally noticeable for separations beyond 0.5"
         
         Parameters:
         ----------
@@ -437,24 +439,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             start_time = time_ini(verbose=False)
 
-        # ntot = master_cube.shape[0]
         bin_fac = int(binning_factor)  # ensure integer
         if bin_fac != 1 and bin_fac != 0:
             cube_bin, derot_angles_bin = cube_subsample(master_cube, n=bin_fac, mode="median", parallactic=derot_angles,
                                                         verbose=verbose)
-            # ntot_bin = int(np.ceil(ntot / bin_fac))  # in case ntot is not divisible by the binning factor
-            # cube_bin = np.zeros([ntot_bin, master_cube.shape[1], master_cube.shape[2]])  # define empty array
-            # derot_angles_bin = np.zeros(ntot_bin)
-            # if verbose:
-            #     print('Median binning master cube with binning factor {}'.format(bin_fac), flush=True)
-            # for nn in range(ntot_bin):  # median binning
-            #     cube_bin[nn] = np.nanmedian(master_cube[nn * bin_fac:(nn + 1) * bin_fac], axis=0)
-            #     derot_angles_bin[nn] = np.median(derot_angles[nn * bin_fac:(nn + 1) * bin_fac])
+            if verbose:
+                timing(start_time)  # prints how long median binning took
             write_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), cube_bin,
                        verbose=debug)
             write_fits(self.outpath+'derot_angles.fits', derot_angles_bin, verbose=debug)
         else:
             print('Binning factor is {}, skipping binning...'.format(binning_factor), flush=True)
-        if verbose:
-            timing(start_time)  # prints how long median binning took
         del master_cube, cube_bin, derot_angles, derot_angles_bin  # memory management
