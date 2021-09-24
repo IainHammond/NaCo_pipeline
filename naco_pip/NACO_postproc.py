@@ -84,12 +84,19 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         if not isdir(self.outpath):
             os.system("mkdir " + self.outpath)
 
-    def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
+    def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True,
-                       do_snr_map_opt=True, delta_rot=(1, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False):
+                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
+                       verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
-        curves, SNR maps and fake planet injection for optimizing the number of principle components
+        curves, SNR maps and fake planet injection for optimizing the number of principle components.
+
+        Natural progression:
+        Run median-ADI and PCA-ADI in full frame and annular
+            a) If a blob is found or if there is a known planet/companion, set source_xy to the approximate x-y
+            coordinates and re-run PCA. Run NEGFC to determine it r, theta and flux
+            b) If no blob is found, set fake_planet to True and create contrast curves
 
         Parameters:
         ----------
@@ -103,7 +110,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             Whether to apply annular PCA-ADI (more computer intensive). Only runs if cropped=True
         fake_planet : bool
             Will inject fake planets into the cube to optimize number of principle components and produce contrast
-            curves for PCA-ADI and/or PCA-ADI annular, depending on above. Increases run time, binned cube recommended
+            curves for PCA-ADI and/or PCA-ADI annular, depending on above. Increases run time - use a binned cube for a
+            faster reduction, or non-binned for better contrast
         first_guess_skip : bool
             Will not complete a first contrast curve to determine the sensitivity required when injecting fake
             companions, but will still make a final contrast curve. For the purpose of decreasing run time, mostly
@@ -115,35 +123,52 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             If fake planet is True and first guess is not skipped, this is the arcsecond separation for determine the
             optimal principle components
         cropped : bool
-            whether the master cube was cropped in pre-processing
+            Whether the master cube was cropped in pre-processing
         do_snr_map : bool
-            whether to compute an SNR map (warning: computer intensive); useful only when point-like features are seen
+            Whether to compute an SNR map (warning: computer intensive); useful only when point-like features are seen
             in the image
         do_snr_map_opt : bool
             Whether to compute a non-conventional (more realistic) SNR map
+        planet_pos : tuple, default None
+            If there is a known (or suspected) companion/giant planet in the data, set this as its x-y coordinates in
+            the post-processed data
         delta_rot : tuple
-            Threshold in rotation angle used in pca_annular to include frames in the PCA library (provided in terms of
-            FWHM). See description of pca_annular() for more details
+            Threshold in rotation angle used in pca_annular to include frames in the PCA library (in terms of FWHM).
+            See description of pca_annular() for more details. Applied to full frame PCA-ADI in the case of a planet.
+            Reduces the number of frames used to build the PCA library and increases run time but reduces companion
+            self-subtraction, especially at close separations
         mask_IWA : int, default 1
-            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of FWHM
+            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of FWHM.
         overwrite : bool, default True
-            whether to overwrite pre-existing output files from previous reductions
+            Whether to overwrite pre-existing output files from previous reductions
         verbose : bool
-            prints more output when True                 
+            Prints more output when True
         debug : bool, default is False
             Saves extra output files
         """
-
-        # make directories if they don't exist
         print("======= Starting post-processing....=======", flush=True)
-        outpath_sub = self.outpath + "sub_npc{}/".format(self.npc)
 
+        # determine npcs, make directories if they don't exist
+        if isinstance(self.npc, int):  # if just an integer or tuple of length 1 is provided
+            test_pcs = [self.npc]  # just a single number of PCs
+            outpath_sub = self.outpath + "sub_npc{}/".format(test_pcs[0])
+        if isinstance(self.npc, list) or isinstance(self.npc, tuple):
+            if len(self.npc) == 2:  # start and stop PCs
+                test_pcs = list(range(self.npc[0], self.npc[1] + 1, 1))
+            elif len(self.npc) == 3:  # start, stop and step PCs
+                test_pcs = list(range(self.npc[0], self.npc[1] + 1, self.npc[2]))
+            outpath_sub = self.outpath + "sub_npc{}-{}/".format(test_pcs[0], test_pcs[-1])
         if not isdir(outpath_sub):
             os.system("mkdir " + outpath_sub)
 
         if verbose:
             print('Input path is {}'.format(self.inpath), flush=True)
             print('Output path is {}'.format(outpath_sub), flush=True)
+
+        if isinstance(delta_rot, list):
+            delta_rot = tuple(delta_rot)
+        if isinstance(planet_pos, list):
+            planet_pos = tuple(planet_pos)
 
         source = self.dataset_dict['source']
         tn_shift = 0.572  # ± 0.178 Launhardt et al. 2020, true North offset for NACO
@@ -209,12 +234,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         # TEST number of principal components
         # PCA-FULL
         if do_pca_full:
-            test_pcs_full = list(range(1, self.npc + 1))
+            test_pcs_full = test_pcs
         # PCA-ANN
         if do_pca_ann:
             if not cropped:  # needs a cropped cube
                 raise ValueError('PCA-ADI annular requires a cropped cube from pre-processing!')
-            test_pcs_ann = list(range(1, self.npc + 1))
+            test_pcs_ann = test_pcs
         # Contrast estimation
         if fake_planet and not first_guess_skip:
             firstguess_pcs = list(range(firstguess_pcs[0], firstguess_pcs[1], firstguess_pcs[2]))
@@ -328,6 +353,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             ntest_pcs = len(test_pcs_full)
             test_pcs_str = "npc" + "-".join(test_pcs_str_list)
 
+            # if there is no blob and we haven't injected fake planets OR we want a full frame contrast curve
             if not fake_planet or (fake_planet and first_guess_skip):
                 df_full_fgs = []
                 PCA_ADI_cube = ADI_cube.copy()
@@ -339,8 +365,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp_tmp[nn] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube,
                                           scale_list=None, ncomp=int(npc),
                                           svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
-                                          delta_rot=delta_rot, fwhm=self.fwhm, collapse='median', check_memory=True,
-                                          full_output=False, verbose=verbose, nproc=self.nproc)
+                                          source_xy=planet_pos, delta_rot=delta_rot, fwhm=self.fwhm, collapse='median',
+                                          check_memory=True, full_output=False, verbose=verbose, nproc=self.nproc)
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
                         contr_curve_full = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
@@ -360,8 +386,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp_tmp_tmp_tmp[nn] = pca(PCA_ADI_cube, angle_list=-derot_angles, cube_ref=ref_cube,
                                                   scale_list=None, ncomp=int(npc),
                                                   svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
-                                                  delta_rot=delta_rot, fwhm=self.fwhm, collapse='median',
-                                                  check_memory=True,
+                                                  source_xy=planet_pos, delta_rot=delta_rot, fwhm=self.fwhm,
+                                                  collapse='median', check_memory=True,
                                                   full_output=False, verbose=verbose, nproc=self.nproc)
                 if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                         (fake_planet and first_guess_skip):
@@ -417,7 +443,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_snrmap_opt.fits', tmp,
                                verbose=verbose)
 
-            elif fake_planet and not first_guess_skip:
+            elif fake_planet and not first_guess_skip:  # use the cubes with fake companions injected
                 snr_tmp = np.zeros([nspi, ntest_pcs, nfcp])
                 tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
                 for ns in range(nspi):
@@ -425,9 +451,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     PCA_ADI_cube = open_fits(outpath_sub+'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
                     for pp, npc in enumerate(test_pcs_full):
                         tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
-                                          mask_center_px=mask_IWA_px, ncomp=int(npc), scaling=None, delta_rot=delta_rot,
-                                          fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose,
-                                          nproc=self.nproc, svd_mode=svd_mode)
+                                          mask_center_px=mask_IWA_px, ncomp=int(npc), scaling=None, fwhm=self.fwhm,
+                                          collapse='median', full_output=False, verbose=verbose, nproc=self.nproc,
+                                          svd_mode=svd_mode)
                         for ff in range(nfcp):  # determine SNR for each companion
                             xx_fcp = cx + rad_arr[ff] * np.cos(np.deg2rad(theta0 + ff * th_step))
                             yy_fcp = cy + rad_arr[ff] * np.sin(np.deg2rad(theta0 + ff * th_step))
@@ -453,8 +479,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 for pp, npc in enumerate(id_npc_full_df):
                     tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
                                       ncomp=int(npc), svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
-                                      delta_rot=delta_rot, fwhm=self.fwhm, collapse='median', full_output=False,
-                                      verbose=verbose)
+                                      fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose)
                 write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str), tmp_tmp,
                            verbose=debug)
                 write_fits(outpath_sub+'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
@@ -523,8 +548,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                       n_segments=1, delta_rot=delta_rot, ncomp=int(npc),
                                                       svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                       max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
-                                                      interpolation='lanczos4', collapse='median', ifs_collapse_range='all',
-                                                      full_output=False, verbose=verbose)
+                                                      interpolation='lanczos4', collapse='median',
+                                                      ifs_collapse_range='all', full_output=False, verbose=verbose)
 
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):

@@ -13,11 +13,11 @@ from vip_hci.conf import get_available_memory
 sep = '―' * 45  # used in printing functions
 print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2021)'+'\n'+sep+'\n')
 try:
-    nproc = int(os.getenv('SLURM_CPUS_PER_TASK',default=1))
+    nproc = int(os.getenv('SLURM_CPUS_PER_TASK', default=1))
 except:
-    nproc=1
+    nproc = 1
 get_available_memory()
-print('Number of CPUs: {} \n'.format(nproc),flush=True)
+print('Number of CPUs: {} \n'.format(nproc), flush=True)
 
 # NaCo info
 wavelength = 3.8e-6  # meters
@@ -27,15 +27,15 @@ pixel_scale = 0.027208  # arcsecs per pixel, Launhardt et al. 2020, +/- 0.000008
 # ***************************************** PARAMETERS TO CHANGE *******************************************************
 
 # CQTau
-source = 'CQTau' # used in some saved filenames and plots, without spaces
-details = '(NACO+AGPM)' # info displayed in plots and figures
-ndit_sci = [100] # number of frames per science cube
-ndit_sky = [100] # number of frames per sky cube
-ndit_unsat = [500,400] #number of frames in unsaturated cubes
-dit_sci = 0.35 #integration time for science frames
-dit_unsat = 0.05 #integration time for unsaturated non coronagraphic images
-dit_flat = 0.2 #integration time for flat frames
-fast_reduction = False # for super fast calibration and pre-processing (median combines all science cubes into one cube)
+source = 'CQTau'  # used in some saved filenames and plots, without spaces
+details = '(NACO+AGPM)'  # info displayed in plots and figures
+ndit_sci = [100]  # number of frames per science cube
+ndit_sky = [100]  # number of frames per sky cube
+ndit_unsat = [500, 400]  # number of frames in unsaturated cubes
+dit_sci = 0.35  # integration time for science frames
+dit_unsat = 0.05  # integration time for unsaturated non coronagraphic images
+dit_flat = 0.2  # integration time for flat frames
+fast_reduction = False  # for super fast calibration and pre-processing (median combines all science cubes into one cube)
 
 # dictionary to pass through the pipeline saving all the static dataset information. Can be ignored
 dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_scale':pixel_scale, 'source': source,
@@ -61,20 +61,22 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 # calib.get_stellar_psf(nd_filter = False, debug = False, plot = 'save')
 # calib.subtract_sky(npc = 1, debug = False, plot = 'save')
 
-# preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
-#                         '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
-#                         recenter_method='speckle', recenter_model='gauss', coro=True)
-# preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
-# preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
-# preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
-# preproc.median_binning(binning_factor=10, verbose=True)  # recommended for PCA-ADI annular and contrast curves
+preproc = calib_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/calibrated/',
+                        '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/', dataset_dict,
+                        recenter_method='speckle', recenter_model='gauss', coro=True)
+preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
+preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
+preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
+preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annular and contrast curves, reduces S/N
 
 postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/preproc/',
-                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc/',
-                           dataset_dict, nproc=nproc, npc=5)
-postproc.postprocessing(do_adi=False, do_adi_contrast=False, do_pca_full=True, do_pca_ann=True, fake_planet=False,
-                       first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=False,
-                       do_snr_map_opt=False, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True, verbose=True, debug=False)
+                            '/home/ihammond/pd87_scratch/products/NACO_archive/10_CQTau/postproc_nobin/',
+                           dataset_dict, nproc=nproc, npc=20) # npc can be int (for a single number of PCs), tuple
+                                                              # or list for a range and step
+postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
+                        first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=False,
+                        do_snr_map_opt=False, source_xy=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
+                        verbose=True, debug=False)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
 #                   weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
