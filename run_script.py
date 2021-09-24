@@ -75,7 +75,7 @@ postproc = preproc_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/10
                                                               # or list for a range and step
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=True,
                         first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=False,
-                        do_snr_map_opt=False, source_xy=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
+                        do_snr_map_opt=False, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
                         verbose=True, debug=False)
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
