@@ -397,7 +397,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         sensitivities = []
                         for nn, npc in enumerate(test_pcs_full):  # iterate over tested principle components
                             sensitivities.append(df_full_fgs[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
-                        print("Sensitivities at {} px: ".format(df_full_fgs[jj]['distance'][jj]), sensitivities,
+                        print("Sensitivities at {} px: ".format(df_full_fgs[nn]['distance'][jj]), sensitivities,
                               flush=True)
                         idx_min = np.argmin(sensitivities)  # minimum sensitivity at that distance
                         contr_curve_full_opt['sensitivity_student'][jj] = df_full_fgs[idx_min]['sensitivity_student'][jj]
@@ -586,7 +586,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         for nn, npc in enumerate(test_pcs_ann):  # iterate over tested principle components
                             sensitivities.append(
                                 df_ann_fgs[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
-                        print("Sensitivities at {} px: ".format(df_ann_fgs[jj]['distance'][jj]), sensitivities,
+                        print("Sensitivities at {} px: ".format(df_ann_fgs[nn]['distance'][jj]), sensitivities,
                               flush=True)
                         idx_min = np.argmin(sensitivities)  # minimum sensitivity at that distance
                         contr_curve_ann_opt['sensitivity_student'][jj] = df_ann_fgs[idx_min]['sensitivity_student'][jj]
