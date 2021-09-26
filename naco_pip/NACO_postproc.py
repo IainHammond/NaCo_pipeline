@@ -833,6 +833,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 plt.savefig(outpath_sub+'contr_curves_app_magnitude.pdf', format='pdf')
             except:
                 pass
+            plt.close('all')
 
         elif fake_planet and first_guess_skip:  # no fake planets injected, just plot the best contrast at each radii
             if do_pca_full:
@@ -852,7 +853,11 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if do_pca_ann:
                 plt.plot(contr_ann_df['distance'] * self.pixel_scale, -2.5 * np.log10(contr_ann_df['sensitivity_student']),
                          'r', linewidth=2, label='PCA-ADI annular (Student)')
-            plt.savefig(outpath_sub + 'contr_curve_skip-fcp.pdf', format='pdf')
+            plt.legend()
+            try:
+                plt.savefig(outpath_sub + 'contr_curve_skip-fcp.pdf', format='pdf')
+            except:
+                pass
             plt.close('all')
 
         if verbose:
