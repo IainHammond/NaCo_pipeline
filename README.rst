@@ -38,3 +38,7 @@ Known Issues:
 - some calibration plots are messy
 - debug mode needs further testing in calibration
 - occasional imperfect horizontal bar correction with PCA dark subtraction
+
+Maintainer:
+------------
+Iain Hammond (Iain.Hammond@monash.edu)
