@@ -30,12 +30,11 @@ Capability
 
 Under testing
 ------------
-- optimised contrast curve for full frame and annular PCA-ADI
-- fast reduction
+- fast reduction (likely to be scrapped in favour of performance improvements)
 
 Known Issues:
 ------------
 - fast reduction doesnt work in some sections
 - some calibration plots are messy
 - debug mode needs further testing in calibration
-- in some data sets the systematic horizontal bars weren't quite removed
+- occasional imperfect horizontal bar correction with PCA dark subtraction
