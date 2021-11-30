@@ -523,7 +523,7 @@ class raw_dataset:
                 tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
-                print('Dark has been subtracted from SCI cubes')
+                print('Dark has been median subtracted from SCI cubes')
 
             if plot:
                 tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
@@ -550,7 +550,7 @@ class raw_dataset:
                 tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
-                print('Dark has been subtracted from SKY cubes')
+                print('Dark has been median subtracted from SKY cubes')
 
             if plot:
                 tmp_tmp_med = np.median(tmp, axis=0)  # sky before subtraction
@@ -574,11 +574,14 @@ class raw_dataset:
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_flat)])
             for sc, fits_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                if tmp.ndim == 2:
+                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
+                else:
+                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
                 tmp_tmp[sc] = tmp - tmp_tmp_tmp_median
             write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp,verbose=debug)
             if verbose:
-                print('Dark has been subtracted from FLAT frames')
+                print('Dark has been median subtracted from FLAT frames')
 
             if plot:
                 tmp_tmp_med = np.median(tmp, axis=0)  # flat cube before subtraction
