@@ -52,7 +52,7 @@ def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = Fal
        r = np.sqrt(area/np.pi)
        tmp = np.zeros([ny,nx])
        tmp = mask_circle(tmp,radius = r, fillwith = 1)
-       tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2 )
+       tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2, imlib='opencv')  # no vip_fft because the image isn't square
        #measure translation
        shift_yx, _, _ = register_translation(tmp, shadow,
                                      upsample_factor= 100)
@@ -473,7 +473,8 @@ class raw_dataset:
 
         # create mask for sci and sky
         mask_AGPM_com = get_annulus_segments(mask_AGPM_com, inner_rad, outer_rad - inner_rad, mode='mask')[0]
-        mask_AGPM_com = frame_shift(mask_AGPM_com, self.agpm_pos[0]-cy, self.agpm_pos[1]-cx, border_mode = 'constant')
+        mask_AGPM_com = frame_shift(mask_AGPM_com, self.agpm_pos[0]-cy, self.agpm_pos[1]-cx, border_mode='constant',
+                                    imlib='opencv')
         #create mask for flats
         mask_AGPM_flat = np.ones([self.com_sz,self.com_sz])
 
