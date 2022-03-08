@@ -14,9 +14,14 @@ import pyprind
 import os
 import random
 import matplotlib as mpl
-mpl.use('Agg') #show option for plot is unavailable with this option, set specifically to save plots on m3
+mpl.use('Agg') # show option for plot is unavailable with this option, set specifically to save plots on m3
 from matplotlib import pyplot as plt
 from numpy import isclose
+try:
+    from vip_hci.config import time_ini, time_fin, timing
+except:
+    from vip_hci.conf import time_ini, time_fin, timing
+    print('Attention: A newer version of VIP is available.')
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift,\
 cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated,cube_fix_badpix_clump,\
@@ -24,7 +29,6 @@ cube_recenter_2dfit
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass,\
 mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
 from vip_hci.metrics import detection, normalize_psf
-from vip_hci.conf import time_ini, time_fin, timing
 from hciplot import plot_frames
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
@@ -32,135 +36,135 @@ from astropy.stats import sigma_clipped_stats
 from scipy.optimize import minimize
 
 def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = False, plot = None):
-       """
-       In coro NACO data there is a lyot stop causing a shadow on the detector
-       this method will return the radius and central position of the circular shadow
-       """
+    """
+    In coro NACO data there is a lyot stop causing a shadow on the detector
+    this method will return the radius and central position of the circular shadow
+    """
 
-       cube = open_fits(self.inpath + file_list[0],verbose=debug)
-       nz, ny, nx = cube.shape
-       median_frame = np.median(cube, axis = 0)
-       median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
-       median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-       ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape) #location of AGPM
-       if debug:
-           write_fits(self.outpath + 'shadow_median_frame', median_frame,verbose=debug)
+    cube = open_fits(self.inpath + file_list[0],verbose=debug)
+    nz, ny, nx = cube.shape
+    median_frame = np.median(cube, axis = 0)
+    median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
+    median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+    ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape) #location of AGPM
+    if debug:
+       write_fits(self.outpath + 'shadow_median_frame', median_frame,verbose=debug)
 
-       shadow = np.where(median_frame >threshold, 1, 0) #lyot shadow
-       #create similar shadow centred at the origin
-       area = sum(sum(shadow))
-       r = np.sqrt(area/np.pi)
-       tmp = np.zeros([ny,nx])
-       tmp = mask_circle(tmp,radius = r, fillwith = 1)
-       tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2, imlib='opencv')  # no vip_fft because the image isn't square
-       #measure translation
-       shift_yx, _, _ = register_translation(tmp, shadow,
-                                     upsample_factor= 100)
-       #express as a coordinate
-       y, x = shift_yx
-       cy = np.round(ycom-y)
-       cx = np.round(xcom-x)
-       if debug:
-           pdb.set_trace()
-       if verbose:
-           print('The centre of the shadow is','cy = ',cy,'cx = ',cx)
-       if plot == 'show':
-           plot_frames((median_frame, shadow, tmp),vmax=(np.percentile(median_frame,99.9),1,1),
-                       vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow')
-       if plot == 'save':
-           plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame,99.9),1,1),
-                       vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow',
-                       dpi=300, save = self.outpath + 'shadow_fit.pdf')
+    shadow = np.where(median_frame >threshold, 1, 0) #lyot shadow
+    #create similar shadow centred at the origin
+    area = sum(sum(shadow))
+    r = np.sqrt(area/np.pi)
+    tmp = np.zeros([ny,nx])
+    tmp = mask_circle(tmp,radius = r, fillwith = 1)
+    tmp = frame_shift(tmp, ycom - ny/2 ,xcom - nx/2, imlib='opencv')  # no vip_fft because the image isn't square
+    #measure translation
+    shift_yx, _, _ = register_translation(tmp, shadow,
+                                 upsample_factor= 100)
+    #express as a coordinate
+    y, x = shift_yx
+    cy = np.round(ycom-y)
+    cx = np.round(xcom-x)
+    if debug:
+       pdb.set_trace()
+    if verbose:
+       print('The centre of the shadow is','cy = ',cy,'cx = ',cx)
+    if plot == 'show':
+       plot_frames((median_frame, shadow, tmp),vmax=(np.percentile(median_frame,99.9),1,1),
+                   vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow')
+    if plot == 'save':
+       plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame,99.9),1,1),
+                   vmin=(np.percentile(median_frame,0.1),0,0),label=('Median frame','Shadow',''),title='Shadow',
+                   dpi=300, save = self.outpath + 'shadow_fit.pdf')
 
-       return cy, cx, r
+    return cy, cx, r
 
 def find_filtered_max(path, verbose = True, debug = False):
-        """
-        This method will find the location of the max after low pass filtering.
-        It gives a rough approximation of the stars location, reliable in unsaturated frames where the star dominates.
-        Need to supply the path to the cube.
+    """
+    This method will find the location of the max after low pass filtering.
+    It gives a rough approximation of the stars location, reliable in unsaturated frames where the star dominates.
+    Need to supply the path to the cube.
 
-        """
-        cube = open_fits(path, verbose = debug)
-        #nz, ny, nx = cube.shape
-        #cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
+    """
+    cube = open_fits(path, verbose = debug)
+    #nz, ny, nx = cube.shape
+    #cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
 
-        # then the position will be that plus the relative shift in y and x
-        #rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
-        #rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+    # then the position will be that plus the relative shift in y and x
+    #rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+    #rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
 
-        #y_tmp = cy + rel_shift_y
-        #x_tmp = cx + rel_shift_x
+    #y_tmp = cy + rel_shift_y
+    #x_tmp = cx + rel_shift_x
 
-        median_frame = np.median(cube, axis = 0)
-        # define a square of 100 x 100 with the center being the approximate AGPM/star position
-        #median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True)
-        # apply low pass filter
-        #filter for the brightest source
-        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
-        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-        #obtain location of the bright source
-        ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-        if verbose:
-            print('The location of the star is','ycom =',ycom,'xcom =', xcom)
-        if debug:
-            pdb.set_trace
-        return [ycom, xcom]
+    median_frame = np.median(cube, axis = 0)
+    # define a square of 100 x 100 with the center being the approximate AGPM/star position
+    #median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True)
+    # apply low pass filter
+    #filter for the brightest source
+    median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
+    median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+    #obtain location of the bright source
+    ycom,xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+    if verbose:
+        print('The location of the star is','ycom =',ycom,'xcom =', xcom)
+    if debug:
+        pdb.set_trace
+    return [ycom, xcom]
 
 def find_AGPM(path, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
-        """
-        added by Iain to prevent dust grains being picked up as the AGPM
+    """
+    added by Iain to prevent dust grains being picked up as the AGPM
 
-        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
-        using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a
-        subset square image around the expected location and applies a low pass filter + max search method and returns
-        the (y,x) location of the AGPM/star
+    This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
+    using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a
+    subset square image around the expected location and applies a low pass filter + max search method and returns
+    the (y,x) location of the AGPM/star
 
-        Parameters
-        ----------
-        path : str
-            Path to cube
-        rel_AGPM_pos_xy : tuple, float
-            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
-            calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
-            with VLT/NaCO as the AGPM is always in the same approximate position
-        size : int
-            pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
-        verbose : bool
-            If True extra messages are shown.
-        debug : bool, False by default
-            Enters pdb once the location has been found
-        Returns
-        ----------
-        [ycom, xcom] : location of AGPM or star
-        """
-        cube = open_fits(path,verbose = debug) # opens first sci/sky cube
+    Parameters
+    ----------
+    path : str
+        Path to cube
+    rel_AGPM_pos_xy : tuple, float
+        relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
+        calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
+        with VLT/NaCO as the AGPM is always in the same approximate position
+    size : int
+        pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
+    verbose : bool
+        If True extra messages are shown.
+    debug : bool, False by default
+        Enters pdb once the location has been found
+    Returns
+    ----------
+    [ycom, xcom] : location of AGPM or star
+    """
+    cube = open_fits(path,verbose = debug) # opens first sci/sky cube
 
-        cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
-        # then the position will be that plus the relative shift in y and x
-        rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
-        rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-        #the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations
-        y_tmp = cy + rel_shift_y
-        x_tmp = cx + rel_shift_x
-        median_frame = cube[-1]
+    cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
+    # then the position will be that plus the relative shift in y and x
+    rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+    rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
+    #the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations
+    y_tmp = cy + rel_shift_y
+    x_tmp = cx + rel_shift_x
+    median_frame = cube[-1]
 
-        # define a square of 100 x 100 with the center being the approximate AGPM/star position
-        median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True)
-        # apply low pass filter
-        median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
-        median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
-        # find coordinates of max flux in the square
-        ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-        # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
-        ycom = cornery+ycom_tmp
-        xcom = cornerx+xcom_tmp
+    # define a square of 100 x 100 with the center being the approximate AGPM/star position
+    median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True)
+    # apply low pass filter
+    median_frame = frame_filter_lowpass(median_frame, median_size = 7, mode = 'median')
+    median_frame = frame_filter_lowpass(median_frame, mode = 'gauss',fwhm_size = 5)
+    # find coordinates of max flux in the square
+    ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
+    # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
+    ycom = cornery+ycom_tmp
+    xcom = cornerx+xcom_tmp
 
-        if verbose:
-            print('The location of the AGPM/star is','ycom =',ycom,'xcom =', xcom)
-        if debug:
-            pdb.set_trace()
-        return [ycom, xcom]
+    if verbose:
+        print('The location of the AGPM/star is','ycom =',ycom,'xcom =', xcom)
+    if debug:
+        pdb.set_trace()
+    return [ycom, xcom]
 
 def find_nearest(array, value, output='index', constraint=None):
     """
@@ -2816,6 +2820,6 @@ class raw_dataset:
         os.system("rm " + self.outpath + '1_*.fits')
         os.system("rm " + self.outpath + '2_*.fits')
         os.system("rm " + self.outpath + '3_*.fits')
-            
-            
-            
+
+
+

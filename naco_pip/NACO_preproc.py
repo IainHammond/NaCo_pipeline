@@ -15,8 +15,11 @@ from os.path import isfile
 import numpy as np
 import pyprind
 from matplotlib import pyplot as plt
-
-from vip_hci.conf import get_available_memory, time_ini, timing
+try:
+    from vip_hci.config import get_available_memory, time_ini, timing
+except:
+    from vip_hci.conf import get_available_memory, time_ini, timing
+    print('Attention: A newer version of VIP is available.')
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, cube_detect_badfr_correlation, \
     cube_crop_frames, cube_subsample
