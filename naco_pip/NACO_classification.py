@@ -124,10 +124,10 @@ class input_dataset():
 
         for fname in self.file_list:
             tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
-            print('Opened {} of type {}'.format(fname, header_fname['HIERARCH ESO DPR TYPE']))
             # ADD code here that checks for bad column and updates the mask
             if verbose:
-                print('Fixing {} of shape {}'.format(fname, tmp.shape))
+                print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
+                                                                 header_fname['HIERARCH ESO DPR TYPE']), flush=True)
             # crop the bad pixel map to the same dimensions of the frames
 
             if len(tmp.shape) == 3:
@@ -150,11 +150,10 @@ class input_dataset():
                                                        bpm_mask=bcm, sigma_clip=3,
                                                        num_neig=5, size=5, protect_mask=False,
                                                        radius=30, verbose=debug)
-                write_fits(self.outpath + fname, tmp,
-                           header_fname, output_verify='fix')
+                write_fits(self.outpath + fname, tmp, header_fname, output_verify='fix')
 
             else:
-                print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']))
+                print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
                 ny, nx = tmp.shape
                 bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
                 bcm[np.where(tmp == sat_val)] = 1
@@ -173,7 +172,7 @@ class input_dataset():
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify='fix')
             if verbose:
-                print('Fixed', fname)
+                print('Fixed file {}'.format(fname), flush=True)
 
     def mk_dico(self, coro=True, verbose=True, debug=False):
         if coro:
@@ -194,7 +193,7 @@ class input_dataset():
             master_airmass = []
 
             if verbose:
-                print('Creating dictionary')
+                print('Creating dictionary', flush=True)
             for fname in file_list:
                 if fname.endswith('.fits') and fname.startswith('NACO'):
                     fits_list.append(fname)
@@ -268,7 +267,7 @@ class input_dataset():
                 for sci in flat_list:
                     f.write(sci + '\n')
             if verbose:
-                print('Done :)')
+                print('Done :)', flush=True)
 
     def find_sky_in_sci_cube(self, nres=3, coro=True, verbose=True, plot=None, debug=False):
         """
@@ -326,13 +325,13 @@ class input_dataset():
             flux_list.append(circ_flux[0])
             fname_list.append(fname)
             if debug:
-                print('centre flux has been measured for', fname)
+                print('centre flux has been measured for', fname, flush=True)
 
         median_flux = np.median(flux_list)
         sd_flux = np.std(flux_list)
 
         if verbose:
-            print('Sorting Sky from Sci')
+            print('Sorting Sky from Sci', flush=True)
 
         for i in range(len(flux_list)):
             if flux_list[i] < median_flux - 2 * sd_flux:
@@ -400,7 +399,7 @@ class input_dataset():
         if len(sky_list_mjd) != len(sky_list):
             print('======== WARNING: SKY observation time list is a different length to SKY cube list!! ========')
         if verbose:
-            print('done :)')
+            print('done sorting :)', flush=True)
 
     def find_derot_angles(self, verbose=False):
         """ 
@@ -435,7 +434,7 @@ class input_dataset():
                     sci_list.append(line.split('\n')[0])
         sci_list.sort()
 
-        print('Calculating derotation angles from header data...')
+        print('Calculating derotation angles from header data...', flush=True)
 
         def _derot_ang_ipag(self, sci_list=sci_list, loc='st'):
             nsci = len(sci_list)
@@ -533,5 +532,5 @@ class input_dataset():
                 final_derot_angs_median[sc] = np.median(final_derot_angs[sc])
             final_derot_angs = final_derot_angs_median
         write_fits(self.outpath + "derot_angles_uncropped.fits", final_derot_angs, verbose=verbose)
-        print('Derotation angles have been computed and saved to file')
+        print('Derotation angles have been computed and saved to file', flush=True)
         # return final_derot_angs, n_frames_vec
