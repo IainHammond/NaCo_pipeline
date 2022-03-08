@@ -13,7 +13,7 @@ mpl.use('Agg')
 from matplotlib import pyplot as plt
 import os
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, isdir
 import numpy as np
 from photutils import CircularAperture, aperture_photometry
 from vip_hci.fits import open_fits, write_fits
@@ -104,6 +104,8 @@ class input_dataset():
         self.fast_reduction = dataset_dict['fast_reduction']
         self.dataset_dict = dataset_dict
         print('##### Number of fits files:', len(self.file_list), '#####')
+        if not isdir(self.outpath):
+            os.makedirs(self.outpath)
 
     def bad_columns(self, sat_val=32768, verbose=True, debug=False):
         """

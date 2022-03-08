@@ -87,7 +87,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         self.source = dataset_dict['source']
         self.details = dataset_dict['details']
         if not isdir(self.outpath):
-            os.system("mkdir " + self.outpath)
+            os.makedirs(self.outpath)
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True,

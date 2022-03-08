@@ -9,8 +9,7 @@ __author__ = 'Iain Hammond'
 __all__ = ['calib_dataset']
 
 import os
-import pathlib
-from os.path import isfile
+from os.path import isfile, isdir
 
 import numpy as np
 import pyprind
@@ -58,6 +57,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         os.system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
+        if not isdir(self.outpath):
+            os.makedirs(self.outpath)
 
     def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
         """
@@ -86,8 +87,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         y_shifts.fits # writes the y shifts to the file
         {source}_master_cube.fits # makes the recentered master cube
         derot_angles.fits # makes a vector of derotation angles
-        """  	
-        pathlib.Path(self.outpath).mkdir(parents=True, exist_ok=True)
+        """
 
         if not coro:
             if self.recenter_method != '2dfit':

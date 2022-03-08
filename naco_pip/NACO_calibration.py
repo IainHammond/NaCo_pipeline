@@ -12,6 +12,7 @@ import pdb
 import numpy as np
 import pyprind
 import os
+from os.path import isdir
 import random
 import matplotlib as mpl
 mpl.use('Agg') # show option for plot is unavailable with this option, set specifically to save plots on m3
@@ -234,7 +235,8 @@ class raw_dataset:
         self.sky_list_mjd = sky_list_mjd
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
-
+        if not isdir(self.outpath):
+            os.makedirs(self.outpath)
 
     def get_final_sz(self, final_sz = None, verbose = True, debug = False):
         """
