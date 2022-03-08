@@ -15,7 +15,7 @@ import os
 from os.path import isdir
 import random
 import matplotlib as mpl
-mpl.use('Agg') # show option for plot is unavailable with this option, set specifically to save plots on m3
+mpl.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 from matplotlib import pyplot as plt
 from numpy import isclose
 try:
@@ -35,6 +35,7 @@ from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
 from astropy.stats import sigma_clipped_stats
 from scipy.optimize import minimize
+
 
 def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = False, plot = None):
     """
@@ -79,6 +80,7 @@ def find_shadow_list(self, file_list, threshold = 0, verbose = True, debug = Fal
 
     return cy, cx, r
 
+
 def find_filtered_max(path, verbose = True, debug = False):
     """
     This method will find the location of the max after low pass filtering.
@@ -111,6 +113,7 @@ def find_filtered_max(path, verbose = True, debug = False):
     if debug:
         pdb.set_trace
     return [ycom, xcom]
+
 
 def find_AGPM(path, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, debug = False):
     """
@@ -167,6 +170,7 @@ def find_AGPM(path, rel_AGPM_pos_xy = (50.5, 6.5), size = 101, verbose = True, d
         pdb.set_trace()
     return [ycom, xcom]
 
+
 def find_nearest(array, value, output='index', constraint=None):
     """
     Function to find the index, and optionally the value, of an array's closest element to a certain value.
@@ -190,6 +194,7 @@ def find_nearest(array, value, output='index', constraint=None):
     elif output=='value': return array[idx]
     else: return array[idx], idx
 
+
 class raw_dataset:
     """
     In order to successfully run the pipeline you must run the methods in following order:
@@ -206,6 +211,8 @@ class raw_dataset:
     def __init__(self, inpath, outpath, dataset_dict,final_sz = None, coro = True):
         self.inpath = inpath
         self.outpath = outpath
+        if not isdir(self.outpath):
+            os.makedirs(self.outpath)
         self.final_sz = final_sz
         self.coro = coro
         sci_list = []
@@ -214,14 +221,14 @@ class raw_dataset:
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        nx = open_fits(self.inpath + sci_list[0],verbose = False).shape[2]
+        nx = open_fits(self.inpath + sci_list[0], verbose=False).shape[2]
         self.com_sz = np.array([int(nx - 1)])
-        write_fits(self.outpath + 'common_sz', self.com_sz, verbose = False)
-        #the size of the shadow in NACO data should be constant.
-        #will differ for NACO data where the coronagraph has been adjusted
-        self.shadow_r = 280 # shouldnt change for NaCO data
-        sci_list_mjd = [] # observation time of each sci cube
-        sky_list_mjd = [] # observation time of each sky cube
+        write_fits(self.outpath + 'common_sz.fits', self.com_sz, verbose=False)
+        # the size of the shadow in NACO data should be constant.
+        # will differ for NACO data where the coronagraph has been adjusted
+        self.shadow_r = 280  # shouldn't change for NaCO data
+        sci_list_mjd = []  # observation time of each sci cube
+        sky_list_mjd = []  # observation time of each sky cube
         with open(self.inpath+"sci_list_mjd.txt", "r") as f:
             tmp = f.readlines()
             for line in tmp:
@@ -235,8 +242,6 @@ class raw_dataset:
         self.sky_list_mjd = sky_list_mjd
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
-        if not isdir(self.outpath):
-            os.makedirs(self.outpath)
 
     def get_final_sz(self, final_sz = None, verbose = True, debug = False):
         """
