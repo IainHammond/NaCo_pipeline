@@ -8,7 +8,11 @@ from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 
 # quick basic checks
 import os
-from vip_hci.conf import get_available_memory
+try:
+    from vip_hci.config import get_available_memory
+except:
+    from vip_hci.conf import get_available_memory
+    print('A newer version of VIP is available')
 
 sep = '―' * 45  # used in printing functions
 print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2022)'+'\n'+sep+'\n')
