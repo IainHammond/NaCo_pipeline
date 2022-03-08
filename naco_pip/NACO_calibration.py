@@ -2105,7 +2105,7 @@ class raw_dataset:
                 os.system("rm "+self.outpath+'2_bpix_corr2_unsat_'+fits_name)
                 os.system("rm "+self.outpath+'2_bpix_corr2_map_unsat_'+fits_name)
 
-    def get_stellar_psf(self, verbose = True, debug = False, plot = None, remove = False):
+    def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot=None, remove=False):
         """
         Obtain a PSF model of the star based off of the unsat cubes.
 
