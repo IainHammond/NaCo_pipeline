@@ -147,7 +147,7 @@ class input_dataset():
                     tmp[j] = frame_fix_badpix_isolated(tmp[j],
                                                        bpm_mask=bcm, sigma_clip=3,
                                                        num_neig=5, size=5, protect_mask=False,
-                                                       radius=30, verbose=debug, debug=False)
+                                                       radius=30, verbose=debug)
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify='fix')
 
@@ -167,7 +167,7 @@ class input_dataset():
                 tmp = frame_fix_badpix_isolated(tmp,
                                                 bpm_mask=bcm, sigma_clip=3, num_neig=5,
                                                 size=5, protect_mask=False, radius=30,
-                                                verbose=debug, debug=False)
+                                                verbose=debug)
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify='fix')
             if verbose:
@@ -399,8 +399,6 @@ class input_dataset():
             print('======== WARNING: SKY observation time list is a different length to SKY cube list!! ========')
         if verbose:
             print('done :)')
-
-    ####### Iain's addition to find the derotation angles of the data ########
 
     def find_derot_angles(self, verbose=False):
         """ 

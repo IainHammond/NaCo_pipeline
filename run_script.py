@@ -50,7 +50,7 @@ dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_s
 
 clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/raw/',
                      '/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/classified/', dataset_dict,coro=True)
-clas.bad_columns()
+clas.bad_columns(verbose=True, debug=False)
 clas.mk_dico()
 clas.find_sky_in_sci_cube(plot='save')
 clas.find_derot_angles()
