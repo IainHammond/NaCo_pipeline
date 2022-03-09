@@ -20,14 +20,17 @@ from pandas import read_csv
 try:
     from vip_hci.config import time_ini, timing
     from vip_hci.psfsub import pca, pca_annular, pca_annulus, median_sub
+    from vip_hci.fm import normalize_psf, cube_inject_companions, mcmc_negfc_sampling, firstguess, show_walk_plot, \
+        show_corner_plot, confidence
 except:
     from vip_hci.conf import time_ini, timing
     from vip_hci.medsub import median_sub
     from vip_hci.pca import pca, pca_annular, pca_annulus
+    from vip_hci.metrics import normalize_psf, cube_inject_companions
+    from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
     print('Attention: A newer version of VIP is available.')
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.metrics import snrmap, contrast_curve, normalize_psf, cube_inject_companions, snr
-from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
+from vip_hci.metrics import snrmap, contrast_curve, snr
 from vip_hci.preproc import cube_crop_frames
 from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
 

@@ -22,9 +22,10 @@ from numpy import isclose
 
 try:
     from vip_hci.config import time_ini, time_fin, timing
+    from vip_hci.fm import normalize_psf
 except:
     from vip_hci.conf import time_ini, time_fin, timing
-
+    from vip_hci.metrics import normalize_psf
     print('Attention: A newer version of VIP is available.')
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
@@ -32,7 +33,7 @@ from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_recenter_2dfit
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
-from vip_hci.metrics import detection, normalize_psf
+from vip_hci.metrics import detection
 from hciplot import plot_frames
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
