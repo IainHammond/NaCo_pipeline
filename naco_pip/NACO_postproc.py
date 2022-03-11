@@ -98,7 +98,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                        verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
-        curves, SNR maps and fake planet injection for optimizing the number of principle components.
+        curves, SNR maps and fake planet injection for optimizing the number of principal components.
 
         Natural progression:
         Run median-ADI and PCA-ADI in full frame and annular
@@ -117,19 +117,19 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         do_pca_ann : bool, default is False
             Whether to apply annular PCA-ADI (more computer intensive). Only runs if cropped=True
         fake_planet : bool
-            Will inject fake planets into the cube to optimize number of principle components and produce contrast
+            Will inject fake planets into the cube to optimize number of principal components and produce contrast
             curves for PCA-ADI and/or PCA-ADI annular, depending on above. Increases run time - use a binned cube for a
             faster reduction, or non-binned for better contrast
         first_guess_skip : bool
             Will not complete a first contrast curve to determine the sensitivity required when injecting fake
             companions, but will still make a final contrast curve. For the purpose of decreasing run time, mostly
-            relevant for non-binned data. Best contrast at each separation is a single loop over principle components.
+            relevant for non-binned data. Best contrast at each separation is a single loop over principal components.
         firstguess_pcs : list of 3 elements
-            If fake planet is True and first guess is not skipped, this is the guess principle components to
+            If fake planet is True and first guess is not skipped, this is the guess principal components to
             explore [start, stop, step] (zero based indexing)
         fcp_pos : list or 1D array, default [0.3]
             If fake planet is True and first guess is not skipped, this is the arcsecond separation for determine the
-            optimal principle components
+            optimal principal components
         cropped : bool
             Whether the master cube was cropped in pre-processing
         do_snr_map : bool
@@ -304,7 +304,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             pn_contr_curve_full_first_opt = pn_contr_curve_full_rr.copy()
             for jj in range(pn_contr_curve_full_first_opt.shape[0]):  # iterate over distance from centre
                 sensitivities = []
-                for nn, npc in enumerate(firstguess_pcs):  # iterate over tested principle components
+                for nn, npc in enumerate(firstguess_pcs):  # iterate over tested principal components
                     sensitivities.append(df_list[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
                 print("Sensitivities at {} px: ".format(df_list[nn]['distance'][jj]), sensitivities, flush=True)
                 idx_min = np.argmin(sensitivities)  # minimum sensitivity at that distance
@@ -403,7 +403,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     contr_curve_full_opt = contr_curve_full.copy()  # gets last data frame
                     for jj in range(contr_curve_full_opt.shape[0]):  # iterate over distances sampled from centre
                         sensitivities = []
-                        for nn, npc in enumerate(test_pcs_full):  # iterate over tested principle components
+                        for nn, npc in enumerate(test_pcs_full):  # iterate over tested principal components
                             sensitivities.append(df_full_fgs[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
                         print("Sensitivities at {} px: ".format(df_full_fgs[nn]['distance'][jj]), sensitivities,
                               flush=True)
@@ -591,7 +591,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     contr_curve_ann_opt = contr_curve_ann.copy()  # gets last data frame
                     for jj in range(contr_curve_ann_opt.shape[0]):  # iterate over distances sampled from centre
                         sensitivities = []
-                        for nn, npc in enumerate(test_pcs_ann):  # iterate over tested principle components
+                        for nn, npc in enumerate(test_pcs_ann):  # iterate over tested principal components
                             sensitivities.append(
                                 df_ann_fgs[nn]['sensitivity_student'][jj])  # sensitivity at that distance and npc
                         print("Sensitivities at {} px: ".format(df_ann_fgs[nn]['distance'][jj]), sensitivities,
@@ -779,7 +779,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     for rr, rad in enumerate(rad_arr):
                         sensitivities.append(df_list[rr]['sensitivity_student'][jj])
                     print("Sensitivities at {} px: ".format(df_list[rr]['distance'][jj]), sensitivities, flush=True)
-                    idx_min = np.argmin(sensitivities)  # absolute best overall principle component
+                    idx_min = np.argmin(sensitivities)  # absolute best overall principal component
                     pn_contr_curve_ann_opt['sensitivity_student'][jj] = df_list[idx_min]['sensitivity_student'][jj]
                     pn_contr_curve_ann_opt['sensitivity_gaussian'][jj] = df_list[idx_min]['sensitivity_gaussian'][jj]
                     pn_contr_curve_ann_opt['throughput'][jj] = df_list[idx_min]['throughput'][jj]
