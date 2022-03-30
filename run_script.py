@@ -23,8 +23,8 @@ except:
 get_available_memory()
 print('Number of CPUs: {} \n'.format(nproc), flush=True)
 
-# NaCo info
-wavelength = 3.8e-6  # meters
+# VLT/NaCo info, doesn't need to be changed
+wavelength = 3.78e-6  # meters
 size_telescope = 8.2  # meters
 pixel_scale = 0.027208  # arcsecs per pixel, Launhardt et al. 2020, +/- 0.0000088
 
@@ -41,26 +41,26 @@ dit_unsat = 0.07  # integration time for unsaturated non coronagraphic images
 dit_flat = 0.2  # integration time for flat frames
 fast_reduction = False  # for super fast calibration and pre-processing (median combines all science cubes into one cube)
 
-# dictionary to pass through the pipeline saving all the static dataset information. Can be ignored
+# Can be ignored. Dictionary to pass through the pipeline saving all the static dataset information.
 dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_scale':pixel_scale, 'source': source,
                 'details': details,'ndit_sci': ndit_sci, 'ndit_sky':ndit_sky,'ndit_unsat':ndit_unsat,'dit_sci':dit_sci,
                 'dit_unsat':dit_unsat,'dit_unsat':dit_unsat,'dit_flat':dit_flat,'fast_reduction':fast_reduction}
 
 # ************************* Activate various functions and set inpath + outpaths ***************************************
 
-clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/raw/',
-                     '/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/classified/', dataset_dict,coro=True)
-clas.bad_columns(verbose=True, debug=False)
-clas.mk_dico()
-clas.find_sky_in_sci_cube(plot='save')
-clas.find_derot_angles()
+# clas = input_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/raw/',
+#                      '/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/classified/', dataset_dict,coro=True)
+# clas.bad_columns(verbose=True, debug=False)
+# clas.mk_dico()
+# clas.find_sky_in_sci_cube(plot='save')
+# clas.find_derot_angles()
 
 calib = raw_dataset('/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/classified/',
                     '/home/ihammond/pd87_scratch/products/NACO_archive/13_HD169142/calibrated/', dataset_dict,final_sz=None)
 calib.dark_subtract(method='median', bad_quadrant=[3], debug=False, plot='save')
 calib.flat_field_correction(debug=False, plot='save')
 calib.correct_nan(debug=False, plot='save')
-calib.correct_bad_pixels(debug=False, plot='save')
+calib.correct_bad_pixels(verbose=True, debug=False, plot='save')
 calib.first_frames_removal(verbose=True, debug=False, plot='save')
 calib.get_stellar_psf(nd_filter=False, debug=False, plot='save')
 calib.subtract_sky(npc=1, debug=False, plot='save')
@@ -81,6 +81,8 @@ preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annu
 #                         first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=False,
 #                         do_snr_map_opt=False, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
 #                         verbose=True, debug=False)
+
+# only to be run if there is a source/blob detected by running post-processing
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
 #                   weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
