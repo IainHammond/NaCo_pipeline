@@ -135,7 +135,7 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     rel_AGPM_pos_xy : tuple, float
         relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
         calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
-        with VLT/NaCO as the AGPM is always in the same approximate position
+        with VLT/NaCo as the AGPM is always in the same approximate position
     size : int
         pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
     verbose : bool
@@ -177,9 +177,9 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     return [ycom, xcom]
 
 
-def find_nearest(array, value, output='index', constraint=None):
+def find_nearest(array, value, output='index', constraint=None, n=1):
     """
-    Function to find the index, and optionally the value, of an array's closest element to a certain value.
+    Function to find the indices, and optionally the values, of an array's n closest elements to a certain value.
     Possible outputs: 'index','value','both'
     Possible constraints: 'ceil', 'floor', None ("ceil" will return the closest element with a value greater than 'value', "floor" the opposite)
     """
@@ -190,11 +190,21 @@ def find_nearest(array, value, output='index', constraint=None):
     else:
         raise ValueError("Input type for array should be np.ndarray or list.")
 
-    idx = (np.abs(array - value)).argmin()
-    if type == 'ceil' and array[idx] - value < 0:
-        idx += 1
-    elif type == 'floor' and value - array[idx] < 0:
-        idx -= 1
+    if constraint is None:
+        fm = np.absolute(array - value)
+
+    elif constraint == 'ceil':
+        fm = array - value
+        fm = fm[np.where(fm > 0)]
+    elif constraint == 'floor':
+        fm = -(array - value)
+        fm = fm[np.where(fm > 0)]
+    else:
+        raise ValueError("Constraint not recognised")
+
+    idx = fm.argsort()[:n]
+    if n == 1:
+        idx = idx[0]
 
     if output == 'index':
         return idx
@@ -2259,7 +2269,7 @@ class raw_dataset:
         print('unsat_mjd_list:', unsat_mjd_list)
 
         thr_d = (1.0 / self.dataset_dict[
-            'pixel_scale'])  # threshhold: difference in star pos must be greater than 1 arc sec
+            'pixel_scale'])  # threshold: difference in star pos must be greater than 1 arc sec
         print('thr_d:', thr_d)
         index_dither = [0]
         print('index_dither:', index_dither)
@@ -2292,7 +2302,6 @@ class raw_dataset:
                 best_idx = find_nearest([unsat_mjd_list[i] for i in good_idx], unsat_mjd_list[un], output='index')
                 # best_idx = find_nearest(unsat_mjd_list[good_idx[0]:good_idx[-1]],unsat_mjd_list[un])
                 print('best_idx:', best_idx)
-                tmp_sky = np.zeros([len(good_idx), tmp.shape[1], tmp.shape[2]])
                 tmp_sky = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[good_idx[best_idx]]), axis=0)
                 write_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[un], tmp - tmp_sky, verbose=debug)
         if remove:
