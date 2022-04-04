@@ -275,7 +275,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 write_fits(outpath_sub + 'final_ADI_simple_snrmap.fits', tmp_tmp, verbose=verbose)
 
             ## Contrast curve
-            if (not isfile(outpath_sub + 'contrast_adi.pdf') or overwrite) and do_adi_contrast:
+            if (not isfile(outpath_sub + 'contrast_adi_madi.pdf') or overwrite) and do_adi_contrast:
                 _ = contrast_curve(ADI_cube, derot_angles, psfn, self.fwhm, pxscale=self.pixel_scale, starphot=starphot,
                                    algo=median_sub, sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                    wedge=(0, 360), fc_snr=fc_snr, student=True, transmission=transmission, smooth=True,
