@@ -8,15 +8,15 @@ Applies necessary calibration to the cubes and corrects NACO biases
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
 
+import os
 import pdb
+import random
+from os.path import isdir
+
+import matplotlib as mpl
 import numpy as np
 import pyprind
-import os
-from os.path import isdir
-import random
-import matplotlib as mpl
 from matplotlib import pyplot as plt
-from numpy import isclose
 
 try:
     from vip_hci.config import time_ini, time_fin, timing
@@ -1272,7 +1272,7 @@ class raw_dataset:
                 if fl == 0:
                     flat_X_values.append(header['AIRMASS'])
                 else:
-                    list_occ = [isclose(header['AIRMASS'], x, atol=0.1) for x in
+                    list_occ = [np.isclose(header['AIRMASS'], x, atol=0.1) for x in
                                 flat_X_values]  # sorts nearby values together
                     if True not in list_occ:
                         flat_X_values.append(header['AIRMASS'])
@@ -1290,7 +1290,7 @@ class raw_dataset:
                 if fl == 0:
                     flat_X_values.append(np.median(tmp))
                 else:
-                    list_occ = [isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
+                    list_occ = [np.isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
                     if True not in list_occ:
                         flat_X_values.append(np.median(tmp))
             flat_X_values = np.sort(flat_X_values)
