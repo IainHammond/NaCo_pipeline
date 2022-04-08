@@ -94,7 +94,7 @@ class input_dataset():
         self.outpath = outpath
         self.coro = coro
         old_list = os.listdir(self.inpath)
-        self.file_list = [file for file in old_list if file.endswith('.fits')]
+        self.file_list = [file for file in old_list if file.endswith('.fits') and not file.startswith('M.')]
         self.dit_sci = dataset_dict['dit_sci']
         self.ndit_sci = dataset_dict['ndit_sci']
         self.ndit_sky = dataset_dict['ndit_sky']
@@ -103,13 +103,13 @@ class input_dataset():
         self.dit_flat = dataset_dict['dit_flat']
         self.fast_reduction = dataset_dict['fast_reduction']
         self.dataset_dict = dataset_dict
-        print('##### Number of fits files:', len(self.file_list), '#####')
+        print('##### Number of FITS files:', len(self.file_list), '#####')
         if not isdir(self.outpath):
             os.makedirs(self.outpath)
 
     def bad_columns(self, sat_val=32768, verbose=True, debug=False):
         """
-        In NACO data there are systematic bad columns in the lower left quadrant
+        In NACO data there are systematic bad columns in the lower left quadrant.
         This method will correct those bad columns with the median of the neighbouring pixels.
         May require manual inspection of one frame to confirm the saturated value.
 
@@ -148,7 +148,7 @@ class input_dataset():
                     # replace bad columns in each frame of the cubes
                     tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
                                                        protect_mask=False, verbose=debug)
-                write_fits(self.outpath + fname, tmp, header_fname, output_verify='fix')
+                write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
 
             else:
                 print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
@@ -165,8 +165,7 @@ class input_dataset():
                 # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
                 tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
                                                 verbose=debug)
-                write_fits(self.outpath + fname, tmp,
-                           header_fname, output_verify='fix')
+                write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
             if verbose:
                 print('Fixed file {}'.format(fname), flush=True)
 
