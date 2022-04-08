@@ -146,10 +146,8 @@ class input_dataset():
                 # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
                 for j in range(nz):
                     # replace bad columns in each frame of the cubes
-                    tmp[j] = frame_fix_badpix_isolated(tmp[j],
-                                                       bpm_mask=bcm, sigma_clip=3,
-                                                       num_neig=5, size=5, protect_mask=False,
-                                                       radius=30, verbose=debug)
+                    tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
+                                                       protect_mask=False, verbose=debug)
                 write_fits(self.outpath + fname, tmp, header_fname, output_verify='fix')
 
             else:
@@ -165,9 +163,7 @@ class input_dataset():
                 # ini_y, fin_y = int(512-cy), int(512+cy)
                 # ini_x, fin_x = int(512-cx), int(512+cx)
                 # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                tmp = frame_fix_badpix_isolated(tmp,
-                                                bpm_mask=bcm, sigma_clip=3, num_neig=5,
-                                                size=5, protect_mask=False, radius=30,
+                tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
                                                 verbose=debug)
                 write_fits(self.outpath + fname, tmp,
                            header_fname, output_verify='fix')
