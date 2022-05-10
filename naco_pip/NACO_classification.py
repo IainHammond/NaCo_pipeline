@@ -50,7 +50,7 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, ve
         ----------
         [ycom, xcom] : location of AGPM or star        
         """
-    sci_cube = open_fits(self.inpath + file_list[0])  # opens first sci/sky cube
+    sci_cube = open_fits(self.inpath + file_list[0], verbose=debug)  # opens first sci/sky cube
     nz, ny, nx = sci_cube.shape  # gets size of it. science and sky cubes have same shape. assumes all cubes are the same ny and nx (they should be!)
 
     cy, cx = frame_center(sci_cube, verbose=verbose)  # find central pixel coordinates
@@ -301,10 +301,10 @@ class input_dataset():
         self.resel = (self.dataset_dict['wavelength'] * 180 * 3600) / (self.dataset_dict['size_telescope'] * np.pi *
                                                                        self.dataset_dict['pixel_scale'])
 
-        agpm_pos = find_AGPM_or_star(self, sci_list, verbose=debug)
+        agpm_pos = find_AGPM_or_star(self, sci_list, verbose=debug, debug=debug)
         if verbose:
-            print('The rough location of the star/AGPM is', 'y  = ', agpm_pos[0], 'x =', agpm_pos[1])
-            print('Measuring flux in SCI cubes...')
+            print('The rough location of the star/AGPM is', 'y=', agpm_pos[0], 'x=', agpm_pos[1], flush=True)
+            print('Measuring flux in SCI cubes...', flush=True)
 
         # create the aperture
         circ_aper = CircularAperture((agpm_pos[1], agpm_pos[0]), round(nres * self.resel))
