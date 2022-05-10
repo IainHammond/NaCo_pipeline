@@ -1658,8 +1658,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             tmp_tmp_tmp = tmp_tmp - tmp
             tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1688,8 +1687,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             bpm = tmp_tmp - tmp
             bpm = np.where(bpm != 0, 1, 0)
@@ -1716,8 +1714,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             bpm = tmp_tmp - tmp
             bpm = np.where(bpm != 0, 1, 0)
