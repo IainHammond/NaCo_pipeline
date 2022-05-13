@@ -208,7 +208,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             nfcp = len(rad_arr)  # number of radii/separations to inject companions
             # radial transmission of the AGPM, 2 columns (pixels from centre, off-axis transmission)
             if coronagraph:
-                transmission = np.array([0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
+                transmission = np.array([[0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
                                          2.0244570e+00, 2.5305712e+00, 3.0366855e+00, 3.5427995e+00,
                                          4.0489140e+00, 4.5550284e+00, 5.0611424e+00, 5.5672565e+00,
                                          6.0733705e+00, 6.5794849e+00, 7.0855989e+00, 7.5917134e+00,
@@ -220,7 +220,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                          3.4921883e+01, 3.7452454e+01, 4.0489140e+01, 4.3525822e+01,
                                          4.6562508e+01, 5.0105309e+01, 5.4154221e+01, 5.7697018e+01,
                                          6.2252052e+01, 6.6807076e+01, 7.1868225e+01],
-                                        [0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
+                                         [0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
                                          1.1413762e-01, 1.9890217e-01, 2.9460809e-01, 3.8605216e-01,
                                          4.6217495e-01, 5.1963091e-01, 5.6185508e-01, 5.9548348e-01,
                                          6.2670821e-01, 6.5912777e-01, 6.9335037e-01, 7.2783405e-01,
@@ -231,7 +231,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                          9.9640906e-01, 9.9917024e-01, 1.0009050e+00, 1.0021056e+00,
                                          1.0026742e+00, 1.0027454e+00, 1.0027291e+00, 1.0023015e+00,
                                          1.0016677e+00, 1.0009446e+00, 1.0000550e+00, 9.9953103e-01,
-                                         9.9917012e-01, 9.9915260e-01, 9.9922234e-01])
+                                         9.9917012e-01, 9.9915260e-01, 9.9922234e-01]])
         else:
             transmission = None
         mask_IWA_px = mask_IWA * self.fwhm
