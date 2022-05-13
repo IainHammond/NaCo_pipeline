@@ -94,8 +94,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True,
-                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, overwrite=True,
-                       verbose=True, debug=False):
+                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, coronagraph=True,
+                       overwrite=True, verbose=True, debug=False):
         """ 
         For post processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
         curves, SNR maps and fake planet injection for optimizing the number of principal components.
@@ -147,6 +147,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             self-subtraction, especially at close separations
         mask_IWA : int, default 1
             Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of FWHM.
+        coronagraph : bool, default is True
+            Set to True if the observation used an AGPM coronagraph
         overwrite : bool, default True
             Whether to overwrite pre-existing output files from previous reductions
         verbose : bool
@@ -204,33 +206,34 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             while rad_arr[-1] >= ADI_cube.shape[-1]:  # ensure largest injection radius is not bigger than the frame
                 rad_arr = rad_arr[:-1]
             nfcp = len(rad_arr)  # number of radii/separations to inject companions
-            # AGPM off-axis transmission, has to be a list of vectors for VIP contrast_curve(). It's also in a different
-            # order compared VIP firstguess() transmission (here it is attenuation, pixel distance)
-            transmission = ([0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
-                             1.1413762e-01, 1.9890217e-01, 2.9460809e-01, 3.8605216e-01,
-                             4.6217495e-01, 5.1963091e-01, 5.6185508e-01, 5.9548348e-01,
-                             6.2670821e-01, 6.5912777e-01, 6.9335037e-01, 7.2783405e-01,
-                             7.8866738e-01, 8.1227022e-01, 8.3128709e-01, 8.5912752e-01,
-                             8.6968899e-01, 8.8677746e-01, 8.9409947e-01, 9.0848678e-01,
-                             9.2426234e-01, 9.4704604e-01, 9.5787460e-01, 9.6538281e-01,
-                             9.7379774e-01, 9.8088801e-01, 9.8751044e-01, 9.9255627e-01,
-                             9.9640906e-01, 9.9917024e-01, 1.0009050e+00, 1.0021056e+00,
-                             1.0026742e+00, 1.0027454e+00, 1.0027291e+00, 1.0023015e+00,
-                             1.0016677e+00, 1.0009446e+00, 1.0000550e+00, 9.9953103e-01,
-                             9.9917012e-01, 9.9915260e-01, 9.9922234e-01],
-                            [0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
-                             2.0244570e+00, 2.5305712e+00, 3.0366855e+00, 3.5427995e+00,
-                             4.0489140e+00, 4.5550284e+00, 5.0611424e+00, 5.5672565e+00,
-                             6.0733705e+00, 6.5794849e+00, 7.0855989e+00, 7.5917134e+00,
-                             8.6039419e+00, 9.1100569e+00, 9.6161709e+00, 1.0628398e+01,
-                             1.1134513e+01, 1.2146742e+01, 1.2652856e+01, 1.3665085e+01,
-                             1.4677314e+01, 1.6195656e+01, 1.7207884e+01, 1.8220114e+01,
-                             1.9738455e+01, 2.1256796e+01, 2.2775141e+01, 2.4293484e+01,
-                             2.6317940e+01, 2.8342396e+01, 3.0366854e+01, 3.2897423e+01,
-                             3.4921883e+01, 3.7452454e+01, 4.0489140e+01, 4.3525822e+01,
-                             4.6562508e+01, 5.0105309e+01, 5.4154221e+01, 5.7697018e+01,
-                             6.2252052e+01, 6.6807076e+01, 7.1868225e+01])
-
+            # radial transmission of the AGPM, 2 columns (pixels from centre, off-axis transmission)
+            if coronagraph:
+                transmission = np.array([0, 3.5894626e-10, 5.0611424e-01, 1.0122285e+00, 1.5183427e+00,
+                                         2.0244570e+00, 2.5305712e+00, 3.0366855e+00, 3.5427995e+00,
+                                         4.0489140e+00, 4.5550284e+00, 5.0611424e+00, 5.5672565e+00,
+                                         6.0733705e+00, 6.5794849e+00, 7.0855989e+00, 7.5917134e+00,
+                                         8.6039419e+00, 9.1100569e+00, 9.6161709e+00, 1.0628398e+01,
+                                         1.1134513e+01, 1.2146742e+01, 1.2652856e+01, 1.3665085e+01,
+                                         1.4677314e+01, 1.6195656e+01, 1.7207884e+01, 1.8220114e+01,
+                                         1.9738455e+01, 2.1256796e+01, 2.2775141e+01, 2.4293484e+01,
+                                         2.6317940e+01, 2.8342396e+01, 3.0366854e+01, 3.2897423e+01,
+                                         3.4921883e+01, 3.7452454e+01, 4.0489140e+01, 4.3525822e+01,
+                                         4.6562508e+01, 5.0105309e+01, 5.4154221e+01, 5.7697018e+01,
+                                         6.2252052e+01, 6.6807076e+01, 7.1868225e+01],
+                                        [0, 6.7836474e-05, 3.3822558e-03, 1.7766271e-02, 5.2646037e-02,
+                                         1.1413762e-01, 1.9890217e-01, 2.9460809e-01, 3.8605216e-01,
+                                         4.6217495e-01, 5.1963091e-01, 5.6185508e-01, 5.9548348e-01,
+                                         6.2670821e-01, 6.5912777e-01, 6.9335037e-01, 7.2783405e-01,
+                                         7.8866738e-01, 8.1227022e-01, 8.3128709e-01, 8.5912752e-01,
+                                         8.6968899e-01, 8.8677746e-01, 8.9409947e-01, 9.0848678e-01,
+                                         9.2426234e-01, 9.4704604e-01, 9.5787460e-01, 9.6538281e-01,
+                                         9.7379774e-01, 9.8088801e-01, 9.8751044e-01, 9.9255627e-01,
+                                         9.9640906e-01, 9.9917024e-01, 1.0009050e+00, 1.0021056e+00,
+                                         1.0026742e+00, 1.0027454e+00, 1.0027291e+00, 1.0023015e+00,
+                                         1.0016677e+00, 1.0009446e+00, 1.0000550e+00, 9.9953103e-01,
+                                         9.9917012e-01, 9.9915260e-01, 9.9922234e-01])
+        else:
+            transmission = None
         mask_IWA_px = mask_IWA * self.fwhm
         if verbose:
             print("adopted mask size: {:.0f}".format(mask_IWA_px), flush=True)
@@ -267,7 +270,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm, delta_rot=delta_rot, full_output=False,
                                      verbose=verbose, nproc=self.nproc)
                 tmp_tmp = mask_circle(tmp_tmp, mask_IWA_px)  # we mask the IWA
-                write_fits(outpath_sub+'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
+                write_fits(outpath_sub + 'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
 
             ## SNR map
             if (not isfile(outpath_sub + 'final_ADI_simple_snrmap.fits') or overwrite) and do_snr_map:
@@ -281,7 +284,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 _ = contrast_curve(ADI_cube, derot_angles, psfn, self.fwhm, pxscale=self.pixel_scale, starphot=starphot,
                                    algo=median_sub, sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                    wedge=(0, 360), fc_snr=fc_snr, student=True, transmission=transmission, smooth=True,
-                                   plot=True, dpi=300, debug=debug, save_plot=outpath_sub+'contrast_simple_madi.pdf',
+                                   plot=True, dpi=300, debug=debug, save_plot=outpath_sub + 'contrast_simple_madi.pdf',
                                    verbose=verbose, nproc=self.nproc)
                 plt.close('all')
             if verbose:
@@ -316,7 +319,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 pn_contr_curve_full_first_opt['noise'][jj] = df_list[idx_min]['noise'][jj]
                 pn_contr_curve_full_first_opt['sigma corr'][jj] = df_list[idx_min]['sigma corr'][jj]
             Df.to_csv(pn_contr_curve_full_first_opt,
-                      path_or_buf=outpath_sub+'TMP_first_guess_contrast_curve_PCA-ADI-full.csv', sep=',', na_rep='',
+                      path_or_buf=outpath_sub + 'TMP_first_guess_contrast_curve_PCA-ADI-full.csv', sep=',', na_rep='',
                       float_format=None)
             arr_dist = np.array(pn_contr_curve_full_first_opt['distance'])
             arr_contrast = np.array(pn_contr_curve_full_first_opt['sensitivity_student'])
@@ -325,7 +328,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             for ff in range(nfcp):
                 idx = find_nearest(arr_dist, rad_arr[ff])  # closest radial px separation from each companion to inject
                 sensitivity_3sig_full_df[ff] = arr_contrast[idx]  # optimal contrast at that separation
-            write_fits(outpath_sub+'TMP_first_guess_3sig_sensitivity.fits', sensitivity_3sig_full_df, verbose=debug)
+            write_fits(outpath_sub + 'TMP_first_guess_3sig_sensitivity.fits', sensitivity_3sig_full_df, verbose=debug)
 
             # do this to inject the companions
             if verbose:
@@ -342,7 +345,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                           rad_dists=rad_arr[ff:ff + 1], n_branches=1,
                                                           theta=(theta0 + ff * th_step) % 360,
                                                           imlib='opencv', verbose=verbose)
-                write_fits(outpath_sub+'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), PCA_ADI_cube, verbose=debug)
+                write_fits(outpath_sub + 'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), PCA_ADI_cube, verbose=debug)
 
             # if do_adi:
             #     sensitivity_5sig_adi_df = np.zeros(nfcp)
@@ -458,7 +461,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
                 for ns in range(nspi):
                     theta0 = ns * th_step
-                    PCA_ADI_cube = open_fits(outpath_sub+'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
+                    PCA_ADI_cube = open_fits(outpath_sub + 'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
                     for pp, npc in enumerate(test_pcs_full):
                         tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
                                           mask_center_px=mask_IWA_px, ncomp=int(npc), scaling=None, fwhm=self.fwhm,
@@ -490,28 +493,31 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
                                       ncomp=int(npc), svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
                                       fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose)
-                write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str), tmp_tmp,
-                           verbose=debug)
-                write_fits(outpath_sub+'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
+                write_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
+                           tmp_tmp, verbose=debug)
+                write_fits(outpath_sub + 'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
                            verbose=debug)
                 ### Convolution
-                if not isfile(outpath_sub+'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(
+                if not isfile(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(
                         test_pcs_str, test_rad_str)) or overwrite:
-                    tmp = open_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
-                                    verbose=debug)
+                    tmp = open_fits(
+                        outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
+                        verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
-                    write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(test_pcs_str, test_rad_str)
-                               , tmp, verbose=debug)
+                    write_fits(
+                        outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(test_pcs_str, test_rad_str)
+                        , tmp, verbose=debug)
                 ### SNR map
-                if (not isfile(outpath_sub+'final_PCA-ADI_full_{}_at_{}as_snrmap.fits'.format(
+                if (not isfile(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_snrmap.fits'.format(
                         test_pcs_str, test_rad_str)) or overwrite) and do_snr_map:
-                    tmp = open_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str)
-                                    , verbose=debug)
+                    tmp = open_fits(
+                        outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str)
+                        , verbose=debug)
                     for pp in range(tmp.shape[0]):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
                     tmp = mask_circle(tmp, mask_IWA_px)
-                    write_fits(outpath_sub+'final_PCA-ADI_full_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
+                    write_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
                                '_snrmap.fits', tmp, verbose=debug)
 
             if verbose:
@@ -541,7 +547,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         array_out[nn], array_der[nn], tmp_tmp[nn] = pca_annular(PCA_ADI_cube, derot_angles,
                                                                                 cube_ref=ref_cube, scale_list=None,
                                                                                 radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                                                                asize=ann_sz*self.fwhm, n_segments=1,
+                                                                                asize=ann_sz * self.fwhm, n_segments=1,
                                                                                 delta_rot=delta_rot, ncomp=int(npc),
                                                                                 svd_mode=svd_mode, nproc=self.nproc,
                                                                                 min_frames_lib=max(npc, 10),
@@ -563,14 +569,14 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
-                        contr_curve_ann = contrast_curve(PCA_ADI_cube, derot_angles, psfn,  self.fwhm,
+                        contr_curve_ann = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
                                                          self.pixel_scale, starphot=starphot, algo=pca_annular,
                                                          sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                                          wedge=(0, 360), fc_snr=fc_snr, student=True,
                                                          transmission=transmission, plot=False,
                                                          verbose=verbose, ncomp=int(npc),
                                                          svd_mode=svd_mode, radius_int=mask_IWA_px,
-                                                         asize=ann_sz*self.fwhm, delta_rot=delta_rot,
+                                                         asize=ann_sz * self.fwhm, delta_rot=delta_rot,
                                                          cube_ref=ref_cube, scaling=None,
                                                          min_frames_lib=max(int(npc), 10),
                                                          max_frames_lib=200, nproc=self.nproc)
@@ -580,7 +586,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                             outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_snrmap_opt.fits') or overwrite) and do_snr_map_opt:
                         tmp_tmp_tmp_tmp[nn] = pca_annular(PCA_ADI_cube, -derot_angles, cube_ref=ref_cube,
                                                           scale_list=None, radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                                          asize=ann_sz*self.fwhm, n_segments=1, delta_rot=delta_rot,
+                                                          asize=ann_sz * self.fwhm, n_segments=1, delta_rot=delta_rot,
                                                           ncomp=int(npc), svd_mode=svd_mode,
                                                           nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                           max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
@@ -652,10 +658,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp_tmp = np.zeros([ntest_pcs, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
                 for ns in range(nspi):
                     theta0 = ns * th_step
-                    PCA_ADI_cube = open_fits(outpath_sub+'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
+                    PCA_ADI_cube = open_fits(outpath_sub + 'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), verbose=debug)
                     for pp, npc in enumerate(test_pcs_ann):
                         tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube, scale_list=None,
-                                                  radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz*self.fwhm,
+                                                  radius_int=mask_IWA_px, fwhm=self.fwhm, asize=ann_sz * self.fwhm,
                                                   n_segments=1, delta_rot=delta_rot, ncomp=int(npc),
                                                   svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                   max_frames_lib=200, tol=1e-1, scaling=None, imlib='opencv',
@@ -669,7 +675,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     write_fits(outpath_sub+'TMP_PCA-ADI_ann_'+test_pcs_str+'_fcp_spi{:.0f}.fits'.format(ns), tmp_tmp,
                                verbose=debug)
                 snr_fcp = np.median(snr_tmp_tmp, axis=0)
-                write_fits(outpath_sub+'final_PCA-ADI_ann_SNR_fcps_'+test_pcs_str+'.fits', snr_fcp, verbose=debug)
+                write_fits(outpath_sub + 'final_PCA-ADI_ann_SNR_fcps_' + test_pcs_str + '.fits', snr_fcp, verbose=debug)
 
                 # Find best npc for each radius
                 for ff in range(nfcp):
@@ -681,37 +687,38 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 tmp_tmp = np.zeros([nfcp, PCA_ADI_cube.shape[1], PCA_ADI_cube.shape[2]])
                 test_pcs_str_list = [str(int(x)) for x in id_npc_ann_df]
                 test_pcs_str = "npc_opt" + "-".join(test_pcs_str_list)
-                test_rad_str_list = ["{:.1f}".format(x) for x in rad_arr*self.pixel_scale]
+                test_rad_str_list = ["{:.1f}".format(x) for x in rad_arr * self.pixel_scale]
                 test_rad_str = "rad" + "-".join(test_rad_str_list)
                 for pp, npc in enumerate(id_npc_ann_df):
                     tmp_tmp[pp] = pca_annular(PCA_ADI_cube, derot_angles, radius_int=mask_IWA_px, fwhm=self.fwhm,
-                                              asize=ann_sz*self.fwhm, delta_rot=delta_rot, ncomp=int(npc),
+                                              asize=ann_sz * self.fwhm, delta_rot=delta_rot, ncomp=int(npc),
                                               svd_mode=svd_mode, max_frames_lib=200, cube_ref=ref_cube, scaling=None,
                                               min_frames_lib=max(npc, 10), collapse='median', full_output=False,
                                               verbose=verbose, nproc=self.nproc)
-                write_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)+'.fits',
+                write_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '.fits',
                            tmp_tmp, verbose=debug)
                 write_fits(outpath_sub+'final_PCA-ADI_ann_npc_id_at_{}as'.format(test_rad_str)+'.fits', id_npc_ann_df,
                            verbose=debug)
 
                 ### Convolution
-                if not isfile(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)
+                if not isfile(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)
                               + '_conv.fits') or overwrite:
-                    tmp = open_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)+'.fits',
-                                    verbose=debug)
+                    tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
+                                    '.fits', verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
-                    write_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)+'_conv.fits',
-                               tmp, verbose=debug)
+                    write_fits(
+                        outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '_conv.fits',
+                        tmp, verbose=debug)
                 ### SNR map
-                if (not isfile(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as_snrmap.fits'.format(
+                if (not isfile(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as_snrmap.fits'.format(
                         test_pcs_str, test_rad_str)) or overwrite) and do_snr_map:
-                    tmp = open_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str)
+                    tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str)
                                     , verbose=debug)
                     for pp in range(tmp.shape[0]):
                         tmp[pp] = snrmap(tmp[pp], self.fwhm, plot=False, nproc=self.nproc, verbose=debug)
                     tmp = mask_circle(tmp, mask_IWA_px)
-                    write_fits(outpath_sub+'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
+                    write_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
                                '_snrmap.fits', tmp, verbose=debug)
 
             if verbose:
@@ -732,14 +739,17 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                             plot=False, cube_ref=ref_cube, scaling=None,
                                                             verbose=verbose, ncomp=int(id_npc_full_df[rr]),
                                                             svd_mode=svd_mode, nproc=self.nproc)
-                    Df.to_csv(pn_contr_curve_full_rr, path_or_buf=outpath_sub+'contrast_curve_PCA-ADI-full_optimal_at_{:.1f}as.csv'.format(rad*self.pixel_scale),
+                    Df.to_csv(pn_contr_curve_full_rr,
+                              path_or_buf=outpath_sub + 'contrast_curve_PCA-ADI-full_optimal_at_{:.1f}as.csv'.format(
+                                  rad * self.pixel_scale),
                               sep=',', na_rep='', float_format=None)
                     df_list.append(pn_contr_curve_full_rr)
                 pn_contr_curve_full_opt = pn_contr_curve_full_rr.copy()
                 for jj in range(pn_contr_curve_full_opt.shape[0]):  # loop distances
                     sensitivities = []
                     for rr, rad in enumerate(rad_arr):
-                        sensitivities.append(df_list[rr]['sensitivity_student'][jj])  # sensitivity at sampled separation
+                        sensitivities.append(
+                            df_list[rr]['sensitivity_student'][jj])  # sensitivity at sampled separation
                     print("Sensitivities at {} px: ".format(df_list[rr]['distance'][jj]), sensitivities, flush=True)
                     idx_min = np.argmin(sensitivities)  # best sensitivity out of all sampled separations
                     pn_contr_curve_full_opt['sensitivity_student'][jj] = df_list[idx_min]['sensitivity_student'][jj]
@@ -748,7 +758,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     pn_contr_curve_full_opt['noise'][jj] = df_list[idx_min]['noise'][jj]
                     pn_contr_curve_full_opt['sigma corr'][jj] = df_list[idx_min]['sigma corr'][jj]
                 Df.to_csv(pn_contr_curve_full_opt,
-                          path_or_buf=outpath_sub+'final_optimal_contrast_curve_PCA-ADI-full.csv', sep=',', na_rep='',
+                          path_or_buf=outpath_sub + 'final_optimal_contrast_curve_PCA-ADI-full.csv', sep=',', na_rep='',
                           float_format=None)
                 arr_dist = np.array(pn_contr_curve_full_opt['distance'])
                 arr_contrast = np.array(pn_contr_curve_full_opt['sensitivity_student'])
@@ -760,18 +770,20 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 PCA_ADI_cube = ADI_cube.copy()  # ensure a fresh cube
                 df_list = []
                 for rr, rad in enumerate(rad_arr):
-                    pn_contr_curve_ann_rr = contrast_curve(PCA_ADI_cube, derot_angles, psfn,  self.fwhm,
+                    pn_contr_curve_ann_rr = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
                                                            self.pixel_scale, starphot=starphot, algo=pca_annular,
                                                            sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                                            wedge=(0, 360), fc_snr=fc_snr, student=True,
                                                            transmission=transmission, plot=False,
                                                            verbose=verbose, ncomp=int(id_npc_ann_df[rr]),
                                                            svd_mode=svd_mode, radius_int=mask_IWA_px,
-                                                           asize=ann_sz*self.fwhm, delta_rot=delta_rot,
+                                                           asize=ann_sz * self.fwhm, delta_rot=delta_rot,
                                                            cube_ref=ref_cube, scaling=None,
                                                            min_frames_lib=max(id_npc_ann_df[rr], 10),
                                                            max_frames_lib=200, nproc=self.nproc)
-                    Df.to_csv(pn_contr_curve_ann_rr, path_or_buf=outpath_sub+'contrast_curve_PCA-ADI-ann_optimal_at_{:.1f}as.csv'.format(rad*self.pixel_scale),
+                    Df.to_csv(pn_contr_curve_ann_rr,
+                              path_or_buf=outpath_sub + 'contrast_curve_PCA-ADI-ann_optimal_at_{:.1f}as.csv'.format(
+                                  rad * self.pixel_scale),
                               sep=',', na_rep='', float_format=None)
                     df_list.append(pn_contr_curve_ann_rr)
                 pn_contr_curve_ann_opt = pn_contr_curve_ann_rr.copy()
@@ -787,7 +799,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     pn_contr_curve_ann_opt['throughput'][jj] = df_list[idx_min]['throughput'][jj]
                     pn_contr_curve_ann_opt['noise'][jj] = df_list[idx_min]['noise'][jj]
                     pn_contr_curve_ann_opt['sigma corr'][jj] = df_list[idx_min]['sigma corr'][jj]
-                Df.to_csv(pn_contr_curve_ann_opt, path_or_buf=outpath_sub+'final_optimal_contrast_curve_PCA-ADI-ann.csv',
+                Df.to_csv(pn_contr_curve_ann_opt,
+                          path_or_buf=outpath_sub + 'final_optimal_contrast_curve_PCA-ADI-ann.csv',
                           sep=',', na_rep='', float_format=None)
                 arr_dist = np.array(pn_contr_curve_ann_opt['distance'])
                 arr_contrast = np.array(pn_contr_curve_ann_opt['sensitivity_student'])
@@ -815,7 +828,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                              label='PCA-ADI annular (Student, optimal)')
             plt.legend()
             try:
-                plt.savefig(outpath_sub+'contr_curves.pdf', format='pdf')
+                plt.savefig(outpath_sub + 'contr_curves.pdf', format='pdf')
             except:
                 pass
 
@@ -840,16 +853,16 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                          label='PCA-ADI annular (Student, optimal)')
             plt.legend()
             try:
-                plt.savefig(outpath_sub+'contr_curves_app_magnitude.pdf', format='pdf')
+                plt.savefig(outpath_sub + 'contr_curves_app_magnitude.pdf', format='pdf')
             except:
                 pass
             plt.close('all')
 
         elif fake_planet and first_guess_skip:  # no fake planets injected, just plot the best contrast at each radii
             if do_pca_full:
-                contr_full_df = read_csv(outpath_sub+'final_skip-fcp_contrast_curve_PCA-ADI-full.csv')
+                contr_full_df = read_csv(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv')
             if do_pca_ann:
-                contr_ann_df = read_csv(outpath_sub+'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv')
+                contr_ann_df = read_csv(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv')
 
             plt.close('all')
             plt.figure(dpi=300)
@@ -858,10 +871,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             plt.gca().invert_yaxis()
             plt.xlabel('Separation ["]')
             if do_pca_full:
-                plt.plot(contr_full_df['distance'] * self.pixel_scale, -2.5 * np.log10(contr_full_df['sensitivity_student']),
+                plt.plot(contr_full_df['distance'] * self.pixel_scale,
+                         -2.5 * np.log10(contr_full_df['sensitivity_student']),
                          'b', linewidth=2, label='PCA-ADI full frame (Student)')
             if do_pca_ann:
-                plt.plot(contr_ann_df['distance'] * self.pixel_scale, -2.5 * np.log10(contr_ann_df['sensitivity_student']),
+                plt.plot(contr_ann_df['distance'] * self.pixel_scale,
+                         -2.5 * np.log10(contr_ann_df['sensitivity_student']),
                          'r', linewidth=2, label='PCA-ADI annular (Student)')
             plt.legend()
             try:
