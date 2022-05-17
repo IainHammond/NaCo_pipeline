@@ -8,17 +8,15 @@ Applies necessary calibration to the cubes and corrects NACO biases
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
 
+import os
 import pdb
+import random
+from os.path import isdir
+
+import matplotlib as mpl
 import numpy as np
 import pyprind
-import os
-from os.path import isdir
-import random
-import matplotlib as mpl
-
-mpl.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 from matplotlib import pyplot as plt
-from numpy import isclose
 
 try:
     from vip_hci.config import time_ini, time_fin, timing
@@ -30,21 +28,22 @@ except:
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated, cube_fix_badpix_clump, \
-    cube_recenter_2dfit
+    cube_recenter_2dfit, cube_detect_badfr_correlation
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
 from vip_hci.metrics import detection
+from vip_hci.stats import cube_distance
 from hciplot import plot_frames
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
-from astropy.stats import sigma_clipped_stats
 from scipy.optimize import minimize
+mpl.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 
 
 def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, plot=None):
     """
-    In coro NACO data there is a lyot stop causing a shadow on the detector
-    this method will return the radius and central position of the circular shadow
+    In coronographic NACO data there is a Lyot stop causing an outer shadow on the detector.
+    This function will return the radius and central position of the circular shadow.
     """
 
     cube = open_fits(self.inpath + file_list[0], verbose=debug)
@@ -85,37 +84,26 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     return cy, cx, r
 
 
-def find_filtered_max(path, verbose=True, debug=False):
+def find_filtered_max(frame):
     """
     This method will find the location of the max after low pass filtering.
-    It gives a rough approximation of the stars location, reliable in unsaturated frames where the star dominates.
-    Need to supply the path to the cube.
+    It gives a rough approximation of the star's location, reliable in unsaturated frames where the star dominates.
 
+    Parameters
+    ----------
+    frame : numpy array
+        the frame in which to find the location of the star
+
+    Returns
+    ----------
+    [ycom, xcom] : list
+        location of AGPM or star
     """
-    cube = open_fits(path, verbose=debug)
-    # nz, ny, nx = cube.shape
-    # cy,cx = frame_center(cube, verbose = verbose) #find central pixel coordinates
-
-    # then the position will be that plus the relative shift in y and x
-    # rel_shift_x = rel_AGPM_pos_xy[0] # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
-    # rel_shift_y = rel_AGPM_pos_xy[1] # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-
-    # y_tmp = cy + rel_shift_y
-    # x_tmp = cx + rel_shift_x
-
-    median_frame = np.median(cube, axis=0)
-    # define a square of 100 x 100 with the center being the approximate AGPM/star position
-    # median_frame,cornery,cornerx = get_square(median_frame, size = size, y = y_tmp, x = x_tmp, position = True, verbose = True)
-    # apply low pass filter
-    # filter for the brightest source
-    median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
-    median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
+    # apply low pass filter to help mind the brightest source
+    frame = frame_filter_lowpass(frame, median_size=7, mode='median')
+    frame = frame_filter_lowpass(frame, mode='gauss', fwhm_size=5)
     # obtain location of the bright source
-    ycom, xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-    if verbose:
-        print('The location of the star is', 'ycom =', ycom, 'xcom =', xcom)
-    if debug:
-        pdb.set_trace
+    ycom, xcom = np.unravel_index(np.argmax(frame), frame.shape)
     return [ycom, xcom]
 
 
@@ -181,7 +169,8 @@ def find_nearest(array, value, output='index', constraint=None, n=1):
     """
     Function to find the indices, and optionally the values, of an array's n closest elements to a certain value.
     Possible outputs: 'index','value','both'
-    Possible constraints: 'ceil', 'floor', None ("ceil" will return the closest element with a value greater than 'value', "floor" the opposite)
+    Possible constraints: 'ceil', 'floor', None ("ceil" will return the closest element with a value greater than
+     'value', "floor" the opposite)
     """
     if type(array) is np.ndarray:
         pass
@@ -1225,111 +1214,11 @@ class raw_dataset:
                                'Unsat Dark Subtracted'), title='Unsat Dark Subtraction',
                         dpi=300, save=self.outpath + 'UNSAT_dark_subtract.pdf')
 
-    def fix_sporadic_columns(self, quadrant='topleft', xpixels_from_center=7, interval=8, verbose=True, debug=False):
-        """
-        For correcting sporadic bad columns in science and sky cubes which can appear in NACO data, similar to the
-        permanent bad columns in the bottom left quadrant. Position of columns should be confirmed with manual visual
-        inspection.
-
-        Parameters:
-        ***********
-        quadrant: str
-            'topright' or 'bottomright'. Most common is topright
-        xpixels_from_center: int
-            how many pixels in x coordinate from the center of the frame found with frame_center the first bad column starts (center is 256 for a 511 frame). Usually 7.
-        interval: int
-            number of pixels in the x coordinate until the next bad column. Usually 8.
-        """
-
-        sci_list = []
-        with open(self.inpath + "sci_list.txt", "r") as f:
-            tmp = f.readlines()
-            for line in tmp:
-                sci_list.append(line.split('\n')[0])
-
-        sky_list = []
-        with open(self.inpath + "sky_list.txt", "r") as f:
-            tmp = f.readlines()
-            for line in tmp:
-                sky_list.append(line.split('\n')[0])
-
-        ncubes = len(sci_list)  # gets the number of cubes
-        com_sz = open_fits(self.inpath + sci_list[0], verbose=False).shape[
-            2]  # gets the common dimensions for all frames
-        tmp_tmp = np.zeros([ncubes, com_sz,
-                            com_sz])  # make 3D array with length equal to number of cubes, and x and y equal to the common size
-
-        # create new image using the median of all frames in each cube
-        for sc, fits_name in enumerate(sci_list):  # list of science cubes to fix provided by user
-            tmp = open_fits(self.inpath + fits_name, verbose=debug)  # open the cube of interest
-            tmp_tmp[sc] = np.median(tmp, axis=0)  # fills the zeros array with the median of all frames in the cube
-
-        mask = np.zeros([com_sz, com_sz])  # makes empty array that is the same x and y dimensions as the frames
-        centery, centerx = frame_center(tmp_tmp)
-        median_pxl_val = []
-        stddev = []
-
-        if quadrant == 'topright':  # works, makes top right mask based off input
-            for a in range(int(centerx + xpixels_from_center), tmp_tmp.shape[2] - 1,
-                           interval):  # create mask where the bad columns are for NACO top right quadrant
-                mask[int((tmp_tmp.shape[1] - 1) / 2):tmp_tmp.shape[2] - 1, a] = 1
-
-        if quadrant == 'bottomright':  # works, makes bottom right mask based off input
-            for a in range(int(centerx + xpixels_from_center), tmp_tmp.shape[2] - 1,
-                           interval):  # create mask where the bad columns are for NACO bottom right quadrant
-                mask[0:int((tmp_tmp.shape[1] - 1) / 2), a] = 1
-
-        # works but the np.where is dodgy coding
-        # find standard deviation and median of the pixels in the bad quadrant that aren't in the bad column, excluding a pixel if it's 2.5 sigma difference
-
-        for counter, image in enumerate(tmp_tmp):  # runs through all median combined images
-
-            # crops the data and mask to the quadrant we are checking. confirmed working
-            data_crop = image[int((tmp_tmp.shape[1] - 1) / 2):tmp_tmp.shape[2] - 1,
-                        int(centerx + xpixels_from_center):tmp_tmp.shape[2] - 1]
-            mask_crop = mask[int((tmp_tmp.shape[1] - 1) / 2):tmp_tmp.shape[2] - 1,
-                        int(centerx + xpixels_from_center):tmp_tmp.shape[2] - 1]
-
-            # good pixels are the 0 values in the mask
-            good_pixels = np.where(mask_crop == 0)
-
-            # create a data array that is just the good values
-            data = data_crop[good_pixels[0], good_pixels[1]]
-
-            mean, median, stdev = sigma_clipped_stats(data,
-                                                      sigma=2.5)  # saves the value of the median for the good pixel values in the image
-            median_pxl_val.append(median)  # adds that value to an array of median pixel values
-            stddev.append(stdev)  # takes standard dev of values and adds it to array
-
-        print('Mean standard deviation of effected columns for all frames:', np.mean(stddev))
-        print('Mean pixel value of effected columns for all frames:', np.mean(median_pxl_val))
-
-        values = []
-        median_col_val = []
-
-        for idx, fits_name in enumerate(sci_list):  # loops over all images
-            for pixel in range(int(centerx) + int(xpixels_from_center), com_sz,
-                               interval):  # loop every 8th x pixel starting from first affected column
-
-                values.append(tmp_tmp[idx][int(centerx):com_sz, pixel])  # grabs pixel values of affected pixel column
-
-            mean, median, stdev = sigma_clipped_stats(values, sigma=2.5)  # get stats of that column
-            median_col_val.append(median)
-            # empties the list for the next loop
-            values.clear()
-
-            if median_col_val[idx] < median_pxl_val[idx] - (1 * stddev[
-                idx]):  # if the median column values are 1 stddevs smaller, then correct them (good frames are consistent enough for 1 stddev to be safe)
-                print('*********Fixing bad column in frame {}*********'.format(fits_name))
-                cube_to_fix = open_fits(self.inpath + fits_name, verbose=False)
-                correct_cube = cube_fix_badpix_isolated(cube_to_fix, bpm_mask=mask, num_neig=13, protect_mask=False,
-                                                        radius=8, verbose=debug)
-                write_fits(self.inpath + fits_name, correct_cube, verbose=debug)
-                print('{} has been corrected and saved'.format(fits_name))
-
     def flat_field_correction(self, verbose=True, debug=False, plot=None, remove=False):
         """
-        Scaling of the cubes according to the FLATS, in order to minimise any bias in the pixels
+        Scaling of the cubes according to the FLATS, in order to minimise any bias in the pixels.
+        Can handle the case when there is no airmass in the FITS header.
+
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, False. Cleans file for unused fits
         """
@@ -1383,7 +1272,7 @@ class raw_dataset:
                 if fl == 0:
                     flat_X_values.append(header['AIRMASS'])
                 else:
-                    list_occ = [isclose(header['AIRMASS'], x, atol=0.1) for x in
+                    list_occ = [np.isclose(header['AIRMASS'], x, atol=0.1) for x in
                                 flat_X_values]  # sorts nearby values together
                     if True not in list_occ:
                         flat_X_values.append(header['AIRMASS'])
@@ -1401,7 +1290,7 @@ class raw_dataset:
                 if fl == 0:
                     flat_X_values.append(np.median(tmp))
                 else:
-                    list_occ = [isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
+                    list_occ = [np.isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
                     if True not in list_occ:
                         flat_X_values.append(np.median(tmp))
             flat_X_values = np.sort(flat_X_values)
@@ -1750,8 +1639,8 @@ class raw_dataset:
                               np.percentile(tmp_tmp[0], 99.9)), title='Second Bad Pixel')
         if plot == 'save':
             plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp), vmin=(0, 0, 0, 0), vmax=(
-            np.percentile(tmp[0], 99.9), np.percentile(tmp[0], 99.9), np.percentile(tmp_tmp[0], 99.9),
-            np.percentile(tmp_tmp[0], 99.9)), save=self.outpath + 'Second_badpx_crop.pdf')
+                np.percentile(tmp[0], 99.9), np.percentile(tmp[0], 99.9), np.percentile(tmp_tmp[0], 99.9),
+                np.percentile(tmp_tmp[0], 99.9)), save=self.outpath + 'Second_badpx_crop.pdf')
 
         # Crop the bpix map in a same way
         bpix_map = frame_crop(bpix_map, self.final_sz, cenxy=self.agpm_pos, force=True)
@@ -1769,8 +1658,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             tmp_tmp_tmp = tmp_tmp - tmp
             tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1799,8 +1687,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             bpm = tmp_tmp - tmp
             bpm = np.where(bpm != 0, 1, 0)
@@ -1827,8 +1714,7 @@ class raw_dataset:
             # timing(t0)
             # second, residual hot pixels
             tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                               size=5, protect_mask=True, frame_by_frame=True,
-                                               radius=10, verbose=debug)
+                                               size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
             # create a bpm for the 2nd correction
             bpm = tmp_tmp - tmp
             bpm = np.where(bpm != 0, 1, 0)
@@ -2194,17 +2080,35 @@ class raw_dataset:
                 os.system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
                 os.system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
 
-    def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot=None, remove=False):
+    def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot='save', remove=False):
         """
-        Obtain a PSF model of the star based off of the unsat cubes.
+        Obtain a PSF model of the star based off of the unsaturated cubes.
+
+        For each unsaturated cube, the star is imaged without the use of a coronagraphic mask. Generally, the star is
+        also 'dithered' from one quadrant of the detector to another, avoiding the bottom left quadrant. This function
+        first median combines all unsaturated frames into a single frame, and subtracts it from the median of each cube.
+        As the star is dithered, it is not subtracted through this process and is easy to identify in the sky subtracted
+        image. We then apply aperture photometry to ensure the flux of the star for each unique position is within
+        expectations wrt. each other. Finally, we apply a 1 arcsecond threshold on the separation of the star between
+        each dithered cube. This process aims to prevent background stars or artefacts being detected as the star. Once
+        this process is complete, we crop to a small area around the star, create a master cube, recenter all frames
+        using a 2D Gaussian, and stack to create a final point spread function. If observing conditions are bad, some
+        frames will be trimmed using a Pearson correlation to the master frame. A neutral density filter toggle is
+        available for unsaturated cubes taken with a neutral density filter applied.
+
+        Should be improved to handle the case of no dithering.
 
         nd_filter : bool, default = None
             when a ND filter is used in L' the transmission is ~0.0178. Used for scaling
-        plot options : 'save', 'show', or default None.
-            Show or save relevant plots for debugging
+        verbose and debug : bool
+            prints more info, if debug it prints when files are opened and gives some additional info.
+            verbose is on by default.
+        plot options : 'save', 'show', or None.
+            Show or save relevant plots
         remove options : bool, False by default
             Cleans previous calibration files
         """
+        start_time = time_ini(verbose=False)
         unsat_list = []
         with open(self.inpath + "unsat_list.txt", "r") as f:
             tmp = f.readlines()
@@ -2213,68 +2117,82 @@ class raw_dataset:
         if not os.path.isfile(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]):
             raise NameError('Missing 3_rmfr_unsat*.fits. Run: first_frame_removal()')
 
-        print('unsat list:', unsat_list)
-
+        # get the new number of frames in each cube after trimming
         self.new_ndit_unsat = int(open_fits(self.outpath + 'new_ndit_sci_sky_unsat', verbose=debug)[2])
+        self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
+                self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
 
-        print('new_ndit_unsat:', self.new_ndit_unsat)
+        if verbose:
+            print('Unsaturated cubes list:', unsat_list)
+            print('Number of frames in each cube:', self.new_ndit_unsat)
+            print('Resolution element: {} px'.format(self.resel_ori), flush=True)
+
+        # open first unsaturated cube, get size, make empty array for storing median of each cube
+        # this does assume the unsaturated cubes have three dimensions, which they always should
+        tmp = open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[0], verbose=debug)
+        tmp_med = np.zeros([len(unsat_list), tmp.shape[-1], tmp.shape[-1]])
+        for ii, fits_name in enumerate(unsat_list):
+            tmp_med[ii] = np.nanmedian(open_fits(self.outpath + '3_rmfr_unsat_' + fits_name, verbose=debug), axis=0)
+        tmp_med = np.nanmedian(tmp_med, axis=0)  # median frame of median cube
+        write_fits(self.outpath + 'median_unsat.fits', tmp_med, verbose=debug)
 
         unsat_pos = []
-        # obtain star positions in the unsat frames
+        # obtain star positions in the sky subtracted (median unsat minus unsat) unsaturated frames
+        # could be made faster by using the cube already made in lines above
         for fits_name in unsat_list:
-            tmp = find_filtered_max(self.outpath + '3_rmfr_unsat_' + fits_name, verbose=verbose, debug=debug)
+            unsat = np.nanmedian(open_fits(self.outpath + '3_rmfr_unsat_' + fits_name, verbose=debug), axis=0)
+            unsat_sky = unsat - tmp_med  # sky subtraction for unsaturated frames
+            tmp = find_filtered_max(unsat_sky)  # get star location
             unsat_pos.append(tmp)
 
-        print('unsat_pos:', unsat_pos)
-
-        self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
-                    self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
         if verbose:
-            print('resolution element = ', self.resel_ori)
+            print('Position [y,x] of the star in unsaturated cubes:', unsat_pos, flush=True)
 
         flux_list = []
         # Measure the flux at those positions
         for un, fits_name in enumerate(unsat_list):
-            circ_aper = CircularAperture((unsat_pos[un][1], unsat_pos[un][0]), round(3 * self.resel_ori))
+            if un == 0:
+                print('Aperture radius is {} px'.format(round(3 * self.resel_ori)), flush=True)
+            circ_aper = CircularAperture(positions=(unsat_pos[un][1], unsat_pos[un][0]), r=round(3 * self.resel_ori))
             tmp = open_fits(self.outpath + '3_rmfr_unsat_' + fits_name, verbose=debug)
             tmp = np.median(tmp, axis=0)
             circ_aper_phot = aperture_photometry(tmp, circ_aper, method='exact')
             circ_flux = np.array(circ_aper_phot['aperture_sum'])
             flux_list.append(circ_flux[0])
 
-        print('flux_list:', flux_list)
-
         med_flux = np.median(flux_list)
         std_flux = np.std(flux_list)
 
-        print('med_flux:', med_flux, 'std_flux:', std_flux)
+        if verbose:
+            print('Fluxes in unsaturated frames: {} adu'.format(flux_list))
+            print('Median flux and standard deviations:', med_flux, std_flux, flush=True)
 
         good_unsat_list = []
         good_unsat_pos = []
         # define good unsat list where the flux of the stars is within 3 standard devs
         for i, flux in enumerate(flux_list):
-            if flux < med_flux + 3 * std_flux and flux > med_flux - 3 * std_flux:
+            if med_flux + 3 * std_flux > flux > med_flux - 3 * std_flux:
                 good_unsat_list.append(unsat_list[i])
                 good_unsat_pos.append(unsat_pos[i])
 
-        print('good_unsat_list:', good_unsat_list)
-        print('good_unsat_pos:', good_unsat_pos)
+        if verbose:
+            print('Good unsaturated cubes:', good_unsat_list)
+            print('Good unsaturated positions:', good_unsat_pos)
 
         unsat_mjd_list = []
-        # get times of unsat cubes (modified jullian calander)
+        # get times of unsat cubes (modified Julian calendar)
         for fname in unsat_list:
             tmp, header = open_fits(self.inpath + fname, header=True, verbose=debug)
             unsat_mjd_list.append(header['MJD-OBS'])
 
-        print('unsat_mjd_list:', unsat_mjd_list)
-
         thr_d = (1.0 / self.dataset_dict[
             'pixel_scale'])  # threshold: difference in star pos must be greater than 1 arc sec
-        print('thr_d:', thr_d)
-        index_dither = [0]
-        print('index_dither:', index_dither)
-        unique_pos = [unsat_pos[0]]  # we already know the first location is unique
-        print('unique_pos:', unique_pos)
+        if verbose:
+            print('Unsaturated cube observation time (MJD):', unsat_mjd_list)
+            print('Distance threshold: {} px'.format(thr_d), flush=True)
+
+        index_dither = [0]  # first position to start measuring offset/dithering distance
+        unique_pos = [unsat_pos[0]]  # we know the first position is unique, so its first entry of unique positions
         counter = 1
         for un, pos in enumerate(unsat_pos[1:]):  # looks at all positions after the first one
             new_pos = True
@@ -2288,65 +2206,127 @@ class raw_dataset:
                 index_dither.append(counter)
                 counter += 1
 
-        print('unique_pos:', unique_pos)
-        print('index_dither:', index_dither)
-
         all_idx = [i for i in range(len(unsat_list))]
-        print('all_idx:', all_idx)
+
+        if verbose:
+            print('Unique positions:', unique_pos)
+            print('Index of all cubes:', all_idx)
+            print('Index of dithered cubes:', index_dither)
+            print('Starting sky subtraction using cubes on different parts of the detector', flush=True)
+
         for un, fits_name in enumerate(unsat_list):
             if fits_name in good_unsat_list:  # just consider the good ones
                 tmp = open_fits(self.outpath + '3_rmfr_unsat_' + fits_name, verbose=debug)
-                good_idx = [j for j in all_idx if
-                            index_dither[j] != index_dither[un]]  # index of cubes on a different part of the detector
-                print('good_idx:', good_idx)
+                # index of cubes on a different part of the detector
+                good_idx = [j for j in all_idx if index_dither[j] != index_dither[un]]
                 best_idx = find_nearest([unsat_mjd_list[i] for i in good_idx], unsat_mjd_list[un], output='index')
                 # best_idx = find_nearest(unsat_mjd_list[good_idx[0]:good_idx[-1]],unsat_mjd_list[un])
-                print('best_idx:', best_idx)
-                tmp_sky = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[good_idx[best_idx]]), axis=0)
+                if verbose:
+                    print('Index of cubes on different part of detector:', good_idx)
+                    print('Index of the above selected for sky subtraction:', best_idx)
+                tmp_sky = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[good_idx[best_idx]],
+                                              verbose=debug), axis=0)
                 write_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[un], tmp - tmp_sky, verbose=debug)
         if remove:
             for un, fits_name in enumerate(unsat_list):
                 os.system("rm " + self.outpath + '3_rmfr_unsat_' + fits_name)
 
         if plot:
-            old_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[0]), axis=0)
-            old_tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[-1]), axis=0)
-            tmp = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[0]), axis=0)
-            tmp_tmp = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]), axis=0)
-        if plot == 'show':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp))
-        if plot == 'save':
-            plot_frames((old_tmp, tmp, old_tmp_tmp, tmp_tmp), save=self.outpath + 'UNSAT_skysubtract')
+            # plot cubes before and after sky subtraction, with original on left and sky subtracted on right
+            unsat_and_sky_cube = []
+            for i, fname in enumerate(good_unsat_list):
+                unsat_and_sky_cube.append(np.median(open_fits(self.outpath + '3_rmfr_unsat_' + fname, verbose=debug),
+                                                    axis=0))
+                unsat_and_sky_cube.append(np.median(open_fits(self.outpath + '4_sky_subtr_unsat_' + fname,
+                                                              verbose=debug), axis=0))
+            unsat_and_sky_cube = tuple(unsat_and_sky_cube)  # plot_frames only takes tuples of frames
 
-        crop_sz_tmp = int(6 * self.resel_ori)
-        crop_sz = int(5 * self.resel_ori)
+            # create labels using the names of each cube, have them alternate so they align with each frame in the plot
+            labels = tuple(x for y in zip(['3_rmfr_unsat_' + s for s in good_unsat_list],
+                                          ['4_sky_subtr_unsat_' + s for s in good_unsat_list]) for x in y)
+
+            plot_frames(unsat_and_sky_cube, rows=len(good_unsat_list), title='Unsaturated cube sky subtraction',
+                        label=labels, label_size=8, cmap='inferno', dpi=300,
+                        save=self.outpath + 'Unsat_skysubtracted.pdf')
+            plt.close('all')
+        crop_sz_tmp = int(8 * self.resel_ori)
+        crop_sz = int(7 * self.resel_ori)
+        if not crop_sz_tmp % 2:  # if it's not even, crop
+            crop_sz_tmp += 1
+        if not crop_sz % 2:
+            crop_sz += 1
         psf_tmp = np.zeros([len(good_unsat_list) * self.new_ndit_unsat, crop_sz, crop_sz])
         for un, fits_name in enumerate(good_unsat_list):
             tmp = open_fits(self.outpath + '4_sky_subtr_unsat_' + fits_name, verbose=debug)
             xy = (good_unsat_pos[un][1], good_unsat_pos[un][0])
-            tmp_tmp, tx, ty = cube_crop_frames(tmp, crop_sz_tmp, xy=xy, verbose=debug, full_output=True)
+            tmp_tmp, _, _ = cube_crop_frames(tmp, crop_sz_tmp, xy=xy, verbose=debug, full_output=True)
             cy, cx = frame_center(tmp_tmp[0], verbose=debug)
             write_fits(self.outpath + '4_tmp_crop_' + fits_name, tmp_tmp, verbose=debug)
-            tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=5, nproc=1,
-                                          model='gauss',
-                                          full_output=False, verbose=debug, save_shifts=False,
+            tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7, nproc=1,
+                                          model='gauss', full_output=False, verbose=debug, save_shifts=False,
                                           offset=None, negative=False, debug=False, threshold=False, plot=False)
             tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=verbose)
             write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
             for dd in range(self.new_ndit_unsat):
-                psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[
-                    dd]  # combining all frames in unsat to make master cube
+                # combining all frames in unsat to make master cube
+                psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
+        write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
+        psf_med = np.median(psf_tmp, axis=0)
+
+        # calculates the correlation of each frame to the median and saves as a list
+        distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
+        if plot:  # save a plot of distances compared to the median for each frame if set to 'save'
+            plt.savefig(self.outpath + 'distances_unsat.pdf', format='pdf')
+            plt.close('all')
+
+        # threshold is the median of the distances minus half a stddev
+        correlation_thres = np.median(distances) - 0.5 * np.std(distances)
+        # detect and remove bad frames in a subframe two pixels smaller than original frame
+        good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
+                                                       dist='pearson', threshold=correlation_thres, plot=plot,
+                                                       verbose=verbose)
+
+        if plot:
+            plt.savefig(self.outpath + 'frame_correlation_unsat.pdf', format='pdf')
+            plt.close('all')
+        # select only the good frames and median combine
+        psf_tmp = psf_tmp[good_frames]
+        write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed.fits', psf_tmp, verbose=debug)
         psf_med = np.median(psf_tmp, axis=0)
         write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
+
+        ### second round
+        distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
+        if plot:
+            plt.savefig(self.outpath + 'distances_unsat2.pdf', format='pdf')
+            plt.close('all')
+
+        # threshold is the median of the distances minus one stddev
+        correlation_thres = np.median(distances) - np.std(distances)
+        good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
+                                                       dist='pearson', threshold=correlation_thres, plot=plot,
+                                                       verbose=verbose)
+
+        if plot:
+            plt.savefig(self.outpath + 'frame_correlation_unsat2.pdf', format='pdf')
+            plt.close('all')
+        psf_tmp = psf_tmp[good_frames]
+        write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed2.fits', psf_tmp, verbose=debug)
+        psf_med = np.median(psf_tmp, axis=0)
+        write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
+
         if verbose:
             print('The median PSF of the star has been obtained')
         if plot == 'show':
             plot_frames(psf_med)
+            plt.close('all')
 
-        data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, cropsize=15, fwhmx=self.resel_ori,
-                                    fwhmy=self.resel_ori,
-                                    theta=0, threshold=False, sigfactor=6, full_output=True,
-                                    debug=False)
+        data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
+                                    threshold=False, sigfactor=6, full_output=True, debug=debug)
+        if plot:  # saves the last model
+            plt.savefig(self.outpath + 'PSF_fitting.pdf')
+            plt.close('all')
+
         data_frame = data_frame.astype('float64')
         self.fwhm_y = data_frame['fwhm_y'][0]
         self.fwhm_x = data_frame['fwhm_x'][0]
@@ -2355,7 +2335,7 @@ class raw_dataset:
 
         if verbose:
             print("fwhm_y, fwhm x, theta and fwhm (mean of both):")
-            print(self.fwhm_y, self.fwhm_x, self.fwhm_theta, self.fwhm)
+            print(self.fwhm_y, self.fwhm_x, self.fwhm_theta, self.fwhm, flush=True)
         write_fits(self.outpath + 'fwhm.fits', np.array([self.fwhm, self.fwhm_y, self.fwhm_x, self.fwhm_theta]),
                    verbose=debug)
 
@@ -2373,8 +2353,11 @@ class raw_dataset:
                    verbose=debug)
 
         if verbose:
-            print("Flux of the psf (in SCI frames): ", flux_psf)
-            print("FWHM:", self.fwhm)
+            print("Flux of the PSF (scaled for science frames): ", flux_psf)
+            print("FWHM = {} px".format(round(self.fwhm, 3)))
+        timing(start_time)
+        if self.fwhm < 3 or self.fwhm > 6:
+            raise ValueError('FWHM is not within expected values!')
 
     def subtract_sky(self, imlib='opencv', npc=1, mode='PCA', verbose=True, debug=False, plot=None, remove=False):
         """
@@ -2501,7 +2484,7 @@ class raw_dataset:
                                     kernel_size=hpf_sz, fwhm_size=self.fwhm)
         bad_dust = []
         self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
-                    self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
+                self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
         crop_sz = int(5 * self.resel_ori)
         if crop_sz % 2 == 0:
             crop_sz = crop_sz - 1
