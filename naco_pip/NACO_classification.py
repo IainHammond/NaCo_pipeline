@@ -225,7 +225,8 @@ class input_dataset():
                         # unsat_list_airmass.append(header['AIRMASS'])
 
                     elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
-                        flat_list.append(fname)
+                        if header['HIERARCH ESO DET DIT'] == self.dit_flat:
+                            flat_list.append(fname)
                         # flat_list_mjd.append(header['MJD-OBS'])
                         # flat_list_airmass.append(header['AIRMASS'])
 
@@ -237,6 +238,21 @@ class input_dataset():
                         if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
                             unsat_dark_list.append(fname)
 
+            # if no appropriate flat-sky found, use flat-lamp
+            if len(flat_list) == 0:
+                for fname in file_list:
+                    if fname.endswith('.fits') and fname.startswith('NACO'): 
+                        cube, header = open_fits(self.outpath + fname, 
+                                                 header=True, verbose=debug)
+                        cond1 = 'FLAT,LAMP' in header['HIERARCH ESO DPR TYPE']
+                        cond2 = header['HIERARCH ESO DET DIT'] == self.dit_flat
+                        if cond1 & cond2:
+                           flat_list.append(fname)
+                           
+            if len(flat_list) == 0:
+                msg = "No appropriate flat fields found. Double-check requested FLAT DIT?"
+                raise ValueError(msg)
+                            
             with open(self.outpath + "sci_list_mjd.txt", "w") as f:
                 for time in sci_list_mjd:
                     f.write(str(time) + '\n')
