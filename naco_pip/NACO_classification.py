@@ -107,7 +107,8 @@ class input_dataset():
         if not isdir(self.outpath):
             os.makedirs(self.outpath)
 
-    def bad_columns(self, sat_val=32768, verbose=True, debug=False):
+    def bad_columns(self, correct=True, sat_val=32768, verbose=True, 
+                    debug=False):
         """
         In NACO data there are systematic bad columns in the lower left quadrant.
         This method will correct those bad columns with the median of the neighbouring pixels.
@@ -124,50 +125,52 @@ class input_dataset():
 
         for fname in self.file_list:
             tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
-            # ADD code here that checks for bad column and updates the mask
-            if verbose:
-                print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
-                                                                 header_fname['HIERARCH ESO DPR TYPE']), flush=True)
-            # crop the bad pixel map to the same dimensions of the frames
-
-            if len(tmp.shape) == 3:
-                nz, ny, nx = tmp.shape
-                bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as cube
-                tmp_median = np.median(tmp, axis=0)  # median frame of cube
-                # loop through the median cube pixels and if any are 32768, add the location to the mask
-                bcm[np.where(tmp_median == sat_val)] = 1
-                # for i in range(0,nx): # all x pixels
-                #     for j in range(0,ny): # all y pixels
-                #         if tmp_median[j,i] == sat_val: # if saturated
-                #             bcm[j,i] = 1 # mark as bad in mask
-                # cy, cx = ny/2 , nx/2
-                # ini_y, fin_y = int(512-cy), int(512+cy)
-                # ini_x, fin_x = int(512-cx), int(512+cx)
-                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                for j in range(nz):
-                    # replace bad columns in each frame of the cubes
-                    tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
-                                                       protect_mask=False, verbose=debug)
-                write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
-
+            if correct:
+                # ADD code here that checks for bad column and updates the mask
+                if verbose:
+                    print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
+                                                                     header_fname['HIERARCH ESO DPR TYPE']), flush=True)
+                # crop the bad pixel map to the same dimensions of the frames
+                if len(tmp.shape) == 3:
+                    nz, ny, nx = tmp.shape
+                    bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as cube
+                    tmp_median = np.median(tmp, axis=0)  # median frame of cube
+                    # loop through the median cube pixels and if any are 32768, add the location to the mask
+                    bcm[np.where(tmp_median == sat_val)] = 1
+                    # for i in range(0,nx): # all x pixels
+                    #     for j in range(0,ny): # all y pixels
+                    #         if tmp_median[j,i] == sat_val: # if saturated
+                    #             bcm[j,i] = 1 # mark as bad in mask
+                    # cy, cx = ny/2 , nx/2
+                    # ini_y, fin_y = int(512-cy), int(512+cy)
+                    # ini_x, fin_x = int(512-cx), int(512+cx)
+                    # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                    for j in range(nz):
+                        # replace bad columns in each frame of the cubes
+                        tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
+                                                           protect_mask=False, verbose=debug)
+                    write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
+    
+                else:
+                    print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
+                    ny, nx = tmp.shape
+                    bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
+                    bcm[np.where(tmp == sat_val)] = 1
+                    # for i in range(0,nx):
+                    #     for j in range(0,ny):
+                    #         if tmp[j,i] == sat_val:
+                    #             bcm[j,i] = 1
+                    # cy, cx = ny/2 , nx/2
+                    # ini_y, fin_y = int(512-cy), int(512+cy)
+                    # ini_x, fin_x = int(512-cx), int(512+cx)
+                    # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                    tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
+                                                    verbose=debug)
+                    write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
+                if verbose:
+                    print('Fixed file {}'.format(fname), flush=True)
             else:
-                print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
-                ny, nx = tmp.shape
-                bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
-                bcm[np.where(tmp == sat_val)] = 1
-                # for i in range(0,nx):
-                #     for j in range(0,ny):
-                #         if tmp[j,i] == sat_val:
-                #             bcm[j,i] = 1
-                # cy, cx = ny/2 , nx/2
-                # ini_y, fin_y = int(512-cy), int(512+cy)
-                # ini_x, fin_x = int(512-cx), int(512+cx)
-                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
-                                                verbose=debug)
                 write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
-            if verbose:
-                print('Fixed file {}'.format(fname), flush=True)
 
     def mk_dico(self, coro=True, verbose=True, debug=False):
         if coro:
