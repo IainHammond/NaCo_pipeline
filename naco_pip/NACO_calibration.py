@@ -11,7 +11,7 @@ __all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
 import os
 import pdb
 import random
-from os.path import isdir
+from os.path import isdir, isfile
 
 import matplotlib as mpl
 import numpy as np
@@ -358,7 +358,7 @@ class raw_dataset:
             for line in tmp:
                 sci_dark_list.append(line.split('\n')[0])
 
-        if not os.path.isfile(self.inpath + sci_list[-1]):
+        if not isfile(self.inpath + sci_list[-1]):
             raise NameError('Missing .fits. Double check the contents of the input path')
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz', verbose=debug)[0])
@@ -560,8 +560,12 @@ class raw_dataset:
                 print('Dark has been median subtracted from SCI cubes')
 
             if plot:
-                tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
-                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
+                if tmp.ndim == 3:
+                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
+                    tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
+                else:
+                    tmp_tmp_med = tmp.copy()
+                    tmp_tmp_med_after = tmp_tmp.copy()
             if plot == 'show':
                 plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
                                                                                    np.percentile(tmp_tmp_med_after,
@@ -592,14 +596,19 @@ class raw_dataset:
                     for i in range(tmp_tmp.shape[0]):
                         tmp_tmp[i] = tmp[i] - tmp_tmp_tmp_median
                 else:
+                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
                 print('Dark has been median subtracted from SKY cubes')
-
+                
             if plot:
-                tmp_tmp_med = np.median(tmp, axis=0)  # sky before subtraction
-                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sky after dark subtract
+                if tmp.ndim == 3:
+                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
+                    tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
+                else:
+                    tmp_tmp_med = tmp.copy()
+                    tmp_tmp_med_after = tmp_tmp.copy()
             if plot == 'show':
                 plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
                                                                                    np.percentile(tmp_tmp_med_after,
@@ -635,8 +644,11 @@ class raw_dataset:
                 print('Dark has been median subtracted from FLAT frames')
 
             if plot:
-                tmp_tmp_med = np.median(tmp, axis=0)  # flat cube before subtraction
-                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # flat cube after dark subtract
+                if tmp.ndim == 3:
+                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
+                else:
+                    tmp_tmp_med = tmp.copy()
+                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
             if plot == 'show':
                 plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med, 99.9),
                                                                                     np.percentile(tmp_tmp_med_after,
@@ -1187,49 +1199,50 @@ class raw_dataset:
                             save=self.outpath + 'SKY_PCA_dark_subtract.pdf')
 
         # median dark subtract of UNSAT cubes
-        tmp_tmp_tmp = open_fits(self.outpath + 'unsat_dark_cube.fits', verbose=debug)
-        tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
-        # no need to crop the unsat frame at the same size as the sci images if they are smaller
-        bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Correcting dark current in unsaturated cubes')
-        for un, fits_name in enumerate(unsat_list):
-            tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
-            if tmp.shape[2] > self.com_sz:
-                nx_unsat_crop = self.com_sz
-                tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
-                tmp_tmp = tmp - tmp_tmp_tmp
-            elif tmp.shape[2] % 2 == 0:
-                nx_unsat_crop = tmp.shape[2] - 1
-                tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
-                tmp_tmp = tmp - tmp_tmp_tmp
-            else:
-                nx_unsat_crop = tmp.shape[2]
-                tmp_tmp = tmp - tmp_tmp_tmp
-            write_fits(self.outpath + '1_crop_unsat_' + fits_name, tmp_tmp, verbose=debug)
-            bar.update()
-
-        if verbose:
-            print('Dark has been subtracted from UNSAT cubes')
-
-        if plot:
-            tmp = np.median(tmp, axis=0)  # unsat before subtraction
-            tmp_tmp = np.median(tmp_tmp, axis=0)  # unsat after dark subtract
-
-        # plots unsat dark, raw unsat, dark subtracted unsat
-        if plot == 'show':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
-                                                           np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                        vmin=(np.percentile(tmp_tmp_tmp, 0.1),
-                              np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                        label=('Raw Unsat Dark', 'Raw Unsat',
-                               'Unsat Dark Subtracted'), title='Unsat Dark Subtraction')
-        if plot == 'save':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
-                                                           np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                        vmin=(np.percentile(tmp_tmp_tmp, 0.1),
-                              np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                        label=('Raw Unsat Dark', 'Raw Unsat',
-                               'Unsat Dark Subtracted'), title='Unsat Dark Subtraction',
-                        dpi=300, save=self.outpath + 'UNSAT_dark_subtract.pdf')
+        if len(unsat_list)>0:
+            tmp_tmp_tmp = open_fits(self.outpath + 'unsat_dark_cube.fits', verbose=debug)
+            tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
+            # no need to crop the unsat frame at the same size as the sci images if they are smaller
+            bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Correcting dark current in unsaturated cubes')
+            for un, fits_name in enumerate(unsat_list):
+                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                if tmp.shape[2] > self.com_sz:
+                    nx_unsat_crop = self.com_sz
+                    tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
+                    tmp_tmp = tmp - tmp_tmp_tmp
+                elif tmp.shape[2] % 2 == 0:
+                    nx_unsat_crop = tmp.shape[2] - 1
+                    tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
+                    tmp_tmp = tmp - tmp_tmp_tmp
+                else:
+                    nx_unsat_crop = tmp.shape[2]
+                    tmp_tmp = tmp - tmp_tmp_tmp
+                write_fits(self.outpath + '1_crop_unsat_' + fits_name, tmp_tmp, verbose=debug)
+                bar.update()
+    
+            if verbose:
+                print('Dark has been subtracted from UNSAT cubes')
+    
+            if plot:
+                tmp = np.median(tmp, axis=0)  # unsat before subtraction
+                tmp_tmp = np.median(tmp_tmp, axis=0)  # unsat after dark subtract
+    
+            # plots unsat dark, raw unsat, dark subtracted unsat
+            if plot == 'show':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
+                                                               np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            vmin=(np.percentile(tmp_tmp_tmp, 0.1),
+                                  np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                            label=('Raw Unsat Dark', 'Raw Unsat',
+                                   'Unsat Dark Subtracted'), title='Unsat Dark Subtraction')
+            if plot == 'save':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
+                                                               np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            vmin=(np.percentile(tmp_tmp_tmp, 0.1),
+                                  np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                            label=('Raw Unsat Dark', 'Raw Unsat',
+                                   'Unsat Dark Subtracted'), title='Unsat Dark Subtraction',
+                            dpi=300, save=self.outpath + 'UNSAT_dark_subtract.pdf')
 
     def flat_field_correction(self, verbose=True, debug=False, plot=None, remove=False):
         """
@@ -1263,7 +1276,7 @@ class raw_dataset:
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
 
-        if not os.path.isfile(self.outpath + '1_crop_' + sci_list[-1]):
+        if not isfile(self.outpath + '1_crop_' + sci_list[-1]):
             raise NameError('Missing 1_crop_*.fits. Run: dark_subtract()')
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz', verbose=debug)[0])
@@ -1299,7 +1312,7 @@ class raw_dataset:
                 print('The airmass values have been sorted into a list')
 
         # if no airmass in header, we can group by using the median pixel value across the flat
-        else:
+        elif len(flat_list) == 15:
             # use same structure as above, replacing airmass with median background level
             for fl, flat_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + flat_list[fl], verbose=debug)
@@ -1315,66 +1328,89 @@ class raw_dataset:
                 print('Median FLAT values: {}'.format(flat_X_values))
                 print('The median FLAT values have been sorted into a list')
 
-        # There should be 15 twilight flats in total with NACO; 5 at each airmass. BUG SOMETIMES!
-        flat_tmp_cube_1 = np.zeros([5, self.com_sz, self.com_sz])
-        flat_tmp_cube_2 = np.zeros([5, self.com_sz, self.com_sz])
-        flat_tmp_cube_3 = np.zeros([5, self.com_sz, self.com_sz])
-        counter_1 = 0
-        counter_2 = 0
-        counter_3 = 0
-
-        flat_cube_3X = np.zeros([3, self.com_sz, self.com_sz])
-
-        # TAKE MEDIAN OF each group of 5 frames with SAME AIRMASS
-        flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', header=False, verbose=debug)
-        for fl, self.flat_name in enumerate(flat_list):
-            if find_nearest(flat_X_values, flat_X[fl]) == 0:
-                flat_tmp_cube_1[counter_1] = flat_cube[fl]
-                counter_1 += 1
-            elif find_nearest(flat_X_values, flat_X[fl]) == 1:
-                flat_tmp_cube_2[counter_2] = flat_cube[fl]
-                counter_2 += 1
-            elif find_nearest(flat_X_values, flat_X[fl]) == 2:
-                flat_tmp_cube_3[counter_3] = flat_cube[fl]
-                counter_3 += 1
-
-        flat_cube_3X[0] = np.median(flat_tmp_cube_1, axis=0)
-        flat_cube_3X[1] = np.median(flat_tmp_cube_2, axis=0)
-        flat_cube_3X[2] = np.median(flat_tmp_cube_3, axis=0)
-        if verbose:
-            print('The median FLAT cubes with same airmass have been defined')
+            # There should be 15 twilight flats in total with NACO; 5 at each airmass. BUG SOMETIMES!
+            flat_tmp_cube_1 = np.zeros([5, self.com_sz, self.com_sz])
+            flat_tmp_cube_2 = np.zeros([5, self.com_sz, self.com_sz])
+            flat_tmp_cube_3 = np.zeros([5, self.com_sz, self.com_sz])
+            counter_1 = 0
+            counter_2 = 0
+            counter_3 = 0
+    
+            flat_cube_nX = np.zeros([3, self.com_sz, self.com_sz])
+    
+            # TAKE MEDIAN OF each group of 5 frames with SAME AIRMASS
+            flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', header=False, verbose=debug)
+            for fl, self.flat_name in enumerate(flat_list):
+                if find_nearest(flat_X_values, flat_X[fl]) == 0:
+                    flat_tmp_cube_1[counter_1] = flat_cube[fl]
+                    counter_1 += 1
+                elif find_nearest(flat_X_values, flat_X[fl]) == 1:
+                    flat_tmp_cube_2[counter_2] = flat_cube[fl]
+                    counter_2 += 1
+                elif find_nearest(flat_X_values, flat_X[fl]) == 2:
+                    flat_tmp_cube_3[counter_3] = flat_cube[fl]
+                    counter_3 += 1
+    
+            flat_cube_nX[0] = np.median(flat_tmp_cube_1, axis=0)
+            flat_cube_nX[1] = np.median(flat_tmp_cube_2, axis=0)
+            flat_cube_nX[2] = np.median(flat_tmp_cube_3, axis=0)
+            if verbose:
+                print('The median FLAT cubes with same airmass have been defined')
+                
+        else:
+            msg = '{} (!=15) flat-fields found => assuming old way of calculating flats'
+            print(msg.format(len(flat_list)))
+            all_flats = []
+            flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', header=False, verbose=debug)
+            for fl, flat_name in enumerate(flat_list):
+                tmp = open_fits(self.inpath + flat_list[fl], verbose=debug)
+                flat_X.append(np.median(tmp))
+                all_flats.append(flat_cube[fl])
+            sort_idx = np.argsort(flat_X)
+            all_flats = np.array(all_flats)
+            flat_cube_nX = all_flats[sort_idx]
 
         # create master flat field
-        med_fl = np.zeros(3)
-        gains_all = np.zeros([3, self.com_sz, self.com_sz])
-        for ii in range(3):
-            med_fl[ii] = np.median(flat_cube_3X[ii])
-            gains_all[ii] = flat_cube_3X[ii] / med_fl[ii]
-        master_flat_frame = np.median(gains_all, axis=0)
-        tmp = open_fits(self.outpath + '1_crop_unsat_' + unsat_list[-1], header=False, verbose=debug)
-        nx_unsat_crop = tmp.shape[2]
-        if nx_unsat_crop < master_flat_frame.shape[1]:
-            master_flat_unsat = frame_crop(master_flat_frame, nx_unsat_crop)
-        else:
-            master_flat_unsat = master_flat_frame
-
+        n_fl = flat_cube_nX.shape[0]
+        med_fl = np.zeros(n_fl)
+        gains_all = np.zeros([n_fl, self.com_sz, self.com_sz])
+        for ii in range(n_fl):
+            med_fl[ii] = np.nanmedian(flat_cube_nX[ii])
+            gains_all[ii] = flat_cube_nX[ii] / med_fl[ii]
+        master_flat_frame = np.nanmedian(gains_all, axis=0)
         write_fits(self.outpath + 'master_flat_field.fits', master_flat_frame, verbose=debug)
-        write_fits(self.outpath + 'master_flat_field_unsat.fits', master_flat_unsat, verbose=debug)
+        ## create unsat master flat field
+        if len(unsat_list)>0:
+            tmp = open_fits(self.outpath + '1_crop_unsat_' + unsat_list[-1], header=False, verbose=debug)
+            nx_unsat_crop = tmp.shape[2]
+            if nx_unsat_crop < master_flat_frame.shape[1]:
+                master_flat_unsat = frame_crop(master_flat_frame, nx_unsat_crop)
+            else:
+                master_flat_unsat = master_flat_frame
+            write_fits(self.outpath + 'master_flat_field_unsat.fits', master_flat_unsat, verbose=debug)
         if verbose:
             print('Master flat frames has been saved')
         if plot == 'show':
-            plot_frames((master_flat_frame, master_flat_unsat), vmax=(np.percentile(master_flat_frame, 99.9),
-                                                                      np.percentile(master_flat_unsat, 99.9)),
-                        vmin=(np.percentile(master_flat_frame, 0.1), np.percentile(master_flat_unsat, 0.1)),
-                        dpi=300, label=('Master flat frame', 'Master flat unsat'))
+            if len(unsat_list)>0:
+                plot_frames((master_flat_frame, master_flat_unsat), vmax=(np.percentile(master_flat_frame, 99.9),
+                                                                          np.percentile(master_flat_unsat, 99.9)),
+                            vmin=(np.percentile(master_flat_frame, 0.1), np.percentile(master_flat_unsat, 0.1)),
+                            dpi=300, label=('Master flat frame', 'Master flat unsat'))
+            else:
+                plot_frames(master_flat_frame, vmax=np.percentile(master_flat_frame, 99.9),
+                            vmin=np.percentile(master_flat_frame, 0.1),
+                            dpi=300, label='Master flat frame')
 
         # scaling of SCI cubes with respect to the master flat
         bar = pyprind.ProgBar(len(sci_list), stream=1, title='Scaling SCI cubes with respect to the master flat')
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath + '1_crop_' + fits_name, verbose=debug)
-            tmp_tmp = np.zeros_like(tmp)
-            for jj in range(tmp.shape[0]):
-                tmp_tmp[jj] = tmp[jj] / master_flat_frame
+            if tmp.ndim==3:
+                tmp_tmp = np.zeros_like(tmp)
+                for jj in range(tmp.shape[0]):
+                    tmp_tmp[jj] = tmp[jj] / master_flat_frame
+            else:
+                tmp_tmp = tmp / master_flat_frame
             write_fits(self.outpath + '2_ff_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
@@ -1382,13 +1418,14 @@ class raw_dataset:
         if verbose:
             print('Done scaling SCI frames with respect to FLAT')
         if plot:
-            tmp = np.median(tmp, axis=0)
-            tmp_tmp = np.median(tmp_tmp, axis=0)
+            if tmp.ndim==3:
+                tmp = np.median(tmp, axis=0)
+                tmp_tmp = np.median(tmp_tmp, axis=0)
         if plot == 'show':
             plot_frames((master_flat_frame, tmp, tmp_tmp),
                         vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
                         vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                        label=('Master flat frame', 'Origianl Science', 'Flat field corrected'), dpi=300,
+                        label=('Master flat frame', 'Original Science', 'Flat field corrected'), dpi=300,
                         title='Science Flat Field Correction')
         if plot == 'save':
             plot_frames((master_flat_frame, tmp, tmp_tmp),
@@ -1397,13 +1434,16 @@ class raw_dataset:
                         label=('Master flat frame', 'Original Science', 'Flat field corrected'), dpi=300,
                         title='Science Flat Field Correction', save=self.outpath + 'SCI_flat_correction.pdf')
 
-        # scaling of SKY cubes with respects to the master flat
+        # scaling of SKY cubes with respect to the master flat
         bar = pyprind.ProgBar(len(sky_list), stream=1, title='Scaling SKY cubes with respect to the master flat')
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '1_crop_' + fits_name, verbose=debug)
-            tmp_tmp = np.zeros_like(tmp)
-            for jj in range(tmp.shape[0]):
-                tmp_tmp[jj] = tmp[jj] / master_flat_frame
+            if tmp.ndim==3:
+                tmp_tmp = np.zeros_like(tmp)
+                for jj in range(tmp.shape[0]):
+                    tmp_tmp[jj] = tmp[jj] / master_flat_frame
+            else:
+                tmp_tmp = tmp / master_flat_frame
             write_fits(self.outpath + '2_ff_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
@@ -1411,8 +1451,9 @@ class raw_dataset:
         if verbose:
             print('Done scaling SKY frames with respect to FLAT')
         if plot:
-            tmp = np.median(tmp, axis=0)
-            tmp_tmp = np.median(tmp_tmp, axis=0)
+            if tmp.ndim==3:
+                tmp = np.median(tmp, axis=0)
+                tmp_tmp = np.median(tmp_tmp, axis=0)
         if plot == 'show':
             plot_frames((master_flat_frame, tmp, tmp_tmp),
                         vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
@@ -1426,34 +1467,35 @@ class raw_dataset:
                         label=('Master flat frame', 'Original Sky', 'Flat field corrected'), dpi=300,
                         title='Sky Flat Field Correction', save=self.outpath + 'SKY_flat_correction.pdf')
 
-        # scaling of UNSAT cubes with respects to the master flat unsat
-        bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Scaling UNSAT cubes with respect to the master flat')
-        for un, fits_name in enumerate(unsat_list):
-            tmp = open_fits(self.outpath + '1_crop_unsat_' + fits_name, verbose=debug)
-            tmp_tmp = np.zeros_like(tmp)
-            for jj in range(tmp.shape[0]):
-                tmp_tmp[jj] = tmp[jj] / master_flat_unsat
-            write_fits(self.outpath + '2_ff_unsat_' + fits_name, tmp_tmp, verbose=debug)
-            bar.update()
-            if remove:
-                os.system("rm " + self.outpath + '1_crop_unsat_' + fits_name)
-        if verbose:
-            print('Done scaling UNSAT frames with respect to FLAT')
-        if plot:
-            tmp = np.median(tmp, axis=0)
-            tmp_tmp = np.median(tmp_tmp, axis=0)
-        if plot == 'show':
-            plot_frames((master_flat_unsat, tmp, tmp_tmp),
-                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                        label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
-                        title='Unsat Flat Field Correction')
-        if plot == 'save':
-            plot_frames((master_flat_unsat, tmp, tmp_tmp),
-                        vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                        vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                        label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
-                        title='Unsat Flat Field Correction', save=self.outpath + 'UNSAT_flat_correction.pdf')
+        # scaling of UNSAT cubes with respect to the master flat unsat
+        if len(unsat_list)>0:
+            bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Scaling UNSAT cubes with respect to the master flat')
+            for un, fits_name in enumerate(unsat_list):
+                tmp = open_fits(self.outpath + '1_crop_unsat_' + fits_name, verbose=debug)
+                tmp_tmp = np.zeros_like(tmp)
+                for jj in range(tmp.shape[0]):
+                    tmp_tmp[jj] = tmp[jj] / master_flat_unsat
+                write_fits(self.outpath + '2_ff_unsat_' + fits_name, tmp_tmp, verbose=debug)
+                bar.update()
+                if remove:
+                    os.system("rm " + self.outpath + '1_crop_unsat_' + fits_name)
+            if verbose:
+                print('Done scaling UNSAT frames with respect to FLAT')
+            if plot:
+                tmp = np.median(tmp, axis=0)
+                tmp_tmp = np.median(tmp_tmp, axis=0)
+            if plot == 'show':
+                plot_frames((master_flat_unsat, tmp, tmp_tmp),
+                            vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                            vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
+                            title='Unsat Flat Field Correction')
+            if plot == 'save':
+                plot_frames((master_flat_unsat, tmp, tmp_tmp),
+                            vmin=(0, np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
+                            vmax=(2, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            label=('Master flat unsat', 'Original Unsat', 'Flat field corrected'), dpi=300,
+                            title='Unsat Flat Field Correction', save=self.outpath + 'UNSAT_flat_correction.pdf')
 
     def correct_nan(self, verbose=True, debug=False, plot=None, remove=False):
         """
@@ -1479,7 +1521,7 @@ class raw_dataset:
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
 
-        if not os.path.isfile(self.outpath + '2_ff_' + sci_list[-1]):
+        if not isfile(self.outpath + '2_ff_' + sci_list[-1]):
             raise NameError('Missing 2_ff_*.fits. Run: flat_field_correction()')
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz')[0])
@@ -1583,7 +1625,7 @@ class raw_dataset:
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
 
-        if not os.path.isfile(self.outpath + '2_nan_corr_' + sci_list[-1]):
+        if not isfile(self.outpath + '2_nan_corr_' + sci_list[-1]):
             raise NameError('Missing 2_nan_corr_*.fits. Run: correct_nan_pixels()')
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz', verbose=debug)[0])
@@ -1803,7 +1845,8 @@ class raw_dataset:
             plot_frames((tmp, tmp - tmpSKY, tmp_tmp, tmp_tmp - tmpSKY, tmp2, tmp2 - tmpSKY,
                          tmp_tmp2, tmp_tmp2 - tmpSKY), save=self.outpath + 'Badpx_comparison')
 
-    def first_frames_removal(self, verbose=True, debug=False, plot='save', remove=False):
+    def first_frames_removal(self, nrm='auto', verbose=True, debug=False, 
+                             plot='save', remove=False):
         """
         Corrects for the inconsistent DIT times within NACO cubes
         The first few frames are removed and the rest rescaled such that the flux is constant.
@@ -1830,7 +1873,7 @@ class raw_dataset:
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
 
-        if not os.path.isfile(self.outpath + '2_bpix_corr2_' + sci_list[-1]):
+        if not isfile(self.outpath + '2_bpix_corr2_' + sci_list[-1]):
             raise NameError('Missing 2_bpix_corr2_*.fits. Run: correct_bad_pixels()')
 
         self.final_sz = int(open_fits(self.outpath + 'final_sz', verbose=debug)[0])
@@ -1876,7 +1919,7 @@ class raw_dataset:
             print("Nominal ndit: {}, min ndit when skimming through cubes: {}".format(self.dataset_dict['ndit_sci'],
                                                                                       min_ndit_sci))
 
-        # update the final size and subsequesntly the mask
+        # update the final size and subsequently the mask
         mask_inner_rad = int(3.0 / self.dataset_dict['pixel_scale'])
         mask_width = int((self.final_sz / 2.) - mask_inner_rad - 2)
 
@@ -1947,19 +1990,22 @@ class raw_dataset:
             print("The new number of frames in each SKY cube is: ", self.new_ndit_sky)
             print("The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat)
 
-        angles = open_fits(self.inpath + "derot_angles_uncropped.fits", verbose=debug)
-        if not self.fast_reduction:
-            angles = angles[:,
-                     nfr_rm:]  # crops each cube of rotation angles file, by keeping all cubes but removing the number of frames at the start
-        write_fits(self.outpath + 'derot_angles_cropped.fits', angles, verbose=debug)
+        if isfile(self.inpath + "derot_angles_uncropped.fits"):
+            angles = open_fits(self.inpath + "derot_angles_uncropped.fits", verbose=debug)
+            if not self.fast_reduction:
+                angles = angles[:,
+                         nfr_rm:]  # crops each cube of rotation angles file, by keeping all cubes but removing the number of frames at the start
+            write_fits(self.outpath + 'derot_angles_cropped.fits', angles, verbose=debug)
 
         # Actual cropping of the cubes to remove the first frames, and the last one (median) AND RESCALING IN FLUX
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            tmp_tmp = np.zeros([int(self.real_ndit_sci[sc]), tmp.shape[1], tmp.shape[2]])
-            for dd in range(nfr_rm, nfr_rm + int(self.real_ndit_sci[sc])):
-                tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes[sc]) / tmp_fluxes[sc, dd]
-
+            if tmp.ndim == 3:
+                tmp_tmp = np.zeros([int(self.real_ndit_sci[sc]), tmp.shape[1], tmp.shape[2]])
+                for dd in range(nfr_rm, nfr_rm + int(self.real_ndit_sci[sc])):
+                    tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes[sc]) / tmp_fluxes[sc, dd]
+            else:
+                tmp_tmp = tmp.copy()
             write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
 
             if remove:
@@ -1970,132 +2016,134 @@ class raw_dataset:
             print('The first {} frames were removed and the flux rescaled for SCI cubes'.format(nfr_rm))
 
         # NOW DOUBLE CHECK THAT FLUXES ARE CONSTANT THROUGHOUT THE CUBE
-        tmp_fluxes = np.zeros([n_sci, self.new_ndit_sci])
-        bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in SCI frames')
-        for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
-            for ii in range(self.new_ndit_sci):
-                tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width, mode='mask')[0]
-                tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
-            bar.update()
-        tmp_flux_med2 = np.median(tmp_fluxes, axis=0)
-
-        # reestimating how many frames should be removed at the begining of the cube
-        # hint: if done correctly there should be 0
-        med_flux = np.median(tmp_flux_med2)
-        std_flux = np.std(tmp_flux_med2)
-        if verbose:
-            print("median flux: ", med_flux)
-            print("std flux: ", std_flux)
-
-        if not self.fast_reduction:
-            for ii in range(min_ndit_sci - nfr_rm):
-                if tmp_flux_med2[ii] > med_flux + std_flux or tmp_flux_med[ii] < med_flux - std_flux:
-                    symbol = 'ro'
-                    label = "bad"
-                else:
-                    symbol = 'bo'
-                    label = "good"
+        if tmp.ndim == 3:
+            tmp_fluxes = np.zeros([n_sci, self.new_ndit_sci])
+            bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in SCI frames')
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
+                for ii in range(self.new_ndit_sci):
+                    tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width, mode='mask')[0]
+                    tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
+                bar.update()
+            tmp_flux_med2 = np.median(tmp_fluxes, axis=0)
+    
+            # reestimating how many frames should be removed at the begining of the cube
+            # hint: if done correctly there should be 0
+            med_flux = np.median(tmp_flux_med2)
+            std_flux = np.std(tmp_flux_med2)
+            if verbose:
+                print("median flux: ", med_flux)
+                print("std flux: ", std_flux)
+    
+            if not self.fast_reduction:
+                for ii in range(min_ndit_sci - nfr_rm):
+                    if tmp_flux_med2[ii] > med_flux + std_flux or tmp_flux_med[ii] < med_flux - std_flux:
+                        symbol = 'ro'
+                        label = "bad"
+                    else:
+                        symbol = 'bo'
+                        label = "good"
+                    if plot:
+                        plt.plot(ii, tmp_flux_med2[ii] / np.amax(tmp_flux_med2), symbol, label=label)
                 if plot:
-                    plt.plot(ii, tmp_flux_med2[ii] / np.amax(tmp_flux_med2), symbol, label=label)
-            if plot:
-                plt.title("Flux in frames 2nd pass")
-                plt.xlabel('Frame number')
-                plt.ylabel('Flux')
-            if plot == 'save':
-                plt.savefig(self.outpath + "Bad_frames_2.pdf", bbox_inches='tight')
-            if plot == 'show':
-                plt.show()
-
-        # FOR SCI
-        tmp_fluxes = np.zeros([n_sci, self.new_ndit_sci])
-        bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in OBJ frames')
-        for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)  ##
-            if sc == 0:
-                cube_meds = np.zeros([n_sci, tmp.shape[1], tmp.shape[2]])
-            cube_meds[sc] = np.median(tmp, axis=0)
-            for ii in range(self.new_ndit_sci):
-                tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
-                                               mode='mask')[0]
-                tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
-            bar.update()
-        tmp_flux_med = np.median(tmp_fluxes, axis=0)
-        write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", np.median(cube_meds, axis=0),
-                   verbose=debug)  # USED LATER to identify dust specks
-
-        if self.fast_reduction:
-            tmp_fluxes_sky = np.ones([n_sky, self.new_ndit_sky])
-        else:
-            # FOR SKY
-            tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
-            bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
-            for sk, fits_name in enumerate(sky_list):
-                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)  ##
-                for ii in range(nfr_rm, nfr_rm + self.new_ndit_sky):
+                    plt.title("Flux in frames 2nd pass")
+                    plt.xlabel('Frame number')
+                    plt.ylabel('Flux')
+                if plot == 'save':
+                    plt.savefig(self.outpath + "Bad_frames_2.pdf", bbox_inches='tight')
+                if plot == 'show':
+                    plt.show()
+    
+            # FOR SCI
+            tmp_fluxes = np.zeros([n_sci, self.new_ndit_sci])
+            bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in OBJ frames')
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)  ##
+                if sc == 0:
+                    cube_meds = np.zeros([n_sci, tmp.shape[1], tmp.shape[2]])
+                cube_meds[sc] = np.median(tmp, axis=0)
+                for ii in range(self.new_ndit_sci):
                     tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
                                                    mode='mask')[0]
-                    tmp_fluxes_sky[sk, ii - nfr_rm] = np.sum(tmp_tmp)
+                    tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
                 bar.update()
-            tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
-
+            tmp_flux_med = np.median(tmp_fluxes, axis=0)
+            write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", np.median(cube_meds, axis=0),
+                       verbose=debug)  # USED LATER to identify dust specks
+    
+            if self.fast_reduction:
+                tmp_fluxes_sky = np.ones([n_sky, self.new_ndit_sky])
+            else:
+                # FOR SKY
+                tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
+                bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
+                for sk, fits_name in enumerate(sky_list):
+                    tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)  ##
+                    for ii in range(nfr_rm, nfr_rm + self.new_ndit_sky):
+                        tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
+                                                       mode='mask')[0]
+                        tmp_fluxes_sky[sk, ii - nfr_rm] = np.sum(tmp_tmp)
+                    bar.update()
+                tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
+    
+                # COMPARE
+                if plot:
+                    plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sci), tmp_flux_med, 'bo', label='Sci')
+                    plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro', label='Sky')
+                    plt.plot(range(1, n_sky + 1), np.median(tmp_fluxes_sky, axis=1), 'yo', label='Medain sky')
+                    plt.xlabel('Frame number')
+                    plt.ylabel('Flux')
+                    plt.legend()
+                if plot == 'save':
+                    plt.savefig(self.outpath + "Frame_sky_compare", bbox_inches='tight')
+                if plot == 'show':
+                    plt.show()
+    
+            for sk, fits_name in enumerate(sky_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
+                tmp_tmp = np.zeros([int(self.real_ndit_sky[sk]), tmp.shape[1], tmp.shape[2]])
+                for dd in range(nfr_rm, nfr_rm + int(self.real_ndit_sky[sk])):
+                    tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes_sky[sk, nfr_rm:]) / tmp_fluxes_sky[
+                        sk, dd - nfr_rm]
+    
+                write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
+                if remove:
+                    os.system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
+                    os.system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
+                    os.system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
+    
             # COMPARE
             if plot:
+                tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
+                bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
+                for sk, fits_name in enumerate(sky_list):
+                    tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)  ##
+                    for ii in range(self.new_ndit_sky):
+                        tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
+                                                       mode='mask')[0]
+                        tmp_fluxes_sky[sk, ii] = np.sum(tmp_tmp)
+                    bar.update()
+                tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
                 plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sci), tmp_flux_med, 'bo', label='Sci')
-                plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro', label='Sky')
-                plt.plot(range(1, n_sky + 1), np.median(tmp_fluxes_sky, axis=1), 'yo', label='Medain sky')
+                plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro',
+                         label='Sky')  # tmp_flux_med_sky, 'ro')#
                 plt.xlabel('Frame number')
                 plt.ylabel('Flux')
                 plt.legend()
             if plot == 'save':
-                plt.savefig(self.outpath + "Frame_sky_compare", bbox_inches='tight')
+                plt.savefig(self.outpath + "Frame_compare_sky.pdf", bbox_inches='tight')
             if plot == 'show':
                 plt.show()
 
-        for sk, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            tmp_tmp = np.zeros([int(self.real_ndit_sky[sk]), tmp.shape[1], tmp.shape[2]])
-            for dd in range(nfr_rm, nfr_rm + int(self.real_ndit_sky[sk])):
-                tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes_sky[sk, nfr_rm:]) / tmp_fluxes_sky[
-                    sk, dd - nfr_rm]
-
-            write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
-            if remove:
-                os.system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
-
-        # COMPARE
-        if plot:
-            tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
-            bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
-            for sk, fits_name in enumerate(sky_list):
-                tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)  ##
-                for ii in range(self.new_ndit_sky):
-                    tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
-                                                   mode='mask')[0]
-                    tmp_fluxes_sky[sk, ii] = np.sum(tmp_tmp)
-                bar.update()
-            tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
-            plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sci), tmp_flux_med, 'bo', label='Sci')
-            plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro',
-                     label='Sky')  # tmp_flux_med_sky, 'ro')#
-            plt.xlabel('Frame number')
-            plt.ylabel('Flux')
-            plt.legend()
-        if plot == 'save':
-            plt.savefig(self.outpath + "Frame_compare_sky.pdf", bbox_inches='tight')
-        if plot == 'show':
-            plt.show()
-
-        for un, fits_name in enumerate(unsat_list):
-            tmp = open_fits(self.outpath + '2_bpix_corr2_unsat_' + fits_name, verbose=debug)
-            tmp_tmp = tmp[nfr_rm:-1]
-            write_fits(self.outpath + '3_rmfr_unsat_' + fits_name, tmp_tmp, verbose=debug)
-            if remove:
-                os.system("rm " + self.outpath + '2_bpix_corr_unsat_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
+        if len(unsat_list) > 0:
+            for un, fits_name in enumerate(unsat_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_unsat_' + fits_name, verbose=debug)
+                tmp_tmp = tmp[nfr_rm:-1]
+                write_fits(self.outpath + '3_rmfr_unsat_' + fits_name, tmp_tmp, verbose=debug)
+                if remove:
+                    os.system("rm " + self.outpath + '2_bpix_corr_unsat_' + fits_name)
+                    os.system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
+                    os.system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
 
     def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot='save', remove=False):
         """
@@ -2131,7 +2179,7 @@ class raw_dataset:
             tmp = f.readlines()
             for line in tmp:
                 unsat_list.append(line.split('\n')[0])
-        if not os.path.isfile(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]):
+        if not isfile(self.outpath + '3_rmfr_unsat_' + unsat_list[-1]):
             raise NameError('Missing 3_rmfr_unsat*.fits. Run: first_frame_removal()')
 
         # get the new number of frames in each cube after trimming
@@ -2408,9 +2456,9 @@ class raw_dataset:
             for sci in sci_list:
                 f.write(sci + '\n')
 
-        if not os.path.isfile(self.outpath + 'fwhm.fits'):
+        if not isfile(self.outpath + 'fwhm.fits'):
             raise NameError('FWHM of the star is not defined. Run: get_stellar_psf()')
-        if not os.path.isfile(self.outpath + '3_rmfr_' + sci_list[-1]):
+        if not isfile(self.outpath + '3_rmfr_' + sci_list[-1]):
             raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')
 
         self.final_sz = int(open_fits(self.outpath + 'final_sz', verbose=debug)[
