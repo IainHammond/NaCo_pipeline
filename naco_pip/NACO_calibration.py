@@ -47,8 +47,11 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     """
 
     cube = open_fits(self.inpath + file_list[0], verbose=debug)
-    nz, ny, nx = cube.shape
-    median_frame = np.median(cube, axis=0)
+    ny, nx = cube.shape[-2:]
+    if cube.ndim == 3:
+        median_frame = np.median(cube, axis=0)
+    else:
+        median_frame = cube.copy()
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
     ycom, xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)  # location of AGPM
@@ -63,8 +66,7 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     tmp = mask_circle(tmp, radius=r, fillwith=1)
     tmp = frame_shift(tmp, ycom - ny / 2, xcom - nx / 2, imlib='opencv')  # no vip_fft because the image isn't square
     # measure translation
-    shift_yx, _, _ = register_translation(tmp, shadow,
-                                          upsample_factor=100)
+    shift_yx, _, _ = register_translation(tmp, shadow, upsample_factor=100)
     # express as a coordinate
     y, x = shift_yx
     cy = np.round(ycom - y)
@@ -145,7 +147,10 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     # the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations
     y_tmp = cy + rel_shift_y
     x_tmp = cx + rel_shift_x
-    median_frame = cube[-1]
+    if cube.ndim == 3:
+        median_frame = cube[-1]
+    else:
+        median_frame = cube.copy()
 
     # define a square of 100 x 100 with the center being the approximate AGPM/star position
     median_frame, cornery, cornerx = get_square(median_frame, size=size, y=y_tmp, x=x_tmp, position=True, verbose=True)
@@ -229,7 +234,7 @@ class raw_dataset:
             tmp = f.readlines()
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
-        nx = open_fits(self.inpath + sci_list[0], verbose=False).shape[2]
+        nx = open_fits(self.inpath + sci_list[0], verbose=False).shape[-1]
         self.com_sz = np.array([int(nx - 1)])
         write_fits(self.outpath + 'common_sz.fits', self.com_sz, verbose=False)
         # the size of the shadow in NACO data should be constant.
@@ -382,22 +387,25 @@ class raw_dataset:
             n_dim = tmp_tmp.ndim
             if sd == 0:
                 if n_dim == 2:
-                    tmp = np.array([frame_crop(tmp_tmp, self.com_sz,
-                                               force=True, verbose=debug)])
-                    master_all_darks.append(tmp)
-                    print(tmp.shape)
+                    tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, 
+                                         verbose=debug)
+                    tmp = np.array([tmp_tmp])
+                    master_all_darks.append(tmp_tmp)
+                    print(tmp_tmp.shape)
                 else:
                     tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
-                    master_all_darks.append(tmp[-1])
+                    for i in range(tmp.shape[0]):
+                        master_all_darks.append(tmp[i])
                     print(tmp[-1].shape)
             else:
                 if n_dim == 2:
                     tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
-                    master_all_darks.append(tmp)
-                    print(tmp.shape)
+                    master_all_darks.append(tmp[-1])
+                    print(tmp[-1].shape)
                 else:
                     tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug), axis=0)
-                    master_all_darks.append(tmp[-1])
+                    for i in range(tmp_tmp.shape[0]):
+                        master_all_darks.append(tmp[-tmp_tmp.shape[0]+i])
                     print(tmp[-1].shape)
         write_fits(self.outpath + 'sci_dark_cube.fits', tmp, verbose=debug)
         if verbose:
@@ -418,10 +426,9 @@ class raw_dataset:
                         print(tmp.shape)
                     else:
                         if nx > self.com_sz:
-                            tmp = np.array([frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)])
-                        else:
-                            tmp = np.array([tmp_tmp])
-                        master_all_darks.append(tmp)
+                            tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
+                        tmp = np.array([tmp_tmp])
+                        master_all_darks.append(tmp_tmp)
                         print(tmp.shape)
                 else:
                     nz, ny, nx = tmp_tmp.shape
@@ -537,12 +544,17 @@ class raw_dataset:
             # median dark subtraction of SCI cubes
             tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits', verbose=debug)
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
-            tmp_tmp_tmp_median = np.median(
-                tmp_tmp_tmp_median[np.where(mask_AGPM_com)])  # consider the median within the mask
+            #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])  # consider the median within the mask # this is a float!
             for sc, fits_name in enumerate(sci_list):
                 tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
-                tmp_tmp = tmp - tmp_tmp_tmp_median
+                if tmp.ndim == 3:
+                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp_tmp = tmp.copy()
+                    for i in range(tmp_tmp.shape[0]):
+                        tmp_tmp[i] = tmp[i] - tmp_tmp_tmp_median
+                else:
+                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
                 print('Dark has been median subtracted from SCI cubes')
@@ -571,11 +583,16 @@ class raw_dataset:
             # median dark subtract of sky cubes
             tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits', verbose=debug)
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
-            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])
+            #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)]) # this is a float!
             for sc, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
-                tmp_tmp = tmp - tmp_tmp_tmp_median
+                if tmp.ndim == 3:
+                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp_tmp = tmp.copy()
+                    for i in range(tmp_tmp.shape[0]):
+                        tmp_tmp[i] = tmp[i] - tmp_tmp_tmp_median
+                else:
+                    tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
                 print('Dark has been median subtracted from SKY cubes')
@@ -605,13 +622,13 @@ class raw_dataset:
             tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
             tmp_tmp_tmp = open_fits(self.outpath + 'flat_dark_cube.fits', verbose=debug)
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
-            tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_flat)])
+            #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_flat)]) # this is a float!
             for sc, fits_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
                 if tmp.ndim == 2:
                     tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
                 else:
-                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = np.median(cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug), axis=0)
                 tmp_tmp[sc] = tmp - tmp_tmp_tmp_median
             write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp, verbose=debug)
             if verbose:
