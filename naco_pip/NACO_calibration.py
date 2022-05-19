@@ -1950,14 +1950,18 @@ class raw_dataset:
 
         self.final_sz = int(open_fits(self.outpath + 'final_sz', verbose=debug)[0])
 
-        com_sz = open_fits(self.outpath + '2_bpix_corr2_' + sci_list[0], verbose=debug).shape[2]
+        com_sz = open_fits(self.outpath + '2_bpix_corr2_' + sci_list[0], verbose=debug).shape[-1]
         # obtaining the real ndit values of the frames (not that of the headers)
         tmp = np.zeros([n_sci, com_sz, com_sz])
         self.real_ndit_sci = []  # change all to self.
         for sc, fits_name in enumerate(sci_list):
             tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            tmp[sc] = tmp_tmp[-1]
-            self.real_ndit_sci.append(tmp_tmp.shape[0] - 1)
+            if tmp_tmp.ndim == 3:
+                tmp[sc] = tmp_tmp[-1]
+                self.real_ndit_sci.append(tmp_tmp.shape[0] - 1)
+            else:
+                tmp[sc] = tmp_tmp.copy()
+                self.real_ndit_sci.append(1)
         if plot == 'show':
             plot_frames(tmp[-1])
 
@@ -1965,8 +1969,12 @@ class raw_dataset:
         self.real_ndit_sky = []
         for sk, fits_name in enumerate(sky_list):
             tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            tmp[sk] = tmp_tmp[-1]
-            self.real_ndit_sky.append(tmp_tmp.shape[0] - 1)
+            if tmp_tmp.ndim == 3:
+                tmp[sk] = tmp_tmp[-1]
+                self.real_ndit_sky.append(tmp_tmp.shape[0] - 1)
+            else:
+                tmp[sk] = tmp_tmp.copy()
+                self.real_ndit_sky.append(1)
         if plot == 'show':
             plot_frames(tmp[-1])
 
