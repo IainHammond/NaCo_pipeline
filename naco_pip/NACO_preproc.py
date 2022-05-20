@@ -49,7 +49,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             self.real_ndit_sci = []
             print('Re-evaluating SCI cube dimensions')
             for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
-                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=False)
+                tmp = open_fits(self.inpath+'4_sky_subtr_'+fits_name, verbose=False)
                 self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
                 del tmp
         self.dataset_dict = dataset_dict
@@ -111,7 +111,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if not isfile(self.outpath+'median_calib_cube.fits'):
             bar = pyprind.ProgBar(len(self.sci_list), stream=1, title='Creating master science cube (median of each science cube)....')
             for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
-                tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug)  # open cube as tmp
+                tmp = open_fits(self.inpath+'4_sky_subtr_'+fits_name, verbose=debug)  # open cube as tmp
                 if sc == 0:
                     _, ny, nx = tmp.shape  # dimensions of cube
                     if subi_size > ny:  # check if bigger than science frame
@@ -206,7 +206,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             print('Shifting frames and creating master science cube', flush=True)
         for sc, fits_name in enumerate(self.sci_list):
-            tmp = open_fits(self.inpath+'4_sky_subtr_imlib_'+fits_name, verbose=debug)  # opens science cube
+            tmp = open_fits(self.inpath+'4_sky_subtr_'+fits_name, verbose=debug)  # opens science cube
             if crop:
                 tmp = cube_crop_frames(tmp, crop_sz, force=False, verbose=debug, full_output=False)
             dim = int(self.real_ndit_sci[sc])  # gets the integer dimensions of this science cube

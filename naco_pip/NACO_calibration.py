@@ -28,7 +28,8 @@ except:
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated, cube_fix_badpix_clump, \
-    cube_recenter_2dfit, cube_detect_badfr_correlation, frame_fix_badpix_isolated
+    cube_recenter_2dfit, cube_detect_badfr_correlation, frame_fix_badpix_isolated, \
+    approx_stellar_position
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
 from vip_hci.metrics import detection
@@ -255,6 +256,8 @@ class raw_dataset:
         self.sky_list_mjd = sky_list_mjd
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
+        self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
+                self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
 
     def get_final_sz(self, final_sz=None, verbose=True, debug=False):
         """
@@ -263,13 +266,13 @@ class raw_dataset:
         debug: enters Python debugger after finding the size
         """
         if final_sz is None:
-            final_sz_ori = min(2 * self.agpm_pos[0] - 1, 2 * self.agpm_pos[1] - 1, 2 * \
-                               (self.com_sz - self.agpm_pos[0]) - 1, 2 * \
-                               (self.com_sz - self.agpm_pos[1]) - 1, int(2 * self.shadow_r))
+            final_sz_ori = min(2 * self.crop_cen[0] - 1, 2 * self.crop_cen[1] - 1, 2 * \
+                               (self.com_sz - self.crop_cen[0]) - 1, 2 * \
+                               (self.com_sz - self.crop_cen[1]) - 1, int(2 * self.shadow_r))
         else:
-            final_sz_ori = min(2 * self.agpm_pos[0] - 1, 2 * self.agpm_pos[1] - 1, \
-                               2 * (self.com_sz - self.agpm_pos[0]) - 1, \
-                               2 * (self.com_sz - self.agpm_pos[1]) - 1, \
+            final_sz_ori = min(2 * self.crop_cen[0] - 1, 2 * self.crop_cen[1] - 1, \
+                               2 * (self.com_sz - self.crop_cen[0]) - 1, \
+                               2 * (self.com_sz - self.crop_cen[1]) - 1, \
                                int(2 * self.shadow_r), final_sz)
         if final_sz_ori % 2 == 0:
             final_sz_ori -= 1
@@ -280,7 +283,8 @@ class raw_dataset:
             pdb.set_trace()
         return final_sz
 
-    def dark_subtract(self, bad_quadrant=[3], method='pca', npc_dark=1, verbose=True, debug=False, plot=None,
+    def dark_subtract(self, bad_quadrant=[3], method='pca', npc_dark=1, 
+                      imlib='vip-fft', verbose=True, debug=False, plot=None,
                       NACO=True):
         """
         Dark subtraction of science, sky and flats using principal component analysis or median subtraction.
@@ -484,9 +488,31 @@ class raw_dataset:
         _, _, self.shadow_r = find_shadow_list(self, sci_list, verbose=verbose, debug=debug, plot=plot)
 
         if self.coro:
-            self.agpm_pos = find_AGPM(self.inpath + sci_list[0], verbose=verbose, debug=debug)
+            self.crop_cen = find_AGPM(self.inpath + sci_list[0], verbose=verbose, debug=debug)
         else:
-            raise ValueError('Pipeline does not handle non-coronagraphic data here yet')
+            if len(sky_list)>0:
+                sub_list = sky_list
+            else:
+                sub_list = sci_dark_list
+            tmp_tmp = []
+            for sk, fits_name in enumerate(sub_list):
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    tmp = np.median(tmp, axis=0)
+                tmp_tmp.append(tmp)
+            self.med_sky = np.median(np.array(tmp_tmp), axis=0)
+            tmp_tmp = []
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    tmp = np.median(tmp, axis=0)
+                tmp_tmp.append(tmp-self.med_sky)
+            tmp_tmp = np.array(tmp_tmp)
+            yx = approx_stellar_position(tmp_tmp, 
+                                         int(self.resel_ori+1), 
+                                         verbose=debug)
+            self.crop_cen = (np.median(yx[:,1]), np.median(yx[:,0]))
+            #raise ValueError('Pipeline does not handle non-coronagraphic data here yet')
 
         mask_AGPM_com = np.ones([self.com_sz, self.com_sz])
         cy, cx = frame_center(mask_AGPM_com)
@@ -501,8 +527,8 @@ class raw_dataset:
 
         # create mask for sci and sky
         mask_AGPM_com = get_annulus_segments(mask_AGPM_com, inner_rad, outer_rad - inner_rad, mode='mask')[0]
-        mask_AGPM_com = frame_shift(mask_AGPM_com, self.agpm_pos[0] - cy, self.agpm_pos[1] - cx, border_mode='constant',
-                                    imlib='opencv')
+        mask_AGPM_com = frame_shift(mask_AGPM_com, self.crop_cen[0] - cy, self.crop_cen[1] - cx, border_mode='constant',
+                                    imlib=imlib)
         # create mask for flats
         mask_AGPM_flat = np.ones([self.com_sz, self.com_sz])
 
@@ -1673,10 +1699,37 @@ class raw_dataset:
 
 
         # update final crop size
-        self.agpm_pos = find_AGPM(self.outpath + '2_nan_corr_' + sci_list[0], verbose=verbose,
-                                  debug=debug)  # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0])
-        self.agpm_pos = [self.agpm_pos[1], self.agpm_pos[0]]
-        self.final_sz = self.get_final_sz(self.final_sz, verbose=verbose, debug=debug)
+        if self.coro:
+            self.crop_cen = find_AGPM(self.outpath + '2_nan_corr_' + sci_list[0], verbose=verbose,
+                                      debug=debug)  # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0])
+            self.final_sz = self.get_final_sz(self.final_sz, verbose=verbose, 
+                                              debug=debug)
+        else:
+            tmp_tmp = []
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    tmp = np.median(tmp, axis=0)
+                tmp_tmp.append(tmp-self.med_sky)
+            tmp_tmp = np.array(tmp_tmp)
+            yx = approx_stellar_position(tmp_tmp, int(self.resel_ori+1), 
+                                         verbose=debug)
+            min_final_sz = int(2*np.amax([np.amax(yx[:,0])-np.amin(yx[:,0]),
+                                          np.amax(yx[:,1])-np.amax(yx[:,1])])+1)
+            min_final_sz = min(min_final_sz, self.com_sz-2)
+            max_final_sz = int(2*min(np.amin(yx), self.com_sz-np.amax(yx)))
+                                     
+            if self.final_sz is not None:
+                # consider max because of potential dithering
+                self.final_sz = min(max(self.final_sz, min_final_sz), 
+                                    max_final_sz)
+            else:
+                self.final_sz = min(self.com_sz-2, max_final_sz)
+            if self.final_sz%2 != self.com_sz%2:
+                self.final_sz -= 1
+            self.crop_cen = [np.nanmean(yx[:,0]), np.nanmean(yx[:,1])]
+            
+        self.crop_cen = [self.crop_cen[1], self.crop_cen[0]]
         write_fits(self.outpath + 'final_sz', np.array([self.final_sz]), verbose=debug)
 
         # crop frames to that size
@@ -1687,14 +1740,14 @@ class raw_dataset:
                     cropper = cube_crop_frames
                 else:
                     cropper = frame_crop
-            tmp_tmp = cropper(tmp, self.final_sz, self.agpm_pos, force=True)
+            tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True)
             write_fits(self.outpath + '2_crop_' + fits_name, tmp_tmp, verbose=debug)
             if remove:
                 os.system("rm " + self.outpath + '2_nan_corr_' + fits_name)
 
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '2_nan_corr_' + fits_name, verbose=debug)
-            tmp_tmp = cropper(tmp, self.final_sz, self.agpm_pos, force=True)
+            tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True)
             write_fits(self.outpath + '2_crop_' + fits_name, tmp_tmp, verbose=debug)
             if remove:
                 os.system("rm " + self.outpath + '2_nan_corr_' + fits_name)
@@ -1722,11 +1775,11 @@ class raw_dataset:
                 np.percentile(tmp_tmp[0], 99.9)), save=self.outpath + 'Second_badpx_crop.pdf')
 
         # Crop the bpix map in a same way
-        bpix_map = frame_crop(bpix_map, self.final_sz, cenxy=self.agpm_pos, force=True)
+        bpix_map = frame_crop(bpix_map, self.final_sz, cenxy=self.crop_cen, force=True)
         write_fits(self.outpath + 'master_bpix_map_2ndcrop.fits', bpix_map, verbose=debug)
 
-        # self.agpm_pos = find_filtered_max(self, self.outpath + '2_crop_' + sci_list[0])
-        # self.agpm_pos = [self.agpm_pos[1],self.agpm_pos[0]]
+        # self.crop_cen = find_filtered_max(self, self.outpath + '2_crop_' + sci_list[0])
+        # self.crop_cen = [self.crop_cen[1],self.crop_cen[0]]
 
         # t0 = time_ini()
         for sc, fits_name in enumerate(sci_list):
@@ -2148,8 +2201,6 @@ class raw_dataset:
                     tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
                 bar.update()
             tmp_flux_med = np.median(tmp_fluxes, axis=0)
-            write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", np.median(cube_meds, axis=0),
-                       verbose=debug)  # USED LATER to identify dust specks
     
             if self.fast_reduction:
                 tmp_fluxes_sky = np.ones([n_sky, self.new_ndit_sky])
@@ -2183,8 +2234,7 @@ class raw_dataset:
                 tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
                 tmp_tmp = np.zeros([int(self.real_ndit_sky[sk]), tmp.shape[1], tmp.shape[2]])
                 for dd in range(nfr_rm, nfr_rm + int(self.real_ndit_sky[sk])):
-                    tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes_sky[sk, nfr_rm:]) / tmp_fluxes_sky[
-                        sk, dd - nfr_rm]
+                    tmp_tmp[dd - nfr_rm] = tmp[dd] * np.median(tmp_fluxes_sky[sk, nfr_rm:]) / tmp_fluxes_sky[sk, dd - nfr_rm]
     
                 write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
                 if remove:
@@ -2214,7 +2264,22 @@ class raw_dataset:
                 plt.savefig(self.outpath + "Frame_compare_sky.pdf", bbox_inches='tight')
             if plot == 'show':
                 plt.show()
+                
+        else:
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, 
+                                verbose=debug)  ##
+                if sc == 0:
+                    cube_meds = np.zeros([n_sci, tmp.shape[-2], tmp.shape[-1]])
+                cube_meds[sc] = tmp.copy()
+                os.system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
+            for sk, fits_name in enumerate(sky_list):
+                os.system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
 
+        write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", 
+                   np.median(cube_meds, axis=0),
+                   verbose=debug)  # USED LATER to identify dust specks
+            
         if len(unsat_list) > 0:
             for un, fits_name in enumerate(unsat_list):
                 tmp = open_fits(self.outpath + '2_bpix_corr2_unsat_' + fits_name, verbose=debug)
@@ -2504,12 +2569,14 @@ class raw_dataset:
         if self.fwhm < 3 or self.fwhm > 6:
             raise ValueError('FWHM is not within expected values!')
 
-    def subtract_sky(self, imlib='opencv', npc=1, mode='PCA', verbose=True, debug=False, plot=None, remove=False):
+    def subtract_sky(self, imlib='vip-fft', npc=1, mode='PCA', fwhm=None, 
+                     verbose=True, debug=False, plot=None, remove=False):
         """
         Sky subtraction of the science cubes
-        imlib : string: 'ndimage-interp', 'opencv'
-        mode : string: 'PCA', 'median'
+        imlib : string: 'ndimage-interp', 'opencv', 'vip-fft'
         npc : list, None, integer
+        mode : string: 'PCA', 'median'
+        fwhm : float or None. If not None, supersedes value from get_stellar_psf
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, False. Cleans file for unused fits
         """
@@ -2536,8 +2603,13 @@ class raw_dataset:
             for sci in sci_list:
                 f.write(sci + '\n')
 
-        if not isfile(self.outpath + 'fwhm.fits'):
+        if isfile(self.outpath + 'fwhm.fits'):
+            self.fwhm = open_fits(self.outpath + 'fwhm.fits', verbose=debug)[0]
+        elif fwhm is not None:
+            self.fwhm = fwhm
+        elif fwhm is not None:
             raise NameError('FWHM of the star is not defined. Run: get_stellar_psf()')
+
         if not isfile(self.outpath + '3_rmfr_' + sci_list[-1]):
             raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')
 
@@ -2578,207 +2650,213 @@ class raw_dataset:
         write_fits(self.outpath + "sky_mjd_times.fits", sky_mjd_list, verbose=debug)
 
         tmp = open_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", verbose=debug)
-        self.fwhm = open_fits(self.outpath + 'fwhm.fits', verbose=debug)[0]
-        # try high pass filter to isolate blobs
-        hpf_sz = int(2 * self.fwhm)
-        if not hpf_sz % 2:
-            hpf_sz += 1
-        tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
-                                    kernel_size=hpf_sz, fwhm_size=self.fwhm)
-        if plot == 'show':
-            plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
-                        dpi=300)
-        if plot == 'save':
-            plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
-                        dpi=300, save=self.outpath + 'Isolated_grains.pdf')
-        # then use the automatic detection tool of vip_hci.metrics
-        snr_thr = 10
-        snr_thr_all = 30
-        psfn = open_fits(self.outpath + "master_unsat_psf_norm.fits", verbose=debug)
-        table_det = detection(tmp, psf=psfn, bkg_sigma=1, mode='lpeaks', matched_filter=True,
-                              mask=True, snr_thresh=snr_thr, plot=False, debug=False,
-                              full_output=True, verbose=debug)
-        y_dust = table_det['y']
-        x_dust = table_det['x']
-        snr_dust = table_det['px_snr']
-
-        # trim to just keep the specks with SNR>10 anywhere but in the lower left quadrant
-        dust_xy_all = []
-        dust_xy_tmp = []
-        cy, cx = frame_center(tmp)
-        for i in range(len(y_dust)):
-            if not np.isnan(snr_dust[i]):  # discard nan
-                if abs(y_dust[i] - cy) > 3 * self.fwhm and abs(x_dust[i] - cx) > 3 * self.fwhm:
-                    if snr_dust[i] > snr_thr_all:
-                        dust_xy_all.append((x_dust[i], y_dust[i]))
-                    if (y_dust[i] > cy or x_dust[i] > cx) and snr_dust[i] > snr_thr:  # discard lower left quadrant
-                        dust_xy_tmp.append((x_dust[i], y_dust[i]))
-        ndust_all = len(dust_xy_all)
-
-        ndust = len(dust_xy_tmp)
-        if verbose:
-            print(dust_xy_tmp)
-            print("{} dust specks have been identified for alignment of SCI and SKY frames".format(ndust))
-
-        # Fit them to gaussians in a test frame, and discard non-circular one (fwhm_y not within 20% of fwhm_x)
-
-        test_xy = np.zeros([ndust, 2])
-        fwhm_xy = np.zeros([ndust, 2])
-        tmp = open_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", verbose=debug)
-        tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
-                                    kernel_size=hpf_sz, fwhm_size=self.fwhm)
-        bad_dust = []
-        self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
-                self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
-        crop_sz = int(5 * self.resel_ori)
-        if crop_sz % 2 == 0:
-            crop_sz = crop_sz - 1
-
-        for dd in range(ndust):
-            table_gaus = fit_2dgaussian(tmp, crop=True, cent=dust_xy_tmp[dd],
-                                        cropsize=crop_sz, fwhmx=self.resel_ori,
-                                        threshold=True, sigfactor=0,
-                                        full_output=True, debug=False)
-            test_xy[dd, 1] = table_gaus['centroid_y'][0]
-            test_xy[dd, 0] = table_gaus['centroid_x'][0]
-            fwhm_xy[dd, 1] = table_gaus['fwhm_y'][0]
-            fwhm_xy[dd, 0] = table_gaus['fwhm_x'][0]
-            amplitude = table_gaus['amplitude'][0]
-            if fwhm_xy[dd, 1] / fwhm_xy[dd, 0] < 0.8 or fwhm_xy[dd, 1] / fwhm_xy[dd, 0] > 1.2:
-                bad_dust.append(dd)
-
-        dust_xy = [xy for i, xy in enumerate(dust_xy_tmp) if i not in bad_dust]
-        ndust = len(dust_xy)
-        if verbose:
-            print("We detected {:.0f} non-circular dust specks, hence removed from the list.".format(len(bad_dust)))
-            print("We are left with {:.0f} dust specks for alignment of SCI and SKY frames.".format(ndust))
-
-        # the code first finds the exact coords of the dust features in the median of the first SCI cube (and show them)
-        xy_cube0 = np.zeros([ndust, 2])
-        crop_sz = int(3 * self.resel_ori)
-        tmp_cube = open_fits(self.outpath + '3_rmfr_' + sci_list[0], verbose=debug)
-        tmp_med = np.median(tmp_cube, axis=0)
-        tmp = frame_filter_highpass(tmp_med, mode='median-subt', median_size=hpf_sz,
-                                    kernel_size=hpf_sz, fwhm_size=self.fwhm)
-        for dd in range(ndust):
-            try:
-                df = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz, fwhmx=self.resel_ori,
-                                    fwhmy=self.resel_ori,
-                                    theta=0, threshold=True, sigfactor=0, full_output=True,
-                                    debug=False)
-                xy_cube0[dd, 1] = df['centroid_y'][0]
-                xy_cube0[dd, 0] = df['centroid_x'][0]
-                fwhm_y = df['fwhm_y'][0]
-                fwhm_x = df['fwhm_x'][0]
-                amplitude = df['amplitude'][0]
-                if verbose:
-                    print("coord_x: {}, coord_y: {}, fwhm_x: {}, fwhm_y:{}, amplitude: {}".format(xy_cube0[dd, 0],
-                                                                                                  xy_cube0[dd, 1],
-                                                                                                  fwhm_x, fwhm_y,
-                                                                                                  amplitude))
-                shift_xy_dd = (xy_cube0[dd, 0] - dust_xy[dd][0], xy_cube0[dd, 1] - dust_xy[dd][1])
-                if verbose:
-                    print("shift with respect to center for dust grain #{}: {}".format(dd, shift_xy_dd))
-            except ValueError:
-                xy_cube0[dd, 0], xy_cube0[dd, 1] = dust_xy[dd]
-                print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd))
-        print("Note: the shifts should be small if the eye coords of each dust grain were well provided!")
-
-        # then it finds the centroids in all other frames (SCI+SKY) to determine the relative shifts to be applied to align all frames
-        shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
-        shifts_xy_sky = np.zeros([ndust, n_sky, self.new_ndit_sky, 2])
-        crop_sz = int(3 * self.resel_ori)
-        # to ensure crop size is odd. if its even, +1 to crop_sz
-        if crop_sz % 2 == 0:
-            crop_sz += 1
-
-        # t0 = time_ini()
-
-        # SCI frames
-        bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
-        for sc, fits_name in enumerate(sci_list):
-            tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
-            for zz in range(tmp_cube.shape[0]):
-                tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
-                                            kernel_size=hpf_sz, fwhm_size=self.fwhm)
-                for dd in range(ndust):
-                    try:  # note we have to do try, because for some (rare) channels the gaussian fit fails
-                        y_tmp, x_tmp = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz,
-                                                      fwhmx=self.resel_ori, fwhmy=self.resel_ori, full_output=False,
-                                                      debug=False)
-                    except ValueError:
-                        x_tmp, y_tmp = dust_xy[dd]
-                        if verbose:
-                            print(
-                                "!!! Gaussian fit failed for sc #{}, dd #{}. We set position to first (eye-)guess position.".format(
-                                    sc, dd))
-                    shifts_xy_sci[dd, sc, zz, 0] = xy_cube0[dd, 0] - x_tmp
-                    shifts_xy_sci[dd, sc, zz, 1] = xy_cube0[dd, 1] - y_tmp
-            bar.update()
-
-        # SKY frames
-        bar = pyprind.ProgBar(n_sky, stream=1, title='Finding shifts to be applied to the SKY frames')
-        for sk, fits_name in enumerate(sky_list):
-            tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
-            for zz in range(tmp_cube.shape[0]):
-                tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
-                                            kernel_size=hpf_sz, fwhm_size=self.fwhm)
-                # check tmp after highpass filter
-                for dd in range(ndust):
-                    try:
-                        y_tmp, x_tmp = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz,
-                                                      fwhmx=self.resel_ori, fwhmy=self.resel_ori, full_output=False,
-                                                      debug=False)
-                    except ValueError:
-                        x_tmp, y_tmp = dust_xy[dd]
-                        if verbose:
-                            print(
-                                "!!! Gaussian fit failed for sk #{}, dd #{}. We set position to first (eye-)guess position.".format(
-                                    sc, dd))
-                    shifts_xy_sky[dd, sk, zz, 0] = xy_cube0[dd, 0] - x_tmp
-                    shifts_xy_sky[dd, sk, zz, 1] = xy_cube0[dd, 1] - y_tmp
-            bar.update()
-        # time_fin(t0)
-
-        # try to debug the fit, check dust pos
-        if verbose:
-            print("Max stddev of the shifts found for the {} dust grains: ".format(ndust),
-                  np.amax(np.std(shifts_xy_sci, axis=0)))
-            print("Min stddev of the shifts found for the {} dust grains: ".format(ndust),
-                  np.amin(np.std(shifts_xy_sci, axis=0)))
-            print("Median stddev of the shifts found for the {} dust grains: ".format(ndust),
-                  np.median(np.std(shifts_xy_sci, axis=0)))
-            print("Median shifts found for the {} dust grains (SCI): ".format(ndust),
-                  np.median(np.median(np.median(shifts_xy_sci, axis=0), axis=0), axis=0))
-            print("Median shifts found for the {} dust grains: (SKY)".format(ndust),
-                  np.median(np.median(np.median(shifts_xy_sky, axis=0), axis=0), axis=0))
-
-        shifts_xy_sci_med = np.median(shifts_xy_sci, axis=0)
-        shifts_xy_sky_med = np.median(shifts_xy_sky, axis=0)
-
-        for sc, fits_name in enumerate(sci_list):
-            try:
+        
+        # REALIGNMENT in case of coronagraphic observations
+        if self.coro:
+            # try high pass filter to isolate blobs
+            hpf_sz = int(2 * self.fwhm)
+            if not hpf_sz % 2:
+                hpf_sz += 1
+            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
+                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            if plot == 'show':
+                plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
+                            dpi=300)
+            if plot == 'save':
+                plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
+                            dpi=300, save=self.outpath + 'Isolated_grains.pdf')
+            # then use the automatic detection tool of vip_hci.metrics
+            snr_thr = 10
+            snr_thr_all = 30
+            psfn = open_fits(self.outpath + "master_unsat_psf_norm.fits", verbose=debug)
+            table_det = detection(tmp, psf=psfn, bkg_sigma=1, mode='lpeaks', matched_filter=True,
+                                  mask=True, snr_thresh=snr_thr, plot=False, debug=False,
+                                  full_output=True, verbose=debug)
+            y_dust = table_det['y']
+            x_dust = table_det['x']
+            snr_dust = table_det['px_snr']
+    
+            # trim to just keep the specks with SNR>10 anywhere but in the lower left quadrant
+            dust_xy_all = []
+            dust_xy_tmp = []
+            cy, cx = frame_center(tmp)
+            for i in range(len(y_dust)):
+                if not np.isnan(snr_dust[i]):  # discard nan
+                    if abs(y_dust[i] - cy) > 3 * self.fwhm and abs(x_dust[i] - cx) > 3 * self.fwhm:
+                        if snr_dust[i] > snr_thr_all:
+                            dust_xy_all.append((x_dust[i], y_dust[i]))
+                        if (y_dust[i] > cy or x_dust[i] > cx) and snr_dust[i] > snr_thr:  # discard lower left quadrant
+                            dust_xy_tmp.append((x_dust[i], y_dust[i]))
+            ndust_all = len(dust_xy_all)
+    
+            ndust = len(dust_xy_tmp)
+            if verbose:
+                print(dust_xy_tmp)
+                print("{} dust specks have been identified for alignment of SCI and SKY frames".format(ndust))
+    
+            # Fit them to gaussians in a test frame, and discard non-circular one (fwhm_y not within 20% of fwhm_x)
+    
+            test_xy = np.zeros([ndust, 2])
+            fwhm_xy = np.zeros([ndust, 2])
+            tmp = open_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", verbose=debug)
+            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
+                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            bad_dust = []
+            crop_sz = int(5 * self.resel_ori)
+            if crop_sz % 2 == 0:
+                crop_sz = crop_sz - 1
+    
+            for dd in range(ndust):
+                table_gaus = fit_2dgaussian(tmp, crop=True, cent=dust_xy_tmp[dd],
+                                            cropsize=crop_sz, fwhmx=self.resel_ori,
+                                            threshold=True, sigfactor=0,
+                                            full_output=True, debug=False)
+                test_xy[dd, 1] = table_gaus['centroid_y'][0]
+                test_xy[dd, 0] = table_gaus['centroid_x'][0]
+                fwhm_xy[dd, 1] = table_gaus['fwhm_y'][0]
+                fwhm_xy[dd, 0] = table_gaus['fwhm_x'][0]
+                amplitude = table_gaus['amplitude'][0]
+                if fwhm_xy[dd, 1] / fwhm_xy[dd, 0] < 0.8 or fwhm_xy[dd, 1] / fwhm_xy[dd, 0] > 1.2:
+                    bad_dust.append(dd)
+    
+            dust_xy = [xy for i, xy in enumerate(dust_xy_tmp) if i not in bad_dust]
+            ndust = len(dust_xy)
+            if verbose:
+                print("We detected {:.0f} non-circular dust specks, hence removed from the list.".format(len(bad_dust)))
+                print("We are left with {:.0f} dust specks for alignment of SCI and SKY frames.".format(ndust))
+    
+            # the code first finds the exact coords of the dust features in the median of the first SCI cube (and show them)
+            xy_cube0 = np.zeros([ndust, 2])
+            crop_sz = int(3 * self.resel_ori)
+            tmp_cube = open_fits(self.outpath + '3_rmfr_' + sci_list[0], verbose=debug)
+            tmp_med = np.median(tmp_cube, axis=0)
+            tmp = frame_filter_highpass(tmp_med, mode='median-subt', median_size=hpf_sz,
+                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            for dd in range(ndust):
+                try:
+                    df = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz, fwhmx=self.resel_ori,
+                                        fwhmy=self.resel_ori,
+                                        theta=0, threshold=True, sigfactor=0, full_output=True,
+                                        debug=False)
+                    xy_cube0[dd, 1] = df['centroid_y'][0]
+                    xy_cube0[dd, 0] = df['centroid_x'][0]
+                    fwhm_y = df['fwhm_y'][0]
+                    fwhm_x = df['fwhm_x'][0]
+                    amplitude = df['amplitude'][0]
+                    if verbose:
+                        print("coord_x: {}, coord_y: {}, fwhm_x: {}, fwhm_y:{}, amplitude: {}".format(xy_cube0[dd, 0],
+                                                                                                      xy_cube0[dd, 1],
+                                                                                                      fwhm_x, fwhm_y,
+                                                                                                      amplitude))
+                    shift_xy_dd = (xy_cube0[dd, 0] - dust_xy[dd][0], xy_cube0[dd, 1] - dust_xy[dd][1])
+                    if verbose:
+                        print("shift with respect to center for dust grain #{}: {}".format(dd, shift_xy_dd))
+                except ValueError:
+                    xy_cube0[dd, 0], xy_cube0[dd, 1] = dust_xy[dd]
+                    print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd))
+            print("Note: the shifts should be small if the eye coords of each dust grain were well provided!")
+    
+            # then it finds the centroids in all other frames (SCI+SKY) to determine the relative shifts to be applied to align all frames
+            shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
+            shifts_xy_sky = np.zeros([ndust, n_sky, self.new_ndit_sky, 2])
+            crop_sz = int(3 * self.resel_ori)
+            # to ensure crop size is odd. if its even, +1 to crop_sz
+            if crop_sz % 2 == 0:
+                crop_sz += 1
+    
+            # t0 = time_ini()
+    
+            # SCI frames
+            bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
+            for sc, fits_name in enumerate(sci_list):
+                tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
+                for zz in range(tmp_cube.shape[0]):
+                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
+                                                kernel_size=hpf_sz, fwhm_size=self.fwhm)
+                    for dd in range(ndust):
+                        try:  # note we have to do try, because for some (rare) channels the gaussian fit fails
+                            y_tmp, x_tmp = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz,
+                                                          fwhmx=self.resel_ori, fwhmy=self.resel_ori, full_output=False,
+                                                          debug=False)
+                        except ValueError:
+                            x_tmp, y_tmp = dust_xy[dd]
+                            if verbose:
+                                print(
+                                    "!!! Gaussian fit failed for sc #{}, dd #{}. We set position to first (eye-)guess position.".format(
+                                        sc, dd))
+                        shifts_xy_sci[dd, sc, zz, 0] = xy_cube0[dd, 0] - x_tmp
+                        shifts_xy_sci[dd, sc, zz, 1] = xy_cube0[dd, 1] - y_tmp
+                bar.update()
+    
+            # SKY frames
+            bar = pyprind.ProgBar(n_sky, stream=1, title='Finding shifts to be applied to the SKY frames')
+            for sk, fits_name in enumerate(sky_list):
+                tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
+                for zz in range(tmp_cube.shape[0]):
+                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
+                                                kernel_size=hpf_sz, fwhm_size=self.fwhm)
+                    # check tmp after highpass filter
+                    for dd in range(ndust):
+                        try:
+                            y_tmp, x_tmp = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz,
+                                                          fwhmx=self.resel_ori, fwhmy=self.resel_ori, full_output=False,
+                                                          debug=False)
+                        except ValueError:
+                            x_tmp, y_tmp = dust_xy[dd]
+                            if verbose:
+                                print(
+                                    "!!! Gaussian fit failed for sk #{}, dd #{}. We set position to first (eye-)guess position.".format(
+                                        sc, dd))
+                        shifts_xy_sky[dd, sk, zz, 0] = xy_cube0[dd, 0] - x_tmp
+                        shifts_xy_sky[dd, sk, zz, 1] = xy_cube0[dd, 1] - y_tmp
+                bar.update()
+            # time_fin(t0)
+    
+            # try to debug the fit, check dust pos
+            if verbose:
+                print("Max stddev of the shifts found for the {} dust grains: ".format(ndust),
+                      np.amax(np.std(shifts_xy_sci, axis=0)))
+                print("Min stddev of the shifts found for the {} dust grains: ".format(ndust),
+                      np.amin(np.std(shifts_xy_sci, axis=0)))
+                print("Median stddev of the shifts found for the {} dust grains: ".format(ndust),
+                      np.median(np.std(shifts_xy_sci, axis=0)))
+                print("Median shifts found for the {} dust grains (SCI): ".format(ndust),
+                      np.median(np.median(np.median(shifts_xy_sci, axis=0), axis=0), axis=0))
+                print("Median shifts found for the {} dust grains: (SKY)".format(ndust),
+                      np.median(np.median(np.median(shifts_xy_sky, axis=0), axis=0), axis=0))
+    
+            shifts_xy_sci_med = np.median(shifts_xy_sci, axis=0)
+            shifts_xy_sky_med = np.median(shifts_xy_sky, axis=0)
+    
+            for sc, fits_name in enumerate(sci_list):
+                try:
+                    tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
+                    tmp_tmp_tmp_tmp = np.zeros_like(tmp)
+                    for zz in range(tmp.shape[0]):
+                        tmp_tmp_tmp_tmp[zz] = frame_shift(tmp[zz], shifts_xy_sci_med[sc, zz, 1],
+                                                          shifts_xy_sci_med[sc, zz, 0], imlib=imlib)
+                    write_fits(self.outpath + '3_AGPM_aligned_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
+                    if remove:
+                        os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
+                except:
+                    print("file #{} not found".format(sc))
+    
+            for sk, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
                 tmp_tmp_tmp_tmp = np.zeros_like(tmp)
                 for zz in range(tmp.shape[0]):
-                    tmp_tmp_tmp_tmp[zz] = frame_shift(tmp[zz], shifts_xy_sci_med[sc, zz, 1],
-                                                      shifts_xy_sci_med[sc, zz, 0], imlib=imlib)
-                write_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
+                    tmp_tmp_tmp_tmp[zz] = frame_shift(tmp[zz], shifts_xy_sky_med[sk, zz, 1], shifts_xy_sky_med[sk, zz, 0],
+                                                      imlib=imlib)
+                write_fits(self.outpath + '3_AGPM_aligned_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
                 if remove:
                     os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
-            except:
-                print("file #{} not found".format(sc))
+        else:
+            for sc, fits_name in enumerate(sci_list):
+                os.system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)
+            for sk, fits_name in enumerate(sky_list):
+                os.system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)  
 
-        for sk, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
-            tmp_tmp_tmp_tmp = np.zeros_like(tmp)
-            for zz in range(tmp.shape[0]):
-                tmp_tmp_tmp_tmp[zz] = frame_shift(tmp[zz], shifts_xy_sky_med[sk, zz, 1], shifts_xy_sky_med[sk, zz, 0],
-                                                  imlib=imlib)
-            write_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
-            if remove:
-                os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
-
+        # Finally, perform sky subtraction:
         ################## MEDIAN ##################################
         if mode == 'median':
             sci_list_test = [sci_list[0], sci_list[int(n_sci / 2)],
@@ -2788,31 +2866,36 @@ class raw_dataset:
             master_sky_times = np.zeros(n_sky)
 
             for sk, fits_name in enumerate(sky_list):
-                tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, verbose=debug)
+                tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + fits_name, verbose=debug)
                 _, head_tmp = open_fits(self.inpath + fits_name, header=True, verbose=debug)
                 master_skies2[sk] = np.median(tmp_tmp_tmp, axis=0)
                 master_sky_times[sk] = head_tmp['MJD-OBS']
-            write_fits(self.outpath + "master_skies_imlib.fits", master_skies2, verbose=debug)
+            write_fits(self.outpath + "master_skies.fits", master_skies2, verbose=debug)
             write_fits(self.outpath + "master_sky_times.fits", master_sky_times, verbose=debug)
 
-            master_skies2 = open_fits(self.outpath + "master_skies_imlib.fits", verbose=debug)
+            master_skies2 = open_fits(self.outpath + "master_skies.fits", verbose=debug)
             master_sky_times = open_fits(self.outpath + "master_sky_times.fits", verbose=debug)
 
             bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with closest frame in time')
             for sc, fits_name in enumerate(sci_list_test):
-                tmp_tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, verbose=debug)
+                tmp_tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + fits_name, verbose=debug)
                 tmpSKY2 = np.zeros_like(tmp_tmp_tmp_tmp)  ###
                 _, head_tmp = open_fits(self.inpath + fits_name, header=True, verbose=debug)
                 sc_time = head_tmp['MJD-OBS']
                 idx_sky = find_nearest(master_sky_times, sc_time)
                 tmpSKY2 = tmp_tmp_tmp_tmp - master_skies2[idx_sky]
-                write_fits(self.outpath + '4_sky_subtr_imlib_' + fits_name, tmpSKY2, verbose=debug)  ###
+                write_fits(self.outpath + '4_sky_subtr_' + fits_name, tmpSKY2, verbose=debug)  ###
             bar.update()
             if plot:
-                old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[0]), axis=0)
-                old_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[-1]), axis=0)
-                tmp = np.median(open_fits(self.outpath + '4_sky_subtr_imlib_' + sci_list[0]), axis=0)
-                tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_imlib_' + sci_list[-1]), axis=0)
+                old_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0])
+                old_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1])
+                tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[0])
+                tmp_tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1])
+                if old_tmp.ndim == 3:
+                    old_tmp = np.median(old_tmp, axis=0)
+                    old_tmp_tmp = np.median(old_tmp_tmp, axis=0)
+                    tmp = np.median(tmp, axis=0)
+                    tmp_tmp = np.median(tmp_tmp, axis=0)
             if plot == 'show':
                 plot_frames((old_tmp, old_tmp_tmp, tmp, tmp_tmp))
             if plot == 'save':
@@ -2824,18 +2907,21 @@ class raw_dataset:
             master_skies2 = np.zeros([n_sky, self.final_sz, self.final_sz])
             master_sky_times = np.zeros(n_sky)
             for sk, fits_name in enumerate(sky_list):
-                tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, verbose=debug)
+                tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + fits_name, verbose=debug)
                 _, head_tmp = open_fits(self.inpath + fits_name, header=True, verbose=debug)
                 master_skies2[sk] = np.median(tmp_tmp_tmp, axis=0)
                 master_sky_times[sk] = head_tmp['MJD-OBS']
-            write_fits(self.outpath + "master_skies_imlib.fits", master_skies2, verbose=debug)
+            write_fits(self.outpath + "master_skies.fits", master_skies2, verbose=debug)
             write_fits(self.outpath + "master_sky_times.fits", master_sky_times, verbose=debug)
 
-            all_skies_imlib = np.zeros([n_sky * self.new_ndit_sky, self.final_sz, self.final_sz])
+            all_skies = np.zeros([n_sky * self.new_ndit_sky, self.final_sz, self.final_sz])
             for sk, fits_name in enumerate(sky_list):
-                tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + fits_name, verbose=debug)
-                all_skies_imlib[sk * self.new_ndit_sky:(sk + 1) * self.new_ndit_sky] = tmp[:self.new_ndit_sky]
-
+                tmp = open_fits(self.outpath + '3_AGPM_aligned_' + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    all_skies[sk * self.new_ndit_sky:(sk + 1) * self.new_ndit_sky] = tmp[:self.new_ndit_sky]
+                else:
+                    all_skies[sk] = tmp.copy()
+                    
             # Define mask for the region where the PCs will be optimal
             # make sure the mask avoids dark region.
             mask_arr = np.ones([self.com_sz, self.com_sz])
@@ -2845,9 +2931,10 @@ class raw_dataset:
             mask_AGPM = frame_crop(mask_AGPM, self.final_sz)
             # Do PCA subtraction of the sky
             if plot:
-                tmp = np.median(tmp, axis=0)
-                tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[-1], verbose=debug)
-                tmp_tmp = np.median(tmp_tmp, axis=0)
+                tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1], verbose=debug)
+                if tmp.ndim == 3:
+                    tmp = np.median(tmp, axis=0)
+                    tmp_tmp = np.median(tmp_tmp, axis=0)
             if plot == 'show':
                 plot_frames((tmp_tmp, tmp, mask_AGPM), vmin=(np.percentile(tmp_tmp, 0.1), np.percentile(tmp, 0.1), 0),
                             vmax=(np.percentile(tmp_tmp, 99.9), np.percentile(tmp, 99.9), 1),
@@ -2880,19 +2967,21 @@ class raw_dataset:
                                         header=True)  # open the cube and get the header
                     sc_time = head['MJD-OBS']  # read this part of the header, float with the start time?
                     idx_sky = find_nearest(master_sky_times, sc_time)  # finds the corresponding cube using the time
-                    tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[fits_idx],
+                    tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[fits_idx],
                                     verbose=debug)  # opens science cube
-                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(
+                    if tmp.ndim == 2:
+                        tmp = tmp[np.newaxis,:,:]
+                    pca_lib = all_skies[int(np.sum(self.real_ndit_sky[:idx_sky])):int(
                         np.sum(self.real_ndit_sky[:idx_sky + 1]))]  # gets the sky cube?
                     med_sky = np.median(pca_lib, axis=0)  # takes median of the sky cubes
                     mean_std = np.zeros(
                         nnpc.shape[0])  # zeros array with length the number of principle components to test
                     hmean_std = np.zeros(nnpc.shape[0])  # same as above for some reason?
                     for nn, npc_tmp in enumerate(nnpc):  # iterate over the number of principle components to test
-                        tmp_tmp = cube_subtract_sky_pca(tmp - med_sky, all_skies_imlib - med_sky,
+                        tmp_tmp = cube_subtract_sky_pca(tmp - med_sky, all_skies - med_sky,
                                                         mask_AGPM, ref_cube=None,
                                                         ncomp=npc_tmp)  # runs PCA sky subtraction
-                        # write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+sci_list[fits_idx], tmp_tmp, verbose=debug)
+                        # write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_'.format(npc_tmp)+sci_list[fits_idx], tmp_tmp, verbose=debug)
                         # measure mean(std) in all apertures in tmp_tmp, and record for each npc
                         std = np.zeros(ndust_all)  # zeros array the length of the number of dust objects
                         for dd in range(ndust_all):  # iterate over the number of dust specks
@@ -2919,15 +3008,15 @@ class raw_dataset:
             #                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
             #                    sc_time = head['MJD-OBS']
             #                    idx_sky = find_nearest(master_sky_times,sc_time)
-            #                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
-            #                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
+            #                    tmp = open_fits(self.outpath+'3_AGPM_aligned_'+fits_name, verbose=debug)
+            #                    pca_lib = all_skies[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
             #                    med_sky = np.median(pca_lib,axis=0)
             #                    mean_std = np.zeros(nnpc.shape[0])
             #                    hmean_std = np.zeros(nnpc.shape[0])
             #                    for nn, npc_tmp in enumerate(nnpc):
-            #                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky,
+            #                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies-med_sky,
             #                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
-            #                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug)
+            #                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug)
             #                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
             #                        std = np.zeros(ndust_all)
             #                        for dd in range(ndust_all):
@@ -2941,12 +3030,12 @@ class raw_dataset:
             ##                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
             #                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
             #                    if remove:
-            #                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
+            #                        os.system("rm "+self.outpath+'3_AGPM_aligned_'+fits_name)
             #                        for npc_bad in nnpc_bad:
-            #                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
-            #                            os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+            #                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_bad)+fits_name)
+            #                            os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_'+fits_name)
             #                    else:
-            #                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+            #                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_'+fits_name)
 
             #                    bar.update()
 
@@ -2958,15 +3047,15 @@ class raw_dataset:
             #                    _, head = open_fits(self.inpath+fits_name, verbose=debug, header=True)
             #                    sc_time = head['MJD-OBS']
             #                    idx_sky = find_nearest(master_sky_times,sc_time)
-            #                    tmp = open_fits(self.outpath+'3_AGPM_aligned_imlib_'+fits_name, verbose=debug)
-            #                    pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
+            #                    tmp = open_fits(self.outpath+'3_AGPM_aligned_'+fits_name, verbose=debug)
+            #                    pca_lib = all_skies[int(np.sum(self.real_ndit_sky[:idx_sky])):int(np.sum(self.real_ndit_sky[:idx_sky+1]))]
             #                    med_sky = np.median(pca_lib,axis=0)
             #                    mean_std = np.zeros(nnpc.shape[0])
             #                    hmean_std = np.zeros(nnpc.shape[0])
             #                    for nn, npc_tmp in enumerate(nnpc):
-            #                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies_imlib-med_sky,
+            #                        tmp_tmp = cube_subtract_sky_pca(tmp-med_sky, all_skies-med_sky,
             #                                                                    mask_AGPM, ref_cube=None, ncomp=npc_tmp)
-            #                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_imlib_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug) # this should be the most common output of the final calibrated cubes
+            #                        write_fits(self.outpath+'4_sky_subtr_medclose1_npc{}_'.format(npc_tmp)+fits_name, tmp_tmp, verbose=debug) # this should be the most common output of the final calibrated cubes
             #                        # measure mean(std) in all apertures in tmp_tmp, and record for each npc
             #                        std = np.zeros(ndust_all)
             #                        for dd in range(ndust_all):
@@ -2980,12 +3069,12 @@ class raw_dataset:
             #                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc,npc_opt[sc]))
             #                    nnpc_bad = [pc for pc in nnpc if pc!=npc_opt[sc]]
             #                    if remove:
-            #                        os.system("rm "+self.outpath+'3_AGPM_aligned_imlib_'+fits_name)
-            #                        os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+            #                        os.system("rm "+self.outpath+'3_AGPM_aligned_'+fits_name)
+            #                        os.system("mv "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_'+fits_name)
             #                        for npc_bad in nnpc_bad:
-            #                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_bad)+fits_name)
+            #                            os.system("rm "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_bad)+fits_name)
             #                    else:
-            #                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_imlib_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_imlib_'+fits_name)
+            #                        os.system("cp "+self.outpath+'4_sky_subtr_medclose1_npc{:.0f}_'.format(npc_opt[sc])+fits_name + ' ' + self.outpath+'4_sky_subtr_'+fits_name)
             #                    bar.update()
             #                write_fits(self.outpath+"TMP_npc_opt.fits",npc_opt)
 
@@ -2996,30 +3085,33 @@ class raw_dataset:
                                     header=True)  # open the cube and get the header
                 sc_time = head['MJD-OBS']  # read this part of the header, float with the start time?
                 idx_sky = find_nearest(master_sky_times, sc_time)  # finds the corresponding cube using the time
-                tmp = open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[sc],
+                tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[sc],
                                 verbose=debug)  # opens science cube
-                pca_lib = all_skies_imlib[int(np.sum(self.real_ndit_sky[:idx_sky])):int(
+                if tmp.ndim == 2:
+                    tmp = tmp[np.newaxis,:,:]
+                pca_lib = all_skies[int(np.sum(self.real_ndit_sky[:idx_sky])):int(
                     np.sum(self.real_ndit_sky[:idx_sky + 1]))]  # gets the sky cube?
                 med_sky = np.median(pca_lib, axis=0)  # takes median of the sky cubes
-                tmp_tmp = cube_subtract_sky_pca(tmp - med_sky, all_skies_imlib - med_sky, mask_AGPM, ref_cube=None,
+                tmp_tmp = cube_subtract_sky_pca(tmp - med_sky, all_skies - med_sky, 
+                                                mask_AGPM, ref_cube=None,
                                                 ncomp=npc)
-                write_fits(self.outpath + '4_sky_subtr_imlib_' + fits_name, tmp_tmp, verbose=debug)
+                write_fits(self.outpath + '4_sky_subtr_' + fits_name, tmp_tmp, verbose=debug)
                 # bar.update()
                 if remove:
-                    os.system("rm " + self.outpath + '3_AGPM_aligned_imlib_' + fits_name)
+                    os.system("rm " + self.outpath + '3_AGPM_aligned_' + fits_name)
 
             if verbose:
                 print('Finished PCA dark subtraction')
             if plot:
                 if npc is None:
                     # ... IF PCA WITH DIFFERENT NPCs
-                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[-1]), axis=0)
-                    tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_imlib_'.format(1) + sci_list[-1]),
+                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1]), axis=0)
+                    tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(1) + sci_list[-1]),
                                     axis=0)
-                    tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_imlib_'.format(5) + sci_list[-1]),
+                    tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(5) + sci_list[-1]),
                                         axis=0)
                     tmp_tmp_tmp = np.median(
-                        open_fits(self.outpath + '4_sky_subtr_npc{}_imlib_'.format(100) + sci_list[-1]), axis=0)
+                        open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(100) + sci_list[-1]), axis=0)
                     tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(1) + sci_list[-1]),
                                      axis=0)
                     tmp_tmp2 = np.median(
@@ -3033,15 +3125,15 @@ class raw_dataset:
                                     save=self.outpath + 'SCI_PCA_sky_subtraction')
                 else:
                     # ... IF PCA WITH A SPECIFIC NPC
-                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[0]), axis=0)
+                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0]), axis=0)
                     old_tmp_tmp = np.median(
-                        open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[int(n_sci / 2)]), axis=0)
-                    old_tmp_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_imlib_' + sci_list[-1]),
+                        open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[int(n_sci / 2)]), axis=0)
+                    old_tmp_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1]),
                                                 axis=0)
-                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_imlib_' + sci_list[0]), axis=0)
-                    tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_imlib_' + sci_list[int(n_sci / 2)]),
+                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[0]), axis=0)
+                    tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[int(n_sci / 2)]),
                                          axis=0)
-                    tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_imlib_' + sci_list[-1]), axis=0)
+                    tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1]), axis=0)
                     if plot == 'show':
                         plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2))
                     if plot == 'save':
@@ -3066,7 +3158,7 @@ class raw_dataset:
         # os.system("rm "+self.outpath+'master_bpix_map_unsat.fits')
         # os.system("rm "+self.outpath+'master_flat_field.fits')
         # os.system("rm "+self.outpath+'master_flat_field_unsat.fits')
-        # os.system("rm "+self.outpath+'master_skies_imlib.fits')
+        # os.system("rm "+self.outpath+'master_skies.fits')
         # os.system("rm "+self.outpath+'master_sky_times.fits')
         # #os.system("rm "+self.outpath+'master_unsat_psf.fits') these are needed in post processing
         # #os.system("rm "+self.outpath+'master_unsat_psf_norm.fits')

@@ -22,7 +22,8 @@ from vip_hci.var import frame_filter_lowpass, frame_center, get_square
 import pdb
 
 
-def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=False):
+def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, 
+                      verbose=True, debug=False):
     """
         added by Iain to prevent dust grains being picked up as the AGPM
         
@@ -173,115 +174,115 @@ class input_dataset():
                 write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
 
     def mk_dico(self, coro=True, verbose=True, debug=False):
-        if coro:
-            # creating a dictionary
-            file_list = [f for f in listdir(self.outpath) if
-                         isfile(join(self.outpath, f))]
-            fits_list = []
-            sci_list = []
-            sci_list_mjd = []
-            sky_list = []
-            sky_list_mjd = []
-            unsat_list = []
-            flat_list = []
-            flat_dark_list = []
-            sci_dark_list = []
-            unsat_dark_list = []
-            master_mjd = []
-            master_airmass = []
 
-            if verbose:
-                print('Creating dictionary', flush=True)
+        # creating a dictionary
+        file_list = [f for f in listdir(self.outpath) if
+                     isfile(join(self.outpath, f))]
+        fits_list = []
+        sci_list = []
+        sci_list_mjd = []
+        sky_list = []
+        sky_list_mjd = []
+        unsat_list = []
+        flat_list = []
+        flat_dark_list = []
+        sci_dark_list = []
+        unsat_dark_list = []
+        master_mjd = []
+        master_airmass = []
+
+        if verbose:
+            print('Creating dictionary', flush=True)
+        for fname in file_list:
+            if fname.endswith('.fits') and fname.startswith('NACO'):
+                fits_list.append(fname)
+                cube, header = open_fits(self.outpath + fname, header=True,
+                                         verbose=debug)
+                if header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                        header['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
+                        header['HIERARCH ESO DET DIT'] == self.dit_sci and \
+                        header['HIERARCH ESO DET NDIT'] in self.ndit_sci and \
+                        cube.shape[0] > 0.8 * min(self.ndit_sci):  # avoid bad cubes
+
+                    sci_list.append(fname)
+                    sci_list_mjd.append(header['MJD-OBS'])
+                    # sci_list_airmass.append(header['AIRMASS'])
+
+                elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                      header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
+                      header['HIERARCH ESO DET DIT'] == self.dit_sci and \
+                      header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and \
+                        cube.shape[0] > 0.8 * min(self.ndit_sky):  # avoid bad cubes
+
+                    sky_list.append(fname)
+                    sky_list_mjd.append(header['MJD-OBS'])
+                    # sky_list_airmass.append(header['AIRMASS'])
+
+                elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                        header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
+                        header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
+                    unsat_list.append(fname)
+                    # unsat_list_mjd.append(header['MJD-OBS'])
+                    # unsat_list_airmass.append(header['AIRMASS'])
+
+                elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
+                    if header['HIERARCH ESO DET DIT'] == self.dit_flat:
+                        flat_list.append(fname)
+                    # flat_list_mjd.append(header['MJD-OBS'])
+                    # flat_list_airmass.append(header['AIRMASS'])
+
+                elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
+                    if header['HIERARCH ESO DET DIT'] == self.dit_flat:
+                        flat_dark_list.append(fname)
+                    if header['HIERARCH ESO DET DIT'] == self.dit_sci:
+                        sci_dark_list.append(fname)
+                    if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
+                        unsat_dark_list.append(fname)
+
+        # if no appropriate flat-sky found, use flat-lamp
+        if len(flat_list) == 0:
             for fname in file_list:
-                if fname.endswith('.fits') and fname.startswith('NACO'):
-                    fits_list.append(fname)
-                    cube, header = open_fits(self.outpath + fname, header=True,
-                                             verbose=debug)
-                    if header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                            header['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
-                            header['HIERARCH ESO DET DIT'] == self.dit_sci and \
-                            header['HIERARCH ESO DET NDIT'] in self.ndit_sci and \
-                            cube.shape[0] > 0.8 * min(self.ndit_sci):  # avoid bad cubes
-
-                        sci_list.append(fname)
-                        sci_list_mjd.append(header['MJD-OBS'])
-                        # sci_list_airmass.append(header['AIRMASS'])
-
-                    elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                          header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
-                          header['HIERARCH ESO DET DIT'] == self.dit_sci and \
-                          header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and \
-                            cube.shape[0] > 0.8 * min(self.ndit_sky):  # avoid bad cubes
-
-                        sky_list.append(fname)
-                        sky_list_mjd.append(header['MJD-OBS'])
-                        # sky_list_airmass.append(header['AIRMASS'])
-
-                    elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                            header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
-                            header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
-                        unsat_list.append(fname)
-                        # unsat_list_mjd.append(header['MJD-OBS'])
-                        # unsat_list_airmass.append(header['AIRMASS'])
-
-                    elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
-                        if header['HIERARCH ESO DET DIT'] == self.dit_flat:
-                            flat_list.append(fname)
-                        # flat_list_mjd.append(header['MJD-OBS'])
-                        # flat_list_airmass.append(header['AIRMASS'])
-
-                    elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
-                        if header['HIERARCH ESO DET DIT'] == self.dit_flat:
-                            flat_dark_list.append(fname)
-                        if header['HIERARCH ESO DET DIT'] == self.dit_sci:
-                            sci_dark_list.append(fname)
-                        if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
-                            unsat_dark_list.append(fname)
-
-            # if no appropriate flat-sky found, use flat-lamp
-            if len(flat_list) == 0:
-                for fname in file_list:
-                    if fname.endswith('.fits') and fname.startswith('NACO'): 
-                        cube, header = open_fits(self.outpath + fname, 
-                                                 header=True, verbose=debug)
-                        cond1 = 'FLAT,LAMP' in header['HIERARCH ESO DPR TYPE']
-                        cond2 = header['HIERARCH ESO DET DIT'] == self.dit_flat
-                        if cond1 & cond2:
-                           flat_list.append(fname)
-                           
-            if len(flat_list) == 0:
-                msg = "No appropriate flat fields found. Double-check requested FLAT DIT?"
-                raise ValueError(msg)
-                            
-            with open(self.outpath + "sci_list_mjd.txt", "w") as f:
-                for time in sci_list_mjd:
-                    f.write(str(time) + '\n')
-            with open(self.outpath + "sky_list_mjd.txt", "w") as f:
-                for time in sky_list_mjd:
-                    f.write(str(time) + '\n')
-            with open(self.outpath + "sci_list.txt", "w") as f:
-                for sci in sci_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "sky_list.txt", "w") as f:
-                for sci in sky_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "unsat_list.txt", "w") as f:
-                for sci in unsat_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "unsat_dark_list.txt", "w") as f:
-                for sci in unsat_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "flat_dark_list.txt", "w") as f:
-                for sci in flat_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "sci_dark_list.txt", "w") as f:
-                for sci in sci_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "flat_list.txt", "w") as f:
-                for sci in flat_list:
-                    f.write(sci + '\n')
-            if verbose:
-                print('Done :)', flush=True)
+                if fname.endswith('.fits') and fname.startswith('NACO'): 
+                    cube, header = open_fits(self.outpath + fname, 
+                                             header=True, verbose=debug)
+                    cond1 = 'FLAT,LAMP' in header['HIERARCH ESO DPR TYPE']
+                    cond2 = header['HIERARCH ESO DET DIT'] == self.dit_flat
+                    if cond1 & cond2:
+                       flat_list.append(fname)
+                       
+        if len(flat_list) == 0:
+            msg = "No appropriate flat fields found. Double-check requested FLAT DIT?"
+            raise ValueError(msg)
+                        
+        with open(self.outpath + "sci_list_mjd.txt", "w") as f:
+            for time in sci_list_mjd:
+                f.write(str(time) + '\n')
+        with open(self.outpath + "sky_list_mjd.txt", "w") as f:
+            for time in sky_list_mjd:
+                f.write(str(time) + '\n')
+        with open(self.outpath + "sci_list.txt", "w") as f:
+            for sci in sci_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "sky_list.txt", "w") as f:
+            for sci in sky_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "unsat_list.txt", "w") as f:
+            for sci in unsat_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "unsat_dark_list.txt", "w") as f:
+            for sci in unsat_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "flat_dark_list.txt", "w") as f:
+            for sci in flat_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "sci_dark_list.txt", "w") as f:
+            for sci in sci_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "flat_list.txt", "w") as f:
+            for sci in flat_list:
+                f.write(sci + '\n')
+        if verbose:
+            print('Done :)', flush=True)
 
     def find_sky_in_sci_cube(self, nres=3, coro=True, verbose=True, plot=None, debug=False):
         """
