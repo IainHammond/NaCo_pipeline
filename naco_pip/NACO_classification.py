@@ -22,7 +22,8 @@ from vip_hci.var import frame_filter_lowpass, frame_center, get_square
 import pdb
 
 
-def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=False):
+def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, 
+                      verbose=True, debug=False):
     """
         added by Iain to prevent dust grains being picked up as the AGPM
         
@@ -107,7 +108,8 @@ class input_dataset():
         if not isdir(self.outpath):
             os.makedirs(self.outpath)
 
-    def bad_columns(self, sat_val=32768, verbose=True, debug=False):
+    def bad_columns(self, correct=True, sat_val=32768, verbose=True, 
+                    debug=False):
         """
         In NACO data there are systematic bad columns in the lower left quadrant.
         This method will correct those bad columns with the median of the neighbouring pixels.
@@ -124,145 +126,163 @@ class input_dataset():
 
         for fname in self.file_list:
             tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
-            # ADD code here that checks for bad column and updates the mask
-            if verbose:
-                print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
-                                                                 header_fname['HIERARCH ESO DPR TYPE']), flush=True)
-            # crop the bad pixel map to the same dimensions of the frames
-
-            if len(tmp.shape) == 3:
-                nz, ny, nx = tmp.shape
-                bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as cube
-                tmp_median = np.median(tmp, axis=0)  # median frame of cube
-                # loop through the median cube pixels and if any are 32768, add the location to the mask
-                bcm[np.where(tmp_median == sat_val)] = 1
-                # for i in range(0,nx): # all x pixels
-                #     for j in range(0,ny): # all y pixels
-                #         if tmp_median[j,i] == sat_val: # if saturated
-                #             bcm[j,i] = 1 # mark as bad in mask
-                # cy, cx = ny/2 , nx/2
-                # ini_y, fin_y = int(512-cy), int(512+cy)
-                # ini_x, fin_x = int(512-cx), int(512+cx)
-                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                for j in range(nz):
-                    # replace bad columns in each frame of the cubes
-                    tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
-                                                       protect_mask=False, verbose=debug)
-                write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
-
+            if correct:
+                # ADD code here that checks for bad column and updates the mask
+                if verbose:
+                    print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
+                                                                     header_fname['HIERARCH ESO DPR TYPE']), flush=True)
+                # crop the bad pixel map to the same dimensions of the frames
+                if len(tmp.shape) == 3:
+                    nz, ny, nx = tmp.shape
+                    bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as cube
+                    tmp_median = np.median(tmp, axis=0)  # median frame of cube
+                    # loop through the median cube pixels and if any are 32768, add the location to the mask
+                    bcm[np.where(tmp_median == sat_val)] = 1
+                    # for i in range(0,nx): # all x pixels
+                    #     for j in range(0,ny): # all y pixels
+                    #         if tmp_median[j,i] == sat_val: # if saturated
+                    #             bcm[j,i] = 1 # mark as bad in mask
+                    # cy, cx = ny/2 , nx/2
+                    # ini_y, fin_y = int(512-cy), int(512+cy)
+                    # ini_x, fin_x = int(512-cx), int(512+cx)
+                    # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                    for j in range(nz):
+                        # replace bad columns in each frame of the cubes
+                        tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
+                                                           protect_mask=False, verbose=debug)
+                    write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
+    
+                else:
+                    print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
+                    ny, nx = tmp.shape
+                    bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
+                    bcm[np.where(tmp == sat_val)] = 1
+                    # for i in range(0,nx):
+                    #     for j in range(0,ny):
+                    #         if tmp[j,i] == sat_val:
+                    #             bcm[j,i] = 1
+                    # cy, cx = ny/2 , nx/2
+                    # ini_y, fin_y = int(512-cy), int(512+cy)
+                    # ini_x, fin_x = int(512-cx), int(512+cx)
+                    # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
+                    tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
+                                                    verbose=debug)
+                    write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
+                if verbose:
+                    print('Fixed file {}'.format(fname), flush=True)
             else:
-                print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
-                ny, nx = tmp.shape
-                bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
-                bcm[np.where(tmp == sat_val)] = 1
-                # for i in range(0,nx):
-                #     for j in range(0,ny):
-                #         if tmp[j,i] == sat_val:
-                #             bcm[j,i] = 1
-                # cy, cx = ny/2 , nx/2
-                # ini_y, fin_y = int(512-cy), int(512+cy)
-                # ini_x, fin_x = int(512-cx), int(512+cx)
-                # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
-                                                verbose=debug)
                 write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
-            if verbose:
-                print('Fixed file {}'.format(fname), flush=True)
 
     def mk_dico(self, coro=True, verbose=True, debug=False):
-        if coro:
-            # creating a dictionary
-            file_list = [f for f in listdir(self.outpath) if
-                         isfile(join(self.outpath, f))]
-            fits_list = []
-            sci_list = []
-            sci_list_mjd = []
-            sky_list = []
-            sky_list_mjd = []
-            unsat_list = []
-            flat_list = []
-            flat_dark_list = []
-            sci_dark_list = []
-            unsat_dark_list = []
-            master_mjd = []
-            master_airmass = []
 
-            if verbose:
-                print('Creating dictionary', flush=True)
-            for fname in file_list:
-                if fname.endswith('.fits') and fname.startswith('NACO'):
-                    fits_list.append(fname)
-                    cube, header = open_fits(self.outpath + fname, header=True,
-                                             verbose=debug)
-                    if header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                            header['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
-                            header['HIERARCH ESO DET DIT'] == self.dit_sci and \
-                            header['HIERARCH ESO DET NDIT'] in self.ndit_sci and \
-                            cube.shape[0] > 0.8 * min(self.ndit_sci):  # avoid bad cubes
+        # creating a dictionary
+        file_list = [f for f in listdir(self.outpath) if
+                     isfile(join(self.outpath, f))]
+        fits_list = []
+        sci_list = []
+        sci_list_mjd = []
+        sky_list = []
+        sky_list_mjd = []
+        unsat_list = []
+        flat_list = []
+        flat_dark_list = []
+        sci_dark_list = []
+        unsat_dark_list = []
+        master_mjd = []
+        master_airmass = []
 
-                        sci_list.append(fname)
-                        sci_list_mjd.append(header['MJD-OBS'])
-                        # sci_list_airmass.append(header['AIRMASS'])
+        if verbose:
+            print('Creating dictionary', flush=True)
+        for fname in file_list:
+            if fname.endswith('.fits') and fname.startswith('NACO'):
+                fits_list.append(fname)
+                cube, header = open_fits(self.outpath + fname, header=True,
+                                         verbose=debug)
+                if header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                        header['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
+                        header['HIERARCH ESO DET DIT'] == self.dit_sci and \
+                        header['HIERARCH ESO DET NDIT'] in self.ndit_sci and \
+                        cube.shape[0] > 0.8 * min(self.ndit_sci):  # avoid bad cubes
 
-                    elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                          header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
-                          header['HIERARCH ESO DET DIT'] == self.dit_sci and \
-                          header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and \
-                            cube.shape[0] > 0.8 * min(self.ndit_sky):  # avoid bad cubes
+                    sci_list.append(fname)
+                    sci_list_mjd.append(header['MJD-OBS'])
+                    # sci_list_airmass.append(header['AIRMASS'])
 
-                        sky_list.append(fname)
-                        sky_list_mjd.append(header['MJD-OBS'])
-                        # sky_list_airmass.append(header['AIRMASS'])
+                elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                      header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
+                      header['HIERARCH ESO DET DIT'] == self.dit_sci and \
+                      header['HIERARCH ESO DET NDIT'] in self.ndit_sky) and \
+                        cube.shape[0] > 0.8 * min(self.ndit_sky):  # avoid bad cubes
 
-                    elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
-                            header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
-                            header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
-                        unsat_list.append(fname)
-                        # unsat_list_mjd.append(header['MJD-OBS'])
-                        # unsat_list_airmass.append(header['AIRMASS'])
+                    sky_list.append(fname)
+                    sky_list_mjd.append(header['MJD-OBS'])
+                    # sky_list_airmass.append(header['AIRMASS'])
 
-                    elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
+                elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                        header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
+                        header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
+                    unsat_list.append(fname)
+                    # unsat_list_mjd.append(header['MJD-OBS'])
+                    # unsat_list_airmass.append(header['AIRMASS'])
+
+                elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
+                    if header['HIERARCH ESO DET DIT'] == self.dit_flat:
                         flat_list.append(fname)
-                        # flat_list_mjd.append(header['MJD-OBS'])
-                        # flat_list_airmass.append(header['AIRMASS'])
+                    # flat_list_mjd.append(header['MJD-OBS'])
+                    # flat_list_airmass.append(header['AIRMASS'])
 
-                    elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
-                        if header['HIERARCH ESO DET DIT'] == self.dit_flat:
-                            flat_dark_list.append(fname)
-                        if header['HIERARCH ESO DET DIT'] == self.dit_sci:
-                            sci_dark_list.append(fname)
-                        if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
-                            unsat_dark_list.append(fname)
+                elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
+                    if header['HIERARCH ESO DET DIT'] == self.dit_flat:
+                        flat_dark_list.append(fname)
+                    if header['HIERARCH ESO DET DIT'] == self.dit_sci:
+                        sci_dark_list.append(fname)
+                    if header['HIERARCH ESO DET DIT'] == self.dit_unsat:
+                        unsat_dark_list.append(fname)
 
-            with open(self.outpath + "sci_list_mjd.txt", "w") as f:
-                for time in sci_list_mjd:
-                    f.write(str(time) + '\n')
-            with open(self.outpath + "sky_list_mjd.txt", "w") as f:
-                for time in sky_list_mjd:
-                    f.write(str(time) + '\n')
-            with open(self.outpath + "sci_list.txt", "w") as f:
-                for sci in sci_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "sky_list.txt", "w") as f:
-                for sci in sky_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "unsat_list.txt", "w") as f:
-                for sci in unsat_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "unsat_dark_list.txt", "w") as f:
-                for sci in unsat_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "flat_dark_list.txt", "w") as f:
-                for sci in flat_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "sci_dark_list.txt", "w") as f:
-                for sci in sci_dark_list:
-                    f.write(sci + '\n')
-            with open(self.outpath + "flat_list.txt", "w") as f:
-                for sci in flat_list:
-                    f.write(sci + '\n')
-            if verbose:
-                print('Done :)', flush=True)
+        # if no appropriate flat-sky found, use flat-lamp
+        if len(flat_list) == 0:
+            for fname in file_list:
+                if fname.endswith('.fits') and fname.startswith('NACO'): 
+                    cube, header = open_fits(self.outpath + fname, 
+                                             header=True, verbose=debug)
+                    cond1 = 'FLAT,LAMP' in header['HIERARCH ESO DPR TYPE']
+                    cond2 = header['HIERARCH ESO DET DIT'] == self.dit_flat
+                    if cond1 & cond2:
+                       flat_list.append(fname)
+                       
+        if len(flat_list) == 0:
+            msg = "No appropriate flat fields found. Double-check requested FLAT DIT?"
+            raise ValueError(msg)
+                        
+        with open(self.outpath + "sci_list_mjd.txt", "w") as f:
+            for time in sci_list_mjd:
+                f.write(str(time) + '\n')
+        with open(self.outpath + "sky_list_mjd.txt", "w") as f:
+            for time in sky_list_mjd:
+                f.write(str(time) + '\n')
+        with open(self.outpath + "sci_list.txt", "w") as f:
+            for sci in sci_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "sky_list.txt", "w") as f:
+            for sci in sky_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "unsat_list.txt", "w") as f:
+            for sci in unsat_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "unsat_dark_list.txt", "w") as f:
+            for sci in unsat_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "flat_dark_list.txt", "w") as f:
+            for sci in flat_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "sci_dark_list.txt", "w") as f:
+            for sci in sci_dark_list:
+                f.write(sci + '\n')
+        with open(self.outpath + "flat_list.txt", "w") as f:
+            for sci in flat_list:
+                f.write(sci + '\n')
+        if verbose:
+            print('Done :)', flush=True)
 
     def find_sky_in_sci_cube(self, nres=3, coro=True, verbose=True, plot=None, debug=False):
         """
