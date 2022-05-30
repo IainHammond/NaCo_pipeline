@@ -10,7 +10,6 @@ __all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
 
 import os
 import pdb
-import random
 from os.path import isdir, isfile
 
 import matplotlib as mpl
@@ -1317,42 +1316,43 @@ class raw_dataset:
 
         flat_X = []
         flat_X_values = []
-        # if the airmass exists, we can group the flats based on airmass
-        if len(flat_airmass_test) > 0:
-            if verbose:
-                print('AIRMASS detected in FLATS header. Grouping FLATS by airmass ....')
-            # flat cubes measured at 3 different airmass
-            for fl, flat_name in enumerate(flat_list):
-                tmp, header = open_fits(self.inpath + flat_list[fl], header=True, verbose=debug)
-                flat_X.append(header['AIRMASS'])
-                if fl == 0:
-                    flat_X_values.append(header['AIRMASS'])
-                else:
-                    list_occ = [np.isclose(header['AIRMASS'], x, atol=0.1) for x in
-                                flat_X_values]  # sorts nearby values together
-                    if True not in list_occ:
-                        flat_X_values.append(header['AIRMASS'])
-            flat_X_values = np.sort(flat_X_values)  # !!! VERY IMPORTANT, DO NOT COMMENT
-            if verbose:
-                print('Airmass values in FLATS: {}'.format(flat_X_values))
-                print('The airmass values have been sorted into a list')
 
-        # if no airmass in header, we can group by using the median pixel value across the flat
-        elif len(flat_list) == 15:
-            # use same structure as above, replacing airmass with median background level
-            for fl, flat_name in enumerate(flat_list):
-                tmp = open_fits(self.inpath + flat_list[fl], verbose=debug)
-                flat_X.append(np.median(tmp))
-                if fl == 0:
-                    flat_X_values.append(np.median(tmp))
-                else:
-                    list_occ = [np.isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
-                    if True not in list_occ:
+        if len(flat_airmass_test) > 0 or len(flat_list) == 15:
+            if len(flat_airmass_test) > 0:  # if the airmass exists, we can group the flats based on airmass
+                if verbose:
+                    print('AIRMASS detected in FLATS header. Grouping FLATS by airmass ....')
+                # flat cubes measured at 3 different airmass
+                for fl, flat_name in enumerate(flat_list):
+                    tmp, header = open_fits(self.inpath + flat_list[fl], header=True, verbose=debug)
+                    flat_X.append(header['AIRMASS'])
+                    if fl == 0:
+                        flat_X_values.append(header['AIRMASS'])
+                    else:
+                        list_occ = [np.isclose(header['AIRMASS'], x, atol=0.1) for x in
+                                    flat_X_values]  # sorts nearby values together
+                        if True not in list_occ:
+                            flat_X_values.append(header['AIRMASS'])
+                flat_X_values = np.sort(flat_X_values)  # !!! VERY IMPORTANT, DO NOT COMMENT
+                if verbose:
+                    print('Airmass values in FLATS: {}'.format(flat_X_values))
+                    print('The airmass values have been sorted into a list')
+
+            # if no airmass in header, we can group by using the median pixel value across the flat
+            elif len(flat_list) == 15:
+                # use same structure as above, replacing airmass with median background level
+                for fl, flat_name in enumerate(flat_list):
+                    tmp = open_fits(self.inpath + flat_list[fl], verbose=debug)
+                    flat_X.append(np.median(tmp))
+                    if fl == 0:
                         flat_X_values.append(np.median(tmp))
-            flat_X_values = np.sort(flat_X_values)
-            if verbose:
-                print('Median FLAT values: {}'.format(flat_X_values))
-                print('The median FLAT values have been sorted into a list')
+                    else:
+                        list_occ = [np.isclose(np.median(tmp), x, atol=50) for x in flat_X_values]
+                        if True not in list_occ:
+                            flat_X_values.append(np.median(tmp))
+                flat_X_values = np.sort(flat_X_values)
+                if verbose:
+                    print('Median FLAT values: {}'.format(flat_X_values))
+                    print('The median FLAT values have been sorted into a list')
 
             # There should be 15 twilight flats in total with NACO; 5 at each airmass. BUG SOMETIMES!
             flat_tmp_cube_1 = np.zeros([5, self.com_sz, self.com_sz])
@@ -1383,7 +1383,7 @@ class raw_dataset:
             if verbose:
                 print('The median FLAT cubes with same airmass have been defined')
                 
-        else:
+        else:  # if not 15 frames, manually sort by median pixel value
             msg = '{} (!=15) flat-fields found => assuming old way of calculating flats'
             print(msg.format(len(flat_list)))
             all_flats = []
