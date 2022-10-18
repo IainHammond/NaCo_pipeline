@@ -83,7 +83,7 @@ def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101,
     xcom = cornerx + xcom_tmp
 
     if verbose:
-        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom)
+        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom, flush=True)
     if debug:
         pdb.set_trace()
     return [ycom, xcom]
@@ -104,7 +104,7 @@ class input_dataset():
         self.dit_flat = dataset_dict['dit_flat']
         self.fast_reduction = dataset_dict['fast_reduction']
         self.dataset_dict = dataset_dict
-        print('##### Number of FITS files:', len(self.file_list), '#####')
+        print('##### Number of FITS files:', len(self.file_list), '#####', flush=True)
         if not isdir(self.outpath):
             os.makedirs(self.outpath)
 
@@ -387,7 +387,7 @@ class input_dataset():
             with open(self.outpath + "sci_list.txt", "w") as f:
                 f.write('master_sci_fast_reduction.fits')
             write_fits(self.outpath + 'master_sci_fast_reduction.fits', master_sci, verbose=debug)
-            print('Saved fast reduction master science cube')
+            print('Saved fast reduction master science cube', flush=True)
         else:
             with open(self.outpath + "sci_list.txt", "w") as f:
                 for sci in sci_list:
@@ -409,10 +409,10 @@ class input_dataset():
                 f.write(str(time) + '\n')
 
         if len(sci_list_mjd) != len(sci_list):
-            print('======== WARNING: SCI observation time list is a different length to SCI cube list!! ========')
+            print('======== WARNING: SCI observation time list is a different length to SCI cube list!! ========', flush=True)
 
         if len(sky_list_mjd) != len(sky_list):
-            print('======== WARNING: SKY observation time list is a different length to SKY cube list!! ========')
+            print('======== WARNING: SKY observation time list is a different length to SKY cube list!! ========', flush=True)
         if verbose:
             print('done sorting :)', flush=True)
 
@@ -473,7 +473,7 @@ class input_dataset():
                 pupilpos = 180.0 - parang[ff] + posang[ff]
                 rot_pt_off[ff] = 90 + 89.44 - pupilpos
                 if verbose:
-                    print("parang: {}, posang: {}, rot_pt_off: {}".format(parang[ff], posang[ff], rot_pt_off[ff]))
+                    print("parang: {}, posang: {}, rot_pt_off: {}".format(parang[ff], posang[ff], rot_pt_off[ff]), flush=True)
 
             # NEXT CHECK IF THE OBSERVATION WENT THROUGH TRANSIT (change of sign in parang OR stddev of rot_pt_off > 1.)       
 
@@ -482,12 +482,11 @@ class input_dataset():
 
             if np.min(parang) * np.max(parang) < 0. or rot_pt_off_std > 1.:
                 if verbose:
-                    print(
-                        "The observation goes through transit and/or the pupil position was reset in the middle of the observation: ")
+                    print("The observation goes through transit and/or the pupil position was reset in the middle of the observation: ", flush=True)
                     if np.min(parang) * np.max(parang) < 0.:
-                        print("min/max parang: ", np.min(parang), np.max(parang))
+                        print("min/max parang: ", np.min(parang), np.max(parang), flush=True)
                     if rot_pt_off_std > 1.:
-                        print("the standard deviation of pupil positions is greater than 1: ", rot_pt_off_std)
+                        print("the standard deviation of pupil positions is greater than 1: ", rot_pt_off_std, flush=True)
                 # find index where the transit occurs (change of sign of parang OR big difference in pupil pos)
                 n_changes = 0
                 for ff in range(len(sci_list) - 1):
@@ -498,7 +497,7 @@ class input_dataset():
                 if n_changes != 1:
                     print(
                         " {} passages of transit were detected (instead of 1!). Check that the input fits list is given in chronological order.".format(
-                            n_changes))
+                            n_changes), flush=True)
                     pdb.set_trace()
 
                 rot_pt_off_med1 = np.median(rot_pt_off[:idx_transit])

@@ -18,7 +18,7 @@ try:
     from vip_hci.config import get_available_memory, time_ini, timing
 except:
     from vip_hci.conf import get_available_memory, time_ini, timing
-    print('Attention: A newer version of VIP is available.')
+    print('Attention: A newer version of VIP is available.', flush=True)
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, cube_detect_badfr_correlation, \
     cube_crop_frames, cube_subsample
@@ -39,15 +39,15 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             for line in tmp:
                 self.sci_list.append(line.split('\n')[0])
         self.sci_list.sort()  # make sure they are in order so derotation doesn't make a mess of the frames
-        print(len(self.sci_list), 'science cubes')
+        print(len(self.sci_list), 'science cubes', flush=True)
         # read the dimensions of each science cube from calibration, or get from each fits file
         if isfile(self.inpath+'new_ndit_sci_sky_unsat.fits'):
-            print('Using SCI cube dimensions from calibration')
+            print('Using SCI cube dimensions from calibration', flush=True)
             nframes = open_fits(self.inpath+'new_ndit_sci_sky_unsat.fits', verbose=False)
             self.real_ndit_sci = [int(nframes[0])] * len(self.sci_list)
         else:
             self.real_ndit_sci = []
-            print('Re-evaluating SCI cube dimensions')
+            print('Re-evaluating SCI cube dimensions', flush=True)
             for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
                 tmp = open_fits(self.inpath+'4_sky_subtr_'+fits_name, verbose=False)
                 self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
@@ -101,11 +101,11 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         fwhm = fwhm_all[0] # fwhm is the first entry in the file 
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
-            print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)))
+            print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)), flush=True)
 
         if not subi_size % 2:
             subi_size -= 1
-            print('WARNING: Recentring sub image size not odd. Adjusted to {} px'.format(subi_size))
+            print('WARNING: Recentring sub image size not odd. Adjusted to {} px'.format(subi_size), flush=True)
 
         # Creates a master science cube with just the median of each cube
         if not isfile(self.outpath+'median_calib_cube.fits'):
@@ -116,19 +116,19 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     _, ny, nx = tmp.shape  # dimensions of cube
                     if subi_size > ny:  # check if bigger than science frame
                         subi_size = ny  # ny should be odd already from calibration
-                        print('WARNING: Recentring sub image size larger than frame. Adjusted to {} px'.format(subi_size))
+                        print('WARNING: Recentring sub image size larger than frame. Adjusted to {} px'.format(subi_size), flush=True)
                     tmp_tmp = np.zeros([ncubes, ny, ny])  # template cube with the median of each SCI cube
                 tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
                 get_available_memory()
                 bar.update()
             write_fits(self.outpath+'median_calib_cube.fits', tmp_tmp, verbose=debug)
             if verbose:
-                print('Median science cube created for recentring')
+                print('Median science cube created for recentring', flush=True)
         else:
             tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits', verbose=debug)
             _, ny, nx = tmp_tmp.shape
             if verbose:
-                print('Median science cube for recentring has been read from file')
+                print('Median science cube for recentring has been read from file', flush=True)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
@@ -253,7 +253,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if not sub_frame_sz % 2:
             sub_frame_sz -= 1
-            print('WARNING: Bad frame sub image size not odd. Adjusted to {} px'.format(sub_frame_sz))
+            print('WARNING: Bad frame sub image size not odd. Adjusted to {} px'.format(sub_frame_sz), flush=True)
 
         angle_file = open_fits(self.outpath+'derot_angles.fits', verbose=debug)  # opens the rotation file
         recentered_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']), verbose=debug)  # loads the master cube
@@ -285,7 +285,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if verbose:
             print("x shift median:", median_sx)
-            print("y shift median:", median_sy)
+            print("y shift median:", median_sy, flush=True)
 
         bad = []
         good = []
@@ -310,14 +310,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if verbose:
             print('Frames within pixel shift threshold:', len(frames_pxl_threshold))
             print('########### Median combining {} frames for correlation check... ###########'.format(
-                len(frames_pxl_threshold)))
+                len(frames_pxl_threshold)), flush=True)
 
         # makes array of good frames from the recentered mastercube
         subarray = cube_crop_frames(frames_pxl_threshold, size=sub_frame_sz, verbose=verbose)  # crops all the frames to a common size
         frame_ref = np.nanmedian(subarray, axis=0)  # median frame of remaining cropped frames, can be sped up with multi-processing
 
         if verbose:
-            print('Running frame correlation check...')
+            print('Running frame correlation check...', flush=True)
 
         # calculates correlation threshold using the median of the Pearson correlation of all frames, minus 1 standard deviation 
 
@@ -342,7 +342,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         frames_threshold = frames_pxl_threshold[good_frames]
         del frames_pxl_threshold
         if verbose:
-            print('Frames within correlation threshold:', len(frames_threshold))
+            print('Frames within correlation threshold:', len(frames_threshold), flush=True)
         # only keeps the derotation entries for the good frames above the correlation threshold     
         angle_threshold = angle_pxl_threshold[good_frames]
 
@@ -385,9 +385,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if not crop_size % 2:
             crop_size += 1
-            print('Crop size not odd, increased to {}'.format(crop_size))
+            print('Crop size not odd, increased to {}'.format(crop_size), flush=True)
         if debug:
-            print('Input crop size is {} pixels'.format(crop_size))
+            print('Input crop size is {} pixels'.format(crop_size), flush=True)
 
         if crop_size >= ny:
             print('Crop size is larger than the frame size. Skipping cropping...', flush=True)

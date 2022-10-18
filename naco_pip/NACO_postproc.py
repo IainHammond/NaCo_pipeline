@@ -28,7 +28,7 @@ except:
     from vip_hci.pca import pca, pca_annular, pca_annulus
     from vip_hci.metrics import normalize_psf, cube_inject_companions
     from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
-    print('Attention: A newer version of VIP is available.')
+    print('Attention: A newer version of VIP is available.', flush=True)
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.metrics import snrmap, contrast_curve, snr
 from vip_hci.preproc import cube_crop_frames
@@ -958,7 +958,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
         if verbose:
             print('Input path is {}'.format(self.inpath))
-            print('Output path is {}'.format(outpath_sub))
+            print('Output path is {}'.format(outpath_sub), flush=True)
 
         source = self.dataset_dict['source']
         tn_shift = 0.572  # ± 0.178, Launhardt et al. 2020, true North offset for NACO
@@ -1043,7 +1043,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             dx_pl = guess_xy[0][0] - cx
             r_pl = np.sqrt(np.power(dx_pl, 2) + np.power(dy_pl, 2))  # pixel distance to the guess location
             theta_pl = (np.rad2deg(np.arctan2(dy_pl, dx_pl))) % 360  # theta (angle) to the guess location
-            print("Estimated (r, theta) before first guess = ({:.1f},{:.1f})".format(r_pl, theta_pl))
+            print("Estimated (r, theta) before first guess = ({:.1f},{:.1f})".format(r_pl, theta_pl), flush=True)
 
             ini_state = firstguess(ADI_cube, derot_angles, psfn, ncomp=opt_npc, plsc=self.pixel_scale,
                                    planets_xy_coord=guess_xy, fwhm=self.fwhm,
@@ -1071,7 +1071,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
             if ini_state[0] < bounds[0][0] or ini_state[0] > bounds[0][1] or ini_state[1] < bounds[1][0] or \
                     ini_state[1] > bounds[1][1] or ini_state[2] < bounds[2][0] or ini_state[2] > bounds[2][1]:
-                print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!")
+                print("!!! WARNING: simplex results not in original bounds - NEGFC simplex MIGHT HAVE FAILED !!!", flush=True)
                 ini_state = np.array([r_pl, theta_pl, abs(ini_state[2])])
 
             if verbose is True:

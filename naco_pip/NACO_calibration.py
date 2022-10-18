@@ -18,21 +18,19 @@ import pyprind
 from matplotlib import pyplot as plt
 
 try:
-    from vip_hci.config import time_ini, time_fin, timing
+    from vip_hci.config import time_ini, time_fin, timing, get_available_memory
     from vip_hci.fm import normalize_psf
 except:
-    from vip_hci.conf import time_ini, time_fin, timing
+    from vip_hci.conf import time_ini, time_fin, timing, get_available_memory
     from vip_hci.metrics import normalize_psf
-    print('Attention: A newer version of VIP is available.')
+    print('Attention: A newer version of VIP is available.', flush=True)
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated, cube_fix_badpix_clump, \
-    cube_recenter_2dfit, cube_detect_badfr_correlation, frame_fix_badpix_isolated, \
-    approx_stellar_position
+    cube_recenter_2dfit, frame_fix_badpix_isolated, cube_detect_badfr_pxstats, approx_stellar_position
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
 from vip_hci.metrics import detection
-from vip_hci.stats import cube_distance
 from hciplot import plot_frames
 from skimage.feature import register_translation
 from photutils import CircularAperture, aperture_photometry
@@ -74,7 +72,7 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     if debug:
         pdb.set_trace()
     if verbose:
-        print('The centre of the shadow is', 'cy = ', cy, 'cx = ', cx)
+        print('The centre of the shadow is', 'cy = ', cy, 'cx = ', cx, flush=True)
     if plot == 'show':
         plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame, 99.9), 1, 1),
                     vmin=(np.percentile(median_frame, 0.1), 0, 0), label=('Median frame', 'Shadow', ''), title='Shadow')
@@ -164,7 +162,7 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     xcom = cornerx + xcom_tmp
 
     if verbose:
-        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom)
+        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom, flush=True)
     if debug:
         pdb.set_trace()
     return [ycom, xcom]
@@ -277,7 +275,7 @@ class raw_dataset:
             final_sz_ori -= 1
         final_sz = int(final_sz_ori)  # iain: added int() around final_sz_ori as cropping requires an integer
         if verbose:
-            print('the final crop size is ', final_sz)
+            print('the final crop size is ', final_sz, flush=True)
         if debug:
             pdb.set_trace()
         return final_sz
@@ -376,11 +374,11 @@ class raw_dataset:
         for fd, fd_name in enumerate(flat_dark_list):
             tmp_tmp = open_fits(self.inpath + fd_name, header=False, verbose=debug)
             tmp[fd] = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
-            print(tmp[fd].shape)
+            print(tmp[fd].shape, flush=True)
             master_all_darks.append(tmp[fd])
         write_fits(self.outpath + 'flat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
-            print('Flat dark cubes have been cropped and saved')
+            print('Flat dark cubes have been cropped and saved', flush=True)
 
         tmp = np.zeros([len(sci_dark_list), self.com_sz, self.com_sz])
 
@@ -394,25 +392,25 @@ class raw_dataset:
                                          verbose=debug)
                     tmp = np.array([tmp_tmp])
                     master_all_darks.append(tmp_tmp)
-                    print(tmp_tmp.shape)
+                    print(tmp_tmp.shape, flush=True)
                 else:
                     tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
                     for i in range(tmp.shape[0]):
                         master_all_darks.append(tmp[i])
-                    print(tmp[-1].shape)
+                    print(tmp[-1].shape, flush=True)
             else:
                 if n_dim == 2:
                     tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
                     master_all_darks.append(tmp[-1])
-                    print(tmp[-1].shape)
+                    print(tmp[-1].shape, flush=True)
                 else:
                     tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug), axis=0)
                     for i in range(tmp_tmp.shape[0]):
                         master_all_darks.append(tmp[-tmp_tmp.shape[0]+i])
-                    print(tmp[-1].shape)
+                    print(tmp[-1].shape, flush=True)
         write_fits(self.outpath + 'sci_dark_cube.fits', tmp, verbose=debug)
         if verbose:
-            print('Sci dark cubes have been cropped and saved')
+            print('Sci dark cubes have been cropped and saved', flush=True)
 
         tmp = np.zeros([len(unsat_dark_list), self.com_sz, self.com_sz])
 
@@ -426,43 +424,43 @@ class raw_dataset:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.array([frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)])
-                        print(tmp.shape)
+                        print(tmp.shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
                         tmp = np.array([tmp_tmp])
                         master_all_darks.append(tmp_tmp)
-                        print(tmp.shape)
+                        print(tmp.shape, flush=True)
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug)
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
                         else:
                             tmp = tmp_tmp
                         master_all_darks.append(np.median(tmp[-nz:], axis=0))
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
             else:
                 if n_dim == 2:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.append(tmp, [frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)], axis=0)
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
                         else:
                             tmp = np.append(tmp, [tmp_tmp])
                         master_all_darks.append(tmp[-1])
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.append(tmp, cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug), axis=0)
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug),
@@ -470,14 +468,12 @@ class raw_dataset:
                         else:
                             tmp = np.append(tmp, tmp_tmp)
                         master_all_darks.append(np.median(tmp[-nz:], axis=0))
-                        print(tmp[-1].shape)
+                        print(tmp[-1].shape, flush=True)
 
         write_fits(self.outpath + 'unsat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
             print('Unsat dark cubes have been cropped and saved')
-
-        if verbose:
-            print('Total of {} median dark frames. Saving dark cube to fits file...'.format(len(master_all_darks)))
+            print('Total of {} median dark frames. Saving dark cube to fits file...'.format(len(master_all_darks)), flush=True)
 
         # convert master all darks to numpy array here
         master_all_darks = np.array(master_all_darks)
@@ -532,7 +528,7 @@ class raw_dataset:
         mask_AGPM_flat = np.ones([self.com_sz, self.com_sz])
 
         if verbose:
-            print('The masks for SCI, SKY and FLAT have been defined')
+            print('The masks for SCI, SKY and FLAT have been defined', flush=True)
         # will exclude a quadrant if specified by looping over the list of bad quadrants and filling the mask with zeros
         if len(bad_quadrant) > 0:
             for quadrant in bad_quadrant:
@@ -562,7 +558,7 @@ class raw_dataset:
         write_fits(self.outpath + 'mask_std.fits', mask_std, verbose=debug)
         write_fits(self.outpath + 'mask_sci.fits', mask_sci, verbose=debug)
         if verbose:
-            print('Masks have been saved as fits file')
+            print('Masks have been saved as fits file', flush=True)
 
         if method == 'median':
 
@@ -582,7 +578,7 @@ class raw_dataset:
                     tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
-                print('Dark has been median subtracted from SCI cubes')
+                print('Dark has been median subtracted from SCI cubes', flush=True)
 
             if plot:
                 if tmp.ndim == 3:
@@ -625,7 +621,7 @@ class raw_dataset:
                     tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
             if verbose:
-                print('Dark has been median subtracted from SKY cubes')
+                print('Dark has been median subtracted from SKY cubes', flush=True)
                 
             if plot:
                 if tmp.ndim == 3:
@@ -666,7 +662,7 @@ class raw_dataset:
                 tmp_tmp[sc] = tmp - tmp_tmp_tmp_median
             write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp, verbose=debug)
             if verbose:
-                print('Dark has been median subtracted from FLAT frames')
+                print('Dark has been median subtracted from FLAT frames', flush=True)
 
             if plot:
                 if tmp.ndim == 3:
@@ -814,7 +810,7 @@ class raw_dataset:
                 write_fits(self.outpath + 'dark_flat_subframe.fits', subframe, verbose=debug)
                 # if verbose:
                 print('Guess = {}'.format(guess))
-                print('Stddev = {}'.format(stddev))
+                print('Stddev = {}'.format(stddev), flush=True)
 
                 #        for fl, flat_name in enumerate(flat_list):
                 #            tmp_tmp_pca[fl] = tmp_tmp_pca[fl]-diff[fl]
@@ -838,7 +834,7 @@ class raw_dataset:
             # solu = minimize(chisquare, p, args=(cube, angs, etc.), method='Nelder-Mead', options=options)
             if verbose:
                 print('FLATS difference w.r.t. DARKS:', diff)
-                print('Calculating optimal PCA dark subtraction for FLATS...')
+                print('Calculating optimal PCA dark subtraction for FLATS...', flush=True)
             guess = 0
             solu = minimize(_get_test_diff_flat, x0=guess, args=(debug), method='Nelder-Mead', tol=2e-4,
                             options={'maxiter': 100, 'disp': verbose})
@@ -860,7 +856,7 @@ class raw_dataset:
             best_test_diff = best_test_diff[0]  # take out of array
             if verbose:
                 print('Best difference (value) to add to FLATS is {} found in {} iterations'.format(best_test_diff,
-                                                                                                    solu.nit))
+                                                                                                    solu.nit), flush=True)
 
             # cond = True
             # max_it = 3 # maximum iterations
@@ -907,7 +903,7 @@ class raw_dataset:
                             save=self.outpath + 'FLAT_PCA_dark_subtract.pdf')
 
             if verbose:
-                print('Flats have been dark corrected')
+                print('Flats have been dark corrected', flush=True)
 
             #        ### ORIGINAL PCA CODE
 
@@ -936,7 +932,7 @@ class raw_dataset:
                 #     tmp_tmp[counter] = tmp_median + diff[sc]
                 #     counter = counter + 1
                 if debug:
-                    print('difference w.r.t dark =', diff[sc])
+                    print('difference w.r.t dark =', diff[sc], flush=True)
                 bar.update()
             write_fits(self.outpath + 'dark_sci_diff.fits', diff, verbose=debug)
             write_fits(self.outpath + 'sci_plus_diff.fits', tmp_tmp, verbose=debug)
@@ -945,7 +941,7 @@ class raw_dataset:
             #         f.write(str(diff_sci) + '\n')
             if verbose:
                 print('SCI difference w.r.t. DARKS has been saved to fits file.')
-                print('SCI difference w.r.t. DARKS:', diff)
+                print('SCI difference w.r.t. DARKS:', diff, flush=True)
 
             # lower_diff = 0.8*np.median(diff)
             # upper_diff = 1.2*np.median(diff)
@@ -970,7 +966,7 @@ class raw_dataset:
                 stddev = np.std(subframe)
                 if verbose:
                     print('Guess = {}'.format(guess))
-                    print('Standard deviation = {}'.format(stddev))
+                    print('Standard deviation = {}'.format(stddev), flush=True)
                 subframe = subframe.reshape(46,
                                             -1)  # hard coded 46 because the subframe size is hardcoded to center pixel +-23
                 write_fits(self.outpath + 'dark_sci_subframe.fits', subframe, verbose=debug)
@@ -988,7 +984,7 @@ class raw_dataset:
             # best_diff = []
             # for sc in [0,middle_idx,-1]:
             if verbose:
-                print('Calculating optimal PCA dark subtraction for SCI cubes. This may take some time.')
+                print('Calculating optimal PCA dark subtraction for SCI cubes. This may take some time.', flush=True)
             solu = minimize(_get_test_diff_sci, x0=guess, args=(verbose), method='Nelder-Mead', tol=2e-4,
                             options={'maxiter': 100, 'disp': verbose})
 
@@ -997,7 +993,7 @@ class raw_dataset:
             # best_diff.append(best_test_diff)
             if verbose:
                 print('Best difference (value) to add to SCI cubes is {} found in {} iterations'.format(best_test_diff,
-                                                                                                        solu.nit))
+                                                                                                        solu.nit), flush=True)
                 # stddev = [] # to refresh the list after each loop
                 # tmp = open_fits(self.inpath+sci_list[sc], header=False, verbose=debug)
                 # tmp = cube_crop_frames(tmp, self.com_sz, force = True, verbose=debug)
@@ -1021,7 +1017,7 @@ class raw_dataset:
             # opt_diff = np.interp(x = sci_list_mjd, xp = xp, fp = fp, left=None, right=None, period=None) # optimal diff for each sci cube
 
             if verbose:
-                print('Optimal constant to apply to each science cube: {}'.format(best_test_diff))
+                print('Optimal constant to apply to each science cube: {}'.format(best_test_diff), flush=True)
 
             bar = pyprind.ProgBar(len(sci_list), stream=1, title='Correcting SCI cubes via PCA dark subtraction')
             for sc, fits_name in enumerate(sci_list):
@@ -1035,7 +1031,7 @@ class raw_dataset:
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp_pca, verbose=debug)
                 bar.update()
             if verbose:
-                print('Dark has been subtracted from SCI cubes')
+                print('Dark has been subtracted from SCI cubes', flush=True)
 
             if plot:
                 tmp = np.median(tmp, axis=0)
@@ -1106,12 +1102,12 @@ class raw_dataset:
                     tmp_median)  # median pixel value of all darks minus median pixel value of sky cube
                 tmp_tmp[sc] = tmp_median + diff[sc]
                 if debug:
-                    print('difference w.r.t dark =', diff[sc])
+                    print('difference w.r.t dark =', diff[sc], flush=True)
                 bar.update()
             write_fits(self.outpath + 'dark_sci_diff.fits', diff, verbose=debug)
             if verbose:
                 print('SKY difference w.r.t. DARKS has been saved to fits file.')
-                print('SKY difference w.r.t. DARKS:', diff)
+                print('SKY difference w.r.t. DARKS:', diff, flush=True)
 
             def _get_test_diff_sky(guess, verbose=False):
                 # tmp_tmp_pca = np.zeros([self.com_sz,self.com_sz])
@@ -1129,7 +1125,7 @@ class raw_dataset:
                 stddev = np.std(subframe)
                 if verbose:
                     print('Guess = {}'.format(guess))
-                    print('Standard deviation = {}'.format(stddev))
+                    print('Standard deviation = {}'.format(stddev), flush=True)
                 subframe = subframe.reshape(46,
                                             -1)  # hard coded 46 because the subframe size is hardcoded to center pixel +-23
                 write_fits(self.outpath + 'dark_sky_subframe.fits', subframe, verbose=debug)
@@ -1142,7 +1138,7 @@ class raw_dataset:
 
             guess = 0
             if verbose:
-                print('Calculating optimal PCA dark subtraction for SKY cubes. This may take some time.')
+                print('Calculating optimal PCA dark subtraction for SKY cubes. This may take some time.', flush=True)
             solu = minimize(_get_test_diff_sky, x0=guess, args=(verbose), method='Nelder-Mead', tol=2e-4,
                             options={'maxiter': 100, 'disp': verbose})
 
@@ -1190,7 +1186,7 @@ class raw_dataset:
             # if verbose:
             #     print('Optimal constant: {}'.format(opt_diff))
             if verbose:
-                print('Optimal constant to apply to each sky cube: {}'.format(best_test_diff))
+                print('Optimal constant to apply to each sky cube: {}'.format(best_test_diff), flush=True)
 
             bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting SKY cubes via PCA dark subtraction')
             for sc, fits_name in enumerate(sky_list):
@@ -1204,7 +1200,7 @@ class raw_dataset:
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp_pca, verbose=debug)
 
             if verbose:
-                print('Dark has been subtracted from SKY cubes')
+                print('Dark has been subtracted from SKY cubes', flush=True)
 
             if plot:
                 tmp = np.median(tmp, axis=0)
@@ -1246,7 +1242,7 @@ class raw_dataset:
                 bar.update()
     
             if verbose:
-                print('Dark has been subtracted from UNSAT cubes')
+                print('Dark has been subtracted from UNSAT cubes', flush=True)
     
             if plot:
                 tmp = np.median(tmp, axis=0)  # unsat before subtraction
@@ -1312,7 +1308,7 @@ class raw_dataset:
         try:
             flat_airmass_test.append(header['AIRMASS'])
         except:
-            print('###### No AIRMASS detected in header!!! Inferring airmass .... ######')
+            print('###### No AIRMASS detected in header!!! Inferring airmass .... ######', flush=True)
 
         flat_X = []
         flat_X_values = []
@@ -1320,7 +1316,7 @@ class raw_dataset:
         if len(flat_airmass_test) > 0 or len(flat_list) == 15:
             if len(flat_airmass_test) > 0:  # if the airmass exists, we can group the flats based on airmass
                 if verbose:
-                    print('AIRMASS detected in FLATS header. Grouping FLATS by airmass ....')
+                    print('AIRMASS detected in FLATS header. Grouping FLATS by airmass ....', flush=True)
                 # flat cubes measured at 3 different airmass
                 for fl, flat_name in enumerate(flat_list):
                     tmp, header = open_fits(self.inpath + flat_list[fl], header=True, verbose=debug)
@@ -1335,7 +1331,7 @@ class raw_dataset:
                 flat_X_values = np.sort(flat_X_values)  # !!! VERY IMPORTANT, DO NOT COMMENT
                 if verbose:
                     print('Airmass values in FLATS: {}'.format(flat_X_values))
-                    print('The airmass values have been sorted into a list')
+                    print('The airmass values have been sorted into a list', flush=True)
 
             # if no airmass in header, we can group by using the median pixel value across the flat
             elif len(flat_list) == 15:
@@ -1352,7 +1348,7 @@ class raw_dataset:
                 flat_X_values = np.sort(flat_X_values)
                 if verbose:
                     print('Median FLAT values: {}'.format(flat_X_values))
-                    print('The median FLAT values have been sorted into a list')
+                    print('The median FLAT values have been sorted into a list', flush=True)
 
             # There should be 15 twilight flats in total with NACO; 5 at each airmass. BUG SOMETIMES!
             flat_tmp_cube_1 = np.zeros([5, self.com_sz, self.com_sz])
@@ -1381,11 +1377,11 @@ class raw_dataset:
             flat_cube_nX[1] = np.median(flat_tmp_cube_2, axis=0)
             flat_cube_nX[2] = np.median(flat_tmp_cube_3, axis=0)
             if verbose:
-                print('The median FLAT cubes with same airmass have been defined')
+                print('The median FLAT cubes with same airmass have been defined', flush=True)
                 
         else:  # if not 15 frames, manually sort by median pixel value
             msg = '{} (!=15) flat-fields found => assuming old way of calculating flats'
-            print(msg.format(len(flat_list)))
+            print(msg.format(len(flat_list)), flush=True)
             all_flats = []
             flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', header=False, verbose=debug)
             for fl, flat_name in enumerate(flat_list):
@@ -1415,7 +1411,7 @@ class raw_dataset:
                 master_flat_unsat = master_flat_frame
             write_fits(self.outpath + 'master_flat_field_unsat.fits', master_flat_unsat, verbose=debug)
         if verbose:
-            print('Master flat frames has been saved')
+            print('Master flat frames has been saved', flush=True)
         if plot == 'show':
             if len(unsat_list)>0:
                 plot_frames((master_flat_frame, master_flat_unsat), vmax=(np.percentile(master_flat_frame, 99.9),
@@ -1442,7 +1438,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '1_crop_' + fits_name)
         if verbose:
-            print('Done scaling SCI frames with respect to FLAT')
+            print('Done scaling SCI frames with respect to FLAT', flush=True)
         if plot:
             if tmp.ndim==3:
                 tmp = np.median(tmp, axis=0)
@@ -1475,7 +1471,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '1_crop_' + fits_name)
         if verbose:
-            print('Done scaling SKY frames with respect to FLAT')
+            print('Done scaling SKY frames with respect to FLAT', flush=True)
         if plot:
             if tmp.ndim==3:
                 tmp = np.median(tmp, axis=0)
@@ -1506,7 +1502,7 @@ class raw_dataset:
                 if remove:
                     os.system("rm " + self.outpath + '1_crop_unsat_' + fits_name)
             if verbose:
-                print('Done scaling UNSAT frames with respect to FLAT')
+                print('Done scaling UNSAT frames with respect to FLAT', flush=True)
             if plot:
                 tmp = np.median(tmp, axis=0)
                 tmp_tmp = np.median(tmp_tmp, axis=0)
@@ -1565,7 +1561,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '2_ff_' + fits_name)
         if verbose:
-            print('Done correcting NaN pixels in SCI frames')
+            print('Done correcting NaN pixels in SCI frames', flush=True)
         if plot:
             if tmp.ndim == 3:
                 tmp = np.median(tmp, axis=0)
@@ -1588,7 +1584,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '2_ff_' + fits_name)
         if verbose:
-            print('Done corecting NaN pixels in SKY frames')
+            print('Done corecting NaN pixels in SKY frames', flush=True)
         if plot:
             if tmp.ndim == 3:
                 tmp = np.median(tmp, axis=0)
@@ -1612,7 +1608,7 @@ class raw_dataset:
                 if remove:
                     os.system("rm " + self.outpath + '2_ff_unsat_' + fits_name)
             if verbose:
-                print('Done correcting NaN pixels in UNSAT frames')
+                print('Done correcting NaN pixels in UNSAT frames', flush=True)
             if plot:
                 if tmp.ndim == 3:
                     tmp = np.median(tmp, axis=0)
@@ -1635,7 +1631,8 @@ class raw_dataset:
         remove options: True, False. Cleans file for unused fits
         """
         if verbose:
-            print('Running bad pixel correction...')
+            print('Running bad pixel correction...', flush=True)
+            start_time = time_ini(verbose=False)
 
         sci_list = []
         with open(self.inpath + "sci_list.txt", "r") as f:
@@ -1671,12 +1668,11 @@ class raw_dataset:
         bpix_map = np.zeros([self.com_sz, self.com_sz])
         bpix_map[bpix] = 1
 
-
         if len(unsat_list) > 0:
             tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + unsat_list[-1], header=False, verbose=debug)
             nx_unsat_crop = tmp.shape[2]        
             if nx_unsat_crop < bpix_map.shape[1]:
-                bpix_map_unsat = frame_crop(bpix_map, nx_unsat_crop, force=True)
+                bpix_map_unsat = frame_crop(bpix_map, nx_unsat_crop, force=True, verbose=debug)
             else:
                 bpix_map_unsat = bpix_map
             write_fits(self.outpath + 'master_bpix_map_unsat.fits', bpix_map_unsat, verbose=debug)
@@ -1693,7 +1689,7 @@ class raw_dataset:
         if verbose:
             print("total number of bpix: ", nbpix)
             print("total number of pixels: ", ntotpix)
-            print("=> {}% of bad pixels.".format(100 * nbpix / ntotpix))
+            print("=> {}% of bad pixels.".format(100 * nbpix / ntotpix), flush=True)
 
         write_fits(self.outpath + 'master_bpix_map.fits', bpix_map, verbose=debug)
 
@@ -1752,14 +1748,14 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '2_nan_corr_' + fits_name)
         if verbose:
-            print('SCI and SKY cubes are cropped to a common size of:', self.final_sz)
+            print('SCI and SKY cubes are cropped to a common size of:', self.final_sz, flush=True)
 
         # COMPARE BEFORE AND AFTER NAN_CORR + CROP
         if plot:
-            old_tmp = open_fits(self.outpath + '2_ff_' + sci_list[0])
-            old_tmp_tmp = open_fits(self.outpath + '2_ff_' + sci_list[1])
-            tmp = open_fits(self.outpath + '2_crop_' + sci_list[0])
-            tmp_tmp = open_fits(self.outpath + '2_crop_' + sci_list[1])
+            old_tmp = open_fits(self.outpath + '2_ff_' + sci_list[0], verbose=debug)
+            old_tmp_tmp = open_fits(self.outpath + '2_ff_' + sci_list[1], verbose=debug)
+            tmp = open_fits(self.outpath + '2_crop_' + sci_list[0], verbose=debug)
+            tmp_tmp = open_fits(self.outpath + '2_crop_' + sci_list[1], verbose=debug)
             if old_tmp.ndim == 3:
                 old_tmp = old_tmp[-1]
                 old_tmp_tmp = old_tmp_tmp[-1]
@@ -1775,7 +1771,7 @@ class raw_dataset:
                 np.percentile(tmp_tmp[0], 99.9)), save=self.outpath + 'Second_badpx_crop.pdf')
 
         # Crop the bpix map in a same way
-        bpix_map = frame_crop(bpix_map, self.final_sz, cenxy=self.crop_cen, force=True)
+        bpix_map = frame_crop(bpix_map, self.final_sz, cenxy=self.crop_cen, force=True, verbose=debug)
         write_fits(self.outpath + 'master_bpix_map_2ndcrop.fits', bpix_map, verbose=debug)
 
         # self.crop_cen = find_filtered_max(self, self.outpath + '2_crop_' + sci_list[0])
@@ -1809,7 +1805,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '2_crop_' + fits_name)
         if verbose:
-            print('*************Bad pixels corrected in SCI cubes*************')
+            print('*************Bad pixels corrected in SCI cubes*************', flush=True)
         if plot and tmp.ndim == 3:
             tmp = tmp[0]
             tmp_tmp = tmp_tmp[0]
@@ -1822,7 +1818,7 @@ class raw_dataset:
                         vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp, 99.9)),
                         save=self.outpath + 'SCI_badpx_corr')
 
-        bpix_map = open_fits(self.outpath + 'master_bpix_map_2ndcrop.fits')
+        bpix_map = open_fits(self.outpath + 'master_bpix_map_2ndcrop.fits', verbose=debug)
         # t0 = time_ini()
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
@@ -1853,7 +1849,7 @@ class raw_dataset:
             if remove:
                 os.system("rm " + self.outpath + '2_crop_' + fits_name)
         if verbose:
-            print('*************Bad pixels corrected in SKY cubes*************')
+            print('*************Bad pixels corrected in SKY cubes*************', flush=True)
         if plot and tmp.ndim == 3:
             tmp = tmp[0]
             tmp_tmp = tmp_tmp[0]
@@ -1888,7 +1884,7 @@ class raw_dataset:
                 if remove:
                     os.system("rm " + self.outpath + '2_nan_corr_unsat_' + fits_name)
             if verbose:
-                print('*************Bad pixels corrected in UNSAT cubes*************')
+                print('*************Bad pixels corrected in UNSAT cubes*************', flush=True)
             if plot == 'show':
                 plot_frames((tmp_tmp_tmp[0], tmp[0], tmp_tmp[0]), vmin=(0, 0, 0), vmax=(1, 16000, 16000))
             if plot == 'save':
@@ -1910,7 +1906,7 @@ class raw_dataset:
         tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
         write_fits(self.outpath + 'TMP_2_master_median_SCI.fits', tmp_tmp_tmp, verbose=debug)
         if verbose:
-            print('Median SCI cube and frame have been created')
+            print('Median SCI cube and frame have been created', flush=True)
 
         # THEN CREATE MASTER CUBE FOR SKY
         tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sky_list[0], verbose=debug)
@@ -1927,7 +1923,7 @@ class raw_dataset:
         tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
         write_fits(self.outpath + 'TMP_2_master_median_SKY.fits', tmp_tmp_tmp, verbose=debug)
         if verbose:
-            print('Median SKY cube and frame have been created')
+            print('Median SKY cube and frame have been created', flush=True)
 
         if plot:
             bpix_map_ori = open_fits(self.outpath + 'master_bpix_map_2ndcrop.fits')
@@ -1969,6 +1965,8 @@ class raw_dataset:
             plot_frames(bpix_maps, save=self.outpath + 'badpx_maps')
             plot_frames((tmp, tmp - tmpSKY, tmp_tmp, tmp_tmp - tmpSKY, tmp2, tmp2 - tmpSKY,
                          tmp_tmp2, tmp_tmp2 - tmpSKY), save=self.outpath + 'Badpx_comparison')
+        if verbose:
+            timing(start_time)
 
     def first_frames_removal(self, nrm='auto', verbose=True, debug=False, 
                              plot='save', remove=False):
@@ -2050,7 +2048,7 @@ class raw_dataset:
             print("real_ndit_sky = ", self.real_ndit_sky)
             print("real_ndit_sci = ", self.real_ndit_sci)
             print("Nominal ndit: {}, min ndit when skimming through cubes: {}".format(self.dataset_dict['ndit_sci'],
-                                                                                      min_ndit_sci))
+                                                                                      min_ndit_sci), flush=True)
 
         # update the final size and subsequently the mask
         mask_inner_rad = int(3.0 / self.dataset_dict['pixel_scale'])
@@ -2071,14 +2069,14 @@ class raw_dataset:
                 bar.update()
             tmp_flux_med = np.median(tmp_fluxes, axis=0)
             if verbose:
-                print('total Flux in SCI frames has been measured')
+                print('total Flux in SCI frames has been measured', flush=True)
 
             # create a plot of the median flux in the frames
             med_flux = np.median(tmp_flux_med)
             std_flux = np.std(tmp_flux_med)
             if verbose:
                 print("median flux: ", med_flux)
-                print("std flux: ", std_flux)
+                print("std flux: ", std_flux, flush=True)
             first_time = True
             for ii in range(min_ndit_sci):
                 if tmp_flux_med[ii] > med_flux + 2 * std_flux or tmp_flux_med[ii] < med_flux - 2 * std_flux or ii == 0:
@@ -2091,7 +2089,7 @@ class raw_dataset:
                         nfr_rm = ii  # the ideal number is when the flux is within 3 standar deviations
                         nfr_rm = min(nfr_rm, 10)  # if above 10 frames to remove, it will cap nfr_rm to 10
                         if verbose:
-                            print("The ideal number of frames to remove at the beginning is: ", nfr_rm)
+                            print("The ideal number of frames to remove at the beginning is: ", nfr_rm, flush=True)
                         first_time = False
                 if plot:
                     plt.plot(ii, tmp_flux_med[ii] / med_flux, symbol, label=label)
@@ -2121,7 +2119,7 @@ class raw_dataset:
         if verbose:
             print("The new number of frames in each SCI cube is: ", self.new_ndit_sci)
             print("The new number of frames in each SKY cube is: ", self.new_ndit_sky)
-            print("The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat)
+            print("The new number of frames in each UNSAT cube is: ", self.new_ndit_unsat, flush=True)
 
         if isfile(self.inpath + "derot_angles_uncropped.fits"):
             angles = open_fits(self.inpath + "derot_angles_uncropped.fits", verbose=debug)
@@ -2146,7 +2144,7 @@ class raw_dataset:
                 os.system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
                 os.system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
         if verbose:
-            print('The first {} frames were removed and the flux rescaled for SCI cubes'.format(nfr_rm))
+            print('The first {} frames were removed and the flux rescaled for SCI cubes'.format(nfr_rm), flush=True)
 
         # NOW DOUBLE CHECK THAT FLUXES ARE CONSTANT THROUGHOUT THE CUBE
         if tmp.ndim == 3:
@@ -2166,7 +2164,7 @@ class raw_dataset:
             std_flux = np.std(tmp_flux_med2)
             if verbose:
                 print("median flux: ", med_flux)
-                print("std flux: ", std_flux)
+                print("std flux: ", std_flux, flush=True)
     
             if not self.fast_reduction:
                 for ii in range(min_ndit_sci - nfr_rm):
@@ -2308,7 +2306,7 @@ class raw_dataset:
 
         Should be improved to handle the case of no dithering.
 
-        nd_filter : bool, default = None
+        nd_filter : bool, default: None
             when a ND filter is used in L' the transmission is ~0.0178. Used for scaling
         verbose and debug : bool
             prints more info, if debug it prints when files are opened and gives some additional info.
@@ -2387,7 +2385,7 @@ class raw_dataset:
 
         if verbose:
             print('Good unsaturated cubes:', good_unsat_list)
-            print('Good unsaturated positions:', good_unsat_pos)
+            print('Good unsaturated positions:', good_unsat_pos, flush=True)
 
         unsat_mjd_list = []
         # get times of unsat cubes (modified Julian calendar)
@@ -2433,7 +2431,7 @@ class raw_dataset:
                 # best_idx = find_nearest(unsat_mjd_list[good_idx[0]:good_idx[-1]],unsat_mjd_list[un])
                 if verbose:
                     print('Index of cubes on different part of detector:', good_idx)
-                    print('Index of the above selected for sky subtraction:', best_idx)
+                    print('Index of the above selected for sky subtraction:', best_idx, flush=True)
                 tmp_sky = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[good_idx[best_idx]],
                                               verbose=debug), axis=0)
                 write_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[un], tmp - tmp_sky, verbose=debug)
@@ -2481,52 +2479,62 @@ class raw_dataset:
                 # combining all frames in unsat to make master cube
                 psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
-        psf_med = np.median(psf_tmp, axis=0)
 
-        # calculates the correlation of each frame to the median and saves as a list
-        distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
-        if plot:  # save a plot of distances compared to the median for each frame if set to 'save'
-            plt.savefig(self.outpath + 'distances_unsat.pdf', format='pdf')
-            plt.close('all')
-
-        # threshold is the median of the distances minus half a stddev
-        correlation_thres = np.median(distances) - 0.5 * np.std(distances)
-        # detect and remove bad frames in a subframe two pixels smaller than original frame
-        good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
-                                                       dist='pearson', threshold=correlation_thres, plot=plot,
-                                                       verbose=verbose)
-
+        good_unsat_idx = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=10, top_sigma=1, low_sigma=1,
+                                                   window=None, plot=True, verbose=verbose)
         if plot:
-            plt.savefig(self.outpath + 'frame_correlation_unsat.pdf', format='pdf')
+            plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', format='pdf', bbox='tight')
             plt.close('all')
-        # select only the good frames and median combine
-        psf_tmp = psf_tmp[good_frames]
+        # use only the good frames, median combine and save
+        psf_tmp = psf_tmp[good_unsat_idx]
         write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed.fits', psf_tmp, verbose=debug)
         psf_med = np.median(psf_tmp, axis=0)
         write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
 
-        ### second round
-        distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
-        if plot:
-            plt.savefig(self.outpath + 'distances_unsat2.pdf', format='pdf')
-            plt.close('all')
-
-        # threshold is the median of the distances minus one stddev
-        correlation_thres = np.median(distances) - np.std(distances)
-        good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
-                                                       dist='pearson', threshold=correlation_thres, plot=plot,
-                                                       verbose=verbose)
-
-        if plot:
-            plt.savefig(self.outpath + 'frame_correlation_unsat2.pdf', format='pdf')
-            plt.close('all')
-        psf_tmp = psf_tmp[good_frames]
-        write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed2.fits', psf_tmp, verbose=debug)
-        psf_med = np.median(psf_tmp, axis=0)
-        write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
+        # calculates the correlation of each frame to the median and saves as a list
+        # distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
+        # if plot:  # save a plot of distances compared to the median for each frame if set to 'save'
+        #     plt.savefig(self.outpath + 'distances_unsat.pdf', format='pdf')
+        #     plt.close('all')
+        #
+        # # threshold is the median of the distances minus half a stddev
+        # correlation_thres = np.median(distances) - 0.5 * np.std(distances)
+        # # detect and remove bad frames in a subframe two pixels smaller than original frame
+        # good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
+        #                                                dist='pearson', threshold=correlation_thres, plot=plot,
+        #                                                verbose=verbose)
+        #
+        # if plot:
+        #     plt.savefig(self.outpath + 'frame_correlation_unsat.pdf', format='pdf')
+        #     plt.close('all')
+        # # select only the good frames and median combine
+        # psf_tmp = psf_tmp[good_frames]
+        # write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed.fits', psf_tmp, verbose=debug)
+        # psf_med = np.median(psf_tmp, axis=0)
+        # write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
+        #
+        # ### second round
+        # distances = cube_distance(psf_tmp, psf_med, mode='full', dist='pearson', plot=plot)
+        # if plot:
+        #     plt.savefig(self.outpath + 'distances_unsat2.pdf', format='pdf')
+        #     plt.close('all')
+        #
+        # # threshold is the median of the distances minus one stddev
+        # correlation_thres = np.median(distances) - np.std(distances)
+        # good_frames, _ = cube_detect_badfr_correlation(psf_tmp, crop_size=psf_med.shape[-1] - 2, frame_ref=psf_med,
+        #                                                dist='pearson', threshold=correlation_thres, plot=plot,
+        #                                                verbose=verbose)
+        #
+        # if plot:
+        #     plt.savefig(self.outpath + 'frame_correlation_unsat2.pdf', format='pdf')
+        #     plt.close('all')
+        # psf_tmp = psf_tmp[good_frames]
+        # write_fits(self.outpath + 'tmp_master_unsat_psf_trimmed2.fits', psf_tmp, verbose=debug)
+        # psf_med = np.median(psf_tmp, axis=0)
+        # write_fits(self.outpath + 'master_unsat_psf.fits', psf_med, verbose=debug)
 
         if verbose:
-            print('The median PSF of the star has been obtained')
+            print('The median PSF of the star has been obtained', flush=True)
         if plot == 'show':
             plot_frames(psf_med)
             plt.close('all')
@@ -2551,7 +2559,7 @@ class raw_dataset:
 
         psf_med_norm, flux_unsat, _ = normalize_psf(psf_med, fwhm=self.fwhm, full_output=True)
         if nd_filter:
-            print('Neutral Density filter toggle is on... using a transmission of 0.0178 for 3.8 micrometers')
+            print('Neutral Density filter toggle is on... using a transmission of 0.0178 for 3.8 micrometers', flush=True)
             flux_psf = (flux_unsat[0] * (1 / 0.0178)) * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
             # scales flux by DIT ratio accounting for transmission of ND filter (as unsat exposure time will be long)
         else:
@@ -2564,7 +2572,7 @@ class raw_dataset:
 
         if verbose:
             print("Flux of the PSF (scaled for science frames): ", flux_psf)
-            print("FWHM = {} px".format(round(self.fwhm, 3)))
+            print("FWHM = {} px".format(round(self.fwhm, 3)), flush=True)
         timing(start_time)
         if self.fwhm < 3 or self.fwhm > 6:
             raise ValueError('FWHM is not within expected values!')
@@ -2692,7 +2700,7 @@ class raw_dataset:
             ndust = len(dust_xy_tmp)
             if verbose:
                 print(dust_xy_tmp)
-                print("{} dust specks have been identified for alignment of SCI and SKY frames".format(ndust))
+                print("{} dust specks have been identified for alignment of SCI and SKY frames".format(ndust), flush=True)
     
             # Fit them to gaussians in a test frame, and discard non-circular one (fwhm_y not within 20% of fwhm_x)
     
@@ -2723,7 +2731,7 @@ class raw_dataset:
             ndust = len(dust_xy)
             if verbose:
                 print("We detected {:.0f} non-circular dust specks, hence removed from the list.".format(len(bad_dust)))
-                print("We are left with {:.0f} dust specks for alignment of SCI and SKY frames.".format(ndust))
+                print("We are left with {:.0f} dust specks for alignment of SCI and SKY frames.".format(ndust), flush=True)
     
             # the code first finds the exact coords of the dust features in the median of the first SCI cube (and show them)
             xy_cube0 = np.zeros([ndust, 2])
@@ -2747,14 +2755,14 @@ class raw_dataset:
                         print("coord_x: {}, coord_y: {}, fwhm_x: {}, fwhm_y:{}, amplitude: {}".format(xy_cube0[dd, 0],
                                                                                                       xy_cube0[dd, 1],
                                                                                                       fwhm_x, fwhm_y,
-                                                                                                      amplitude))
+                                                                                                      amplitude), flush=True)
                     shift_xy_dd = (xy_cube0[dd, 0] - dust_xy[dd][0], xy_cube0[dd, 1] - dust_xy[dd][1])
                     if verbose:
-                        print("shift with respect to center for dust grain #{}: {}".format(dd, shift_xy_dd))
+                        print("shift with respect to center for dust grain #{}: {}".format(dd, shift_xy_dd), flush=True)
                 except ValueError:
                     xy_cube0[dd, 0], xy_cube0[dd, 1] = dust_xy[dd]
-                    print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd))
-            print("Note: the shifts should be small if the eye coords of each dust grain were well provided!")
+                    print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd), flush=True)
+            print("Note: the shifts should be small if the eye coords of each dust grain were well provided!", flush=True)
     
             # then it finds the centroids in all other frames (SCI+SKY) to determine the relative shifts to be applied to align all frames
             shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
@@ -2783,7 +2791,7 @@ class raw_dataset:
                             if verbose:
                                 print(
                                     "!!! Gaussian fit failed for sc #{}, dd #{}. We set position to first (eye-)guess position.".format(
-                                        sc, dd))
+                                        sc, dd), flush=True)
                         shifts_xy_sci[dd, sc, zz, 0] = xy_cube0[dd, 0] - x_tmp
                         shifts_xy_sci[dd, sc, zz, 1] = xy_cube0[dd, 1] - y_tmp
                 bar.update()
@@ -2806,7 +2814,7 @@ class raw_dataset:
                             if verbose:
                                 print(
                                     "!!! Gaussian fit failed for sk #{}, dd #{}. We set position to first (eye-)guess position.".format(
-                                        sc, dd))
+                                        sc, dd), flush=True)
                         shifts_xy_sky[dd, sk, zz, 0] = xy_cube0[dd, 0] - x_tmp
                         shifts_xy_sky[dd, sk, zz, 1] = xy_cube0[dd, 1] - y_tmp
                 bar.update()
@@ -2823,7 +2831,7 @@ class raw_dataset:
                 print("Median shifts found for the {} dust grains (SCI): ".format(ndust),
                       np.median(np.median(np.median(shifts_xy_sci, axis=0), axis=0), axis=0))
                 print("Median shifts found for the {} dust grains: (SKY)".format(ndust),
-                      np.median(np.median(np.median(shifts_xy_sky, axis=0), axis=0), axis=0))
+                      np.median(np.median(np.median(shifts_xy_sky, axis=0), axis=0), axis=0), flush=True)
     
             shifts_xy_sci_med = np.median(shifts_xy_sci, axis=0)
             shifts_xy_sky_med = np.median(shifts_xy_sky, axis=0)
@@ -2839,7 +2847,7 @@ class raw_dataset:
                     if remove:
                         os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
                 except:
-                    print("file #{} not found".format(sc))
+                    print("file #{} not found".format(sc), flush=True)
     
             for sk, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
@@ -2928,7 +2936,7 @@ class raw_dataset:
             mask_inner_rad = int(3 / self.dataset_dict['pixel_scale'])
             mask_width = int(self.shadow_r * 0.8 - mask_inner_rad)
             mask_AGPM = get_annulus_segments(mask_arr, mask_inner_rad, mask_width, mode='mask')[0]
-            mask_AGPM = frame_crop(mask_AGPM, self.final_sz)
+            mask_AGPM = frame_crop(mask_AGPM, self.final_sz, verbose=debug)
             # Do PCA subtraction of the sky
             if plot:
                 tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1], verbose=debug)
@@ -2946,7 +2954,7 @@ class raw_dataset:
                             save=self.outpath + 'PCA_sky_subtract_mask.pdf')
 
             if verbose:
-                print('Beginning PCA subtraction')
+                print('Beginning PCA subtraction', flush=True)
 
             if npc is None or isinstance(npc, list):  # checks whether none or list
                 if npc is None:
@@ -2994,10 +3002,10 @@ class raw_dataset:
                                                 int(ndust_all / 2.):])  # takes the mean of the higher std for second half of the dust specks?
                     npc_opt[sc] = nnpc[np.argmin(hmean_std)]  # index of the lowest standard deviation?
                     if verbose:
-                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc, npc_opt[sc]))
+                        print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc, npc_opt[sc]), flush=True)
                 npc = int(np.median(npc_opt))
                 if verbose:
-                    print('##### Optimal number of principle components for sky subtraction:', npc, '#####')
+                    print('##### Optimal number of principle components for sky subtraction:', npc, '#####', flush=True)
                 with open(self.outpath + "npc_sky_subtract.txt", "w") as f:
                     f.write('{}'.format(npc))
                 write_fits(self.outpath + "TMP_npc_opt.fits", npc_opt, verbose=debug)
@@ -3101,7 +3109,7 @@ class raw_dataset:
                     os.system("rm " + self.outpath + '3_AGPM_aligned_' + fits_name)
 
             if verbose:
-                print('Finished PCA dark subtraction')
+                print('Finished PCA dark subtraction', flush=True)
             if plot:
                 if npc is None:
                     # ... IF PCA WITH DIFFERENT NPCs
