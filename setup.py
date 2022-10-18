@@ -46,13 +46,16 @@ def resource(*args):
 
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
-reqs = parse_requirements(resource('requirements.txt'), session=PipSession)
-requirements = [str(ir.requirement) for ir in reqs]    
-
-reqs_dev = parse_requirements(resource('requirements-dev.txt'), 
-                              session=PipSession)
-requirements_dev = [str(ir.requirement) for ir in reqs_dev]    
-
+reqs = parse_requirements(resource('requirements.txt'), session=False)
+try:
+    reqs = [str(ir.req) for ir in reqs]
+except:
+    reqs = [str(ir.requirement) for ir in reqs]
+reqs_dev = parse_requirements(resource('requirements-dev.txt'), session=False)
+try:
+    reqs_dev = [str(ir.req) for ir in reqs_dev]
+except:
+    reqs_dev = [str(ir.requirement) for ir in reqs_dev]
 
 with open(resource('README.rst')) as readme_file:
     README = readme_file.read()
@@ -73,12 +76,12 @@ setup(
     license='MIT',
     author='Val/Iain/Lewis',
     author_email='iain.hammond@monash.edu',
-    #url='https://github.com/vortex-exoplanet/VIP',
+    url='https://github.com/IainHammond/NACO_pipeline',
     cmdclass={'install': InstallReqs,
               'develop': InstallDevReqs},
     packages=PACKAGES,
-    install_requires=requirements,
-    extras_require={"dev": requirements_dev},
+    install_requires=reqs,
+    extras_require={"dev": reqs_dev},
     zip_safe=False,
     classifiers=['Intended Audience :: Science/Research',
                  'License :: OSI Approved :: MIT License',
