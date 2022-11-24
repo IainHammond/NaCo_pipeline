@@ -986,7 +986,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             raise ValueError("Invalid algorithm. Select either pca_annular, pca_annulus or pca!")
         opt_npc = ncomp
         ap_rad = 1 * self.fwhm
-        f_range = np.geomspace(0.1, 201, 40)
+        f_range = np.geomspace(0.1, 201, 1000)
         asize = 3 * self.fwhm
 
         if weights:
