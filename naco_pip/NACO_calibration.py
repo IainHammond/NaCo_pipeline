@@ -2307,7 +2307,7 @@ class raw_dataset:
         Should be improved to handle the case of no dithering.
 
         nd_filter : bool, default: None
-            when a ND filter is used in L' the transmission is ~0.0178. Used for scaling
+            when a ND filter is used in L' the transmission is ~0.01777. Used for scaling
         verbose and debug : bool
             prints more info, if debug it prints when files are opened and gives some additional info.
             verbose is on by default.
@@ -2559,9 +2559,9 @@ class raw_dataset:
 
         psf_med_norm, flux_unsat, _ = normalize_psf(psf_med, fwhm=self.fwhm, full_output=True)
         if nd_filter:
-            print('Neutral Density filter toggle is on... using a transmission of 0.0178 for 3.8 micrometers', flush=True)
-            flux_psf = (flux_unsat[0] * (1 / 0.0178)) * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
-            # scales flux by DIT ratio accounting for transmission of ND filter (as unsat exposure time will be long)
+            print('Neutral Density filter toggle is on... using a transmission of 0.0177787 for 3.78 micrometers', flush=True)
+            flux_psf = (flux_unsat[0] * (1 / 0.0177787)) * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
+            # scales flux by DIT ratio accounting for transmission of ND filter
         else:
             flux_psf = flux_unsat[0] * (self.dataset_dict['dit_sci'] / self.dataset_dict['dit_unsat'])
             # scales flux by DIT ratio
