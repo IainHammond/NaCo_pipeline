@@ -446,7 +446,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 for pp, npc in enumerate(id_npc_full_df):
                     tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, scale_list=None,
                                       ncomp=int(npc), svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
-                                      fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose)
+                                      fwhm=self.fwhm, collapse='median', full_output=False, verbose=verbose,
+                                      nproc=self.nproc)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
                            tmp_tmp, verbose=debug)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
@@ -1006,7 +1007,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                    interpolation='lanczos4', collapse='median', p_ini=None,
                                    transmission=transmission, weights=weights, algo=algo,
                                    f_range=f_range, simplex=True, simplex_options=None, plot=save_plot,
-                                   verbose=verbose, save=save_plot)
+                                   verbose=verbose, save=save_plot, algo_options={'nproc': self.nproc})
             # when p_ini is set to None, it gets the value of planets_xy_coord
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
 
