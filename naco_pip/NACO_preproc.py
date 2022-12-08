@@ -1,29 +1,28 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Recenters, detects bad frames, crops and bins
+Cube centring, detects bad frames, crops and bins
 
 @author: Iain
 """
 __author__ = 'Iain Hammond'
 __all__ = ['calib_dataset']
 
-import os
+from os import makedirs, system
 from os.path import isfile, isdir
 
 import numpy as np
-import pyprind
+from pyprind import ProgBar
+import matplotlib
 from matplotlib import pyplot as plt
-try:
-    from vip_hci.config import get_available_memory, time_ini, timing
-except:
-    from vip_hci.conf import get_available_memory, time_ini, timing
-    print('Attention: A newer version of VIP is available.', flush=True)
+
+from vip_hci.config import get_available_memory, time_ini, timing
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, cube_detect_badfr_correlation, \
-    cube_crop_frames, cube_subsample
+from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, \
+    cube_detect_badfr_correlation, cube_crop_frames, cube_subsample
 from vip_hci.stats import cube_distance
 
+matplotlib.use('Agg')
 
 class calib_dataset:  # this class is for pre-processing of the calibrated data
     def __init__(self, inpath, outpath, dataset_dict, recenter_method, recenter_model, coro=True):
@@ -55,10 +54,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
         if not isdir(self.outpath):
-            os.makedirs(self.outpath)
-        os.system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath)  # for use later
-        os.system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
-        os.system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
+            makedirs(self.outpath)
+        system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath)  # for use later
+        system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
+        system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
     def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
         """
@@ -109,7 +108,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         # Creates a master science cube with just the median of each cube
         if not isfile(self.outpath+'median_calib_cube.fits'):
-            bar = pyprind.ProgBar(len(self.sci_list), stream=1, title='Creating master science cube (median of each science cube)....')
+            bar = ProgBar(len(self.sci_list), stream=1, title='Creating master science cube (median of each science cube)....')
             for sc, fits_name in enumerate(self.sci_list):  # enumerate over the list of all science cubes
                 tmp = open_fits(self.inpath+'4_sky_subtr_'+fits_name, verbose=debug)  # open cube as tmp
                 if sc == 0:
@@ -292,7 +291,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         i = 0 
         shifts = list(zip(x_shifts,y_shifts))
-        bar = pyprind.ProgBar(len(x_shifts), stream=1, title='Running pixel shift check...')
+        bar = ProgBar(len(x_shifts), stream=1, title='Running pixel shift check...')
         for sx, sy in shifts:  # iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
             if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
                 good.append(i)

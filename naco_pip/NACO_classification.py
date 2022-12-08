@@ -8,19 +8,20 @@ Classifies cubes and find derotation angles
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['input_dataset', 'find_AGPM_or_star']
 
-import matplotlib as mpl
-mpl.use('Agg')
-from matplotlib import pyplot as plt
-import os
-from os import listdir
+import pdb
+from os import listdir, makedirs
 from os.path import isfile, join, isdir
+
+import matplotlib
 import numpy as np
+from matplotlib import pyplot as plt
 from photutils import CircularAperture, aperture_photometry
+
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
 from vip_hci.var import frame_filter_lowpass, frame_center, get_square
-import pdb
 
+matplotlib.use('Agg')
 
 def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, 
                       verbose=True, debug=False):
@@ -94,7 +95,7 @@ class input_dataset():
         self.inpath = inpath
         self.outpath = outpath
         self.coro = coro
-        old_list = os.listdir(self.inpath)
+        old_list = listdir(self.inpath)
         self.file_list = [file for file in old_list if file.endswith('.fits') and not file.startswith('M.')]
         self.dit_sci = dataset_dict['dit_sci']
         self.ndit_sci = dataset_dict['ndit_sci']
@@ -106,7 +107,7 @@ class input_dataset():
         self.dataset_dict = dataset_dict
         print('##### Number of FITS files:', len(self.file_list), '#####', flush=True)
         if not isdir(self.outpath):
-            os.makedirs(self.outpath)
+            makedirs(self.outpath)
 
     def bad_columns(self, correct=True, sat_val=32768, verbose=True, 
                     debug=False):

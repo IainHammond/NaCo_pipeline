@@ -8,71 +8,25 @@ Applies post-processing algorithms to the pre-processed cube
 __author__ = 'Iain Hammond'
 __all__ = ['preproc_dataset']
 
-import os
+from os import makedirs, system
 from os.path import isfile, isdir
 
-import matplotlib as mpl
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame as Df
 from pandas import read_csv
 
-try:
-    from vip_hci.config import time_ini, timing
-    from vip_hci.psfsub import pca, pca_annular, pca_annulus, median_sub
-    from vip_hci.fm import normalize_psf, cube_inject_companions, mcmc_negfc_sampling, firstguess, show_walk_plot, \
-        show_corner_plot, confidence
-except:
-    from vip_hci.conf import time_ini, timing
-    from vip_hci.medsub import median_sub
-    from vip_hci.pca import pca, pca_annular, pca_annulus
-    from vip_hci.metrics import normalize_psf, cube_inject_companions
-    from vip_hci.negfc import mcmc_negfc_sampling, firstguess, show_walk_plot, show_corner_plot, confidence
-    print('Attention: A newer version of VIP is available.', flush=True)
+from vip_hci.config import time_ini, timing
 from vip_hci.fits import open_fits, write_fits
+from vip_hci.fm import normalize_psf, cube_inject_companions, mcmc_negfc_sampling, firstguess, show_walk_plot, \
+    show_corner_plot, confidence, find_nearest
 from vip_hci.metrics import snrmap, contrast_curve, snr
 from vip_hci.preproc import cube_crop_frames
+from vip_hci.psfsub import pca, pca_annular, pca_annulus, median_sub
 from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
 
-mpl.use('Agg')
-
-
-def find_nearest(array, value, output='index', constraint=None, n=1):
-    """
-    Function to find the indices, and optionally the values, of an array's n closest elements to a certain value.
-    Possible outputs: 'index','value','both'
-    Possible constraints: 'ceil', 'floor', None ("ceil" will return the closest element with a value greater than 'value', "floor" the opposite)
-    """
-    if type(array) is np.ndarray:
-        pass
-    elif type(array) is list:
-        array = np.array(array)
-    else:
-        raise ValueError("Input type for array should be np.ndarray or list.")
-
-    if constraint is None:
-        fm = np.absolute(array - value)
-
-    elif constraint == 'ceil':
-        fm = array - value
-        fm = fm[np.where(fm > 0)]
-    elif constraint == 'floor':
-        fm = -(array - value)
-        fm = fm[np.where(fm > 0)]
-    else:
-        raise ValueError("Constraint not recognised")
-
-    idx = fm.argsort()[:n]
-    if n == 1:
-        idx = idx[0]
-
-    if output == 'index':
-        return idx
-    elif output == 'value':
-        return array[idx]
-    else:
-        return array[idx], idx
-
+matplotlib.use('Agg')
 
 class preproc_dataset:  # this class is for post-processing of the pre-processed data
     def __init__(self, inpath, outpath, dataset_dict, nproc, npc):
@@ -90,7 +44,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         self.source = dataset_dict['source']
         self.details = dataset_dict['details']
         if not isdir(self.outpath):
-            os.makedirs(self.outpath)
+            makedirs(self.outpath)
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], cropped=True, do_snr_map=True,
@@ -169,7 +123,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 test_pcs = list(range(self.npc[0], self.npc[1] + 1, self.npc[2]))
             outpath_sub = self.outpath + "sub_npc{}-{}/".format(test_pcs[0], test_pcs[-1])
         if not isdir(outpath_sub):
-            os.system("mkdir " + outpath_sub)
+            system("mkdir " + outpath_sub)
 
         if verbose:
             print('Input path is {}'.format(self.inpath), flush=True)
@@ -954,7 +908,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         outpath_sub = self.outpath + "negfc/"
 
         if not isdir(outpath_sub):
-            os.system("mkdir " + outpath_sub)
+            system("mkdir " + outpath_sub)
 
         if verbose:
             print('Input path is {}'.format(self.inpath))

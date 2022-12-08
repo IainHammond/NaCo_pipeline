@@ -6,37 +6,32 @@ Applies necessary calibration to the cubes and corrects NACO biases
 @author: lewis, iain
 """
 __author__ = 'Lewis Picker, Iain Hammond'
-__all__ = ['raw_dataset', 'find_nearest', 'find_filtered_max']
+__all__ = ['raw_dataset', 'find_filtered_max']
 
-import os
 import pdb
+from os import makedirs, system
 from os.path import isdir, isfile
 
-import matplotlib as mpl
+import matplotlib
 import numpy as np
 import pyprind
 from matplotlib import pyplot as plt
+from photutils import CircularAperture, aperture_photometry
+from scipy.optimize import minimize
+from skimage.feature import register_translation
 
-try:
-    from vip_hci.config import time_ini, time_fin, timing, get_available_memory
-    from vip_hci.fm import normalize_psf
-except:
-    from vip_hci.conf import time_ini, time_fin, timing, get_available_memory
-    from vip_hci.metrics import normalize_psf
-    print('Attention: A newer version of VIP is available.', flush=True)
+from hciplot import plot_frames
+from vip_hci.config import time_ini, timing
 from vip_hci.fits import open_fits, write_fits
+from vip_hci.fm import normalize_psf, find_nearest
+from vip_hci.metrics import detection
 from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated, cube_fix_badpix_clump, \
     cube_recenter_2dfit, frame_fix_badpix_isolated, cube_detect_badfr_pxstats, approx_stellar_position
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
-from vip_hci.metrics import detection
-from hciplot import plot_frames
-from skimage.feature import register_translation
-from photutils import CircularAperture, aperture_photometry
-from scipy.optimize import minimize
-mpl.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 
+matplotlib.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 
 def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, plot=None):
     """
@@ -168,44 +163,6 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     return [ycom, xcom]
 
 
-def find_nearest(array, value, output='index', constraint=None, n=1):
-    """
-    Function to find the indices, and optionally the values, of an array's n closest elements to a certain value.
-    Possible outputs: 'index','value','both'
-    Possible constraints: 'ceil', 'floor', None ("ceil" will return the closest element with a value greater than
-     'value', "floor" the opposite)
-    """
-    if type(array) is np.ndarray:
-        pass
-    elif type(array) is list:
-        array = np.array(array)
-    else:
-        raise ValueError("Input type for array should be np.ndarray or list.")
-
-    if constraint is None:
-        fm = np.absolute(array - value)
-
-    elif constraint == 'ceil':
-        fm = array - value
-        fm = fm[np.where(fm > 0)]
-    elif constraint == 'floor':
-        fm = -(array - value)
-        fm = fm[np.where(fm > 0)]
-    else:
-        raise ValueError("Constraint not recognised")
-
-    idx = fm.argsort()[:n]
-    if n == 1:
-        idx = idx[0]
-
-    if output == 'index':
-        return idx
-    elif output == 'value':
-        return array[idx]
-    else:
-        return array[idx], idx
-
-
 class raw_dataset:
     """
     In order to successfully run the pipeline you must run the methods in following order:
@@ -223,7 +180,7 @@ class raw_dataset:
         self.inpath = inpath
         self.outpath = outpath
         if not isdir(self.outpath):
-            os.makedirs(self.outpath)
+            makedirs(self.outpath)
         self.final_sz = final_sz
         self.coro = coro
         sci_list = []
@@ -1436,7 +1393,7 @@ class raw_dataset:
             write_fits(self.outpath + '2_ff_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
-                os.system("rm " + self.outpath + '1_crop_' + fits_name)
+                system("rm " + self.outpath + '1_crop_' + fits_name)
         if verbose:
             print('Done scaling SCI frames with respect to FLAT', flush=True)
         if plot:
@@ -1469,7 +1426,7 @@ class raw_dataset:
             write_fits(self.outpath + '2_ff_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
-                os.system("rm " + self.outpath + '1_crop_' + fits_name)
+                system("rm " + self.outpath + '1_crop_' + fits_name)
         if verbose:
             print('Done scaling SKY frames with respect to FLAT', flush=True)
         if plot:
@@ -1500,7 +1457,7 @@ class raw_dataset:
                 write_fits(self.outpath + '2_ff_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 bar.update()
                 if remove:
-                    os.system("rm " + self.outpath + '1_crop_unsat_' + fits_name)
+                    system("rm " + self.outpath + '1_crop_unsat_' + fits_name)
             if verbose:
                 print('Done scaling UNSAT frames with respect to FLAT', flush=True)
             if plot:
@@ -1559,7 +1516,7 @@ class raw_dataset:
             write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
-                os.system("rm " + self.outpath + '2_ff_' + fits_name)
+                system("rm " + self.outpath + '2_ff_' + fits_name)
         if verbose:
             print('Done correcting NaN pixels in SCI frames', flush=True)
         if plot:
@@ -1582,7 +1539,7 @@ class raw_dataset:
             write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
-                os.system("rm " + self.outpath + '2_ff_' + fits_name)
+                system("rm " + self.outpath + '2_ff_' + fits_name)
         if verbose:
             print('Done corecting NaN pixels in SKY frames', flush=True)
         if plot:
@@ -1606,7 +1563,7 @@ class raw_dataset:
                 write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 bar.update()
                 if remove:
-                    os.system("rm " + self.outpath + '2_ff_unsat_' + fits_name)
+                    system("rm " + self.outpath + '2_ff_unsat_' + fits_name)
             if verbose:
                 print('Done correcting NaN pixels in UNSAT frames', flush=True)
             if plot:
@@ -1739,14 +1696,14 @@ class raw_dataset:
             tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True)
             write_fits(self.outpath + '2_crop_' + fits_name, tmp_tmp, verbose=debug)
             if remove:
-                os.system("rm " + self.outpath + '2_nan_corr_' + fits_name)
+                system("rm " + self.outpath + '2_nan_corr_' + fits_name)
 
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '2_nan_corr_' + fits_name, verbose=debug)
             tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True)
             write_fits(self.outpath + '2_crop_' + fits_name, tmp_tmp, verbose=debug)
             if remove:
-                os.system("rm " + self.outpath + '2_nan_corr_' + fits_name)
+                system("rm " + self.outpath + '2_nan_corr_' + fits_name)
         if verbose:
             print('SCI and SKY cubes are cropped to a common size of:', self.final_sz, flush=True)
 
@@ -1803,7 +1760,7 @@ class raw_dataset:
             write_fits(self.outpath + '2_bpix_corr2_map_' + fits_name, tmp_tmp_tmp, verbose=debug)
             # timing(t0)
             if remove:
-                os.system("rm " + self.outpath + '2_crop_' + fits_name)
+                system("rm " + self.outpath + '2_crop_' + fits_name)
         if verbose:
             print('*************Bad pixels corrected in SCI cubes*************', flush=True)
         if plot and tmp.ndim == 3:
@@ -1847,7 +1804,7 @@ class raw_dataset:
                        verbose=debug)
             # timing(t0)
             if remove:
-                os.system("rm " + self.outpath + '2_crop_' + fits_name)
+                system("rm " + self.outpath + '2_crop_' + fits_name)
         if verbose:
             print('*************Bad pixels corrected in SKY cubes*************', flush=True)
         if plot and tmp.ndim == 3:
@@ -1882,7 +1839,7 @@ class raw_dataset:
                 write_fits(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name, tmp_tmp_tmp, verbose=debug)
                 # timing(t0)
                 if remove:
-                    os.system("rm " + self.outpath + '2_nan_corr_unsat_' + fits_name)
+                    system("rm " + self.outpath + '2_nan_corr_unsat_' + fits_name)
             if verbose:
                 print('*************Bad pixels corrected in UNSAT cubes*************', flush=True)
             if plot == 'show':
@@ -2140,9 +2097,9 @@ class raw_dataset:
             write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
 
             if remove:
-                os.system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
-                os.system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
+                system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
+                system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
+                system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
         if verbose:
             print('The first {} frames were removed and the flux rescaled for SCI cubes'.format(nfr_rm), flush=True)
 
@@ -2236,9 +2193,9 @@ class raw_dataset:
     
                 write_fits(self.outpath + '3_rmfr_' + fits_name, tmp_tmp, verbose=debug)
                 if remove:
-                    os.system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
-                    os.system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
-                    os.system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr2_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr2_map_' + fits_name)
     
             # COMPARE
             if plot:
@@ -2270,9 +2227,9 @@ class raw_dataset:
                 if sc == 0:
                     cube_meds = np.zeros([n_sci, tmp.shape[-2], tmp.shape[-1]])
                 cube_meds[sc] = tmp.copy()
-                os.system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
+                system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
             for sk, fits_name in enumerate(sky_list):
-                os.system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
+                system('mv '+ self.outpath + '2_bpix_corr2_' + fits_name + ' '+ self.outpath + '3_rmfr_' + fits_name)
 
         write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", 
                    np.median(cube_meds, axis=0),
@@ -2284,9 +2241,9 @@ class raw_dataset:
                 tmp_tmp = tmp[nfr_rm:-1]
                 write_fits(self.outpath + '3_rmfr_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 if remove:
-                    os.system("rm " + self.outpath + '2_bpix_corr_unsat_' + fits_name)
-                    os.system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
-                    os.system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr_unsat_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
+                    system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
 
     def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot='save', remove=False):
         """
@@ -2437,7 +2394,7 @@ class raw_dataset:
                 write_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[un], tmp - tmp_sky, verbose=debug)
         if remove:
             for un, fits_name in enumerate(unsat_list):
-                os.system("rm " + self.outpath + '3_rmfr_unsat_' + fits_name)
+                system("rm " + self.outpath + '3_rmfr_unsat_' + fits_name)
 
         if plot:
             # plot cubes before and after sky subtraction, with original on left and sky subtracted on right
@@ -2845,7 +2802,7 @@ class raw_dataset:
                                                           shifts_xy_sci_med[sc, zz, 0], imlib=imlib)
                     write_fits(self.outpath + '3_AGPM_aligned_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
                     if remove:
-                        os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
+                        system("rm " + self.outpath + '3_rmfr_' + fits_name)
                 except:
                     print("file #{} not found".format(sc), flush=True)
     
@@ -2857,12 +2814,12 @@ class raw_dataset:
                                                       imlib=imlib)
                 write_fits(self.outpath + '3_AGPM_aligned_' + fits_name, tmp_tmp_tmp_tmp, verbose=debug)
                 if remove:
-                    os.system("rm " + self.outpath + '3_rmfr_' + fits_name)
+                    system("rm " + self.outpath + '3_rmfr_' + fits_name)
         else:
             for sc, fits_name in enumerate(sci_list):
-                os.system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)
+                system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)
             for sk, fits_name in enumerate(sky_list):
-                os.system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)  
+                system('mv '+ self.outpath + '3_rmfr_' + fits_name + ' '+ self.outpath + '3_AGPM_aligned_' + fits_name)
 
         # Finally, perform sky subtraction:
         ################## MEDIAN ##################################
@@ -3106,7 +3063,7 @@ class raw_dataset:
                 write_fits(self.outpath + '4_sky_subtr_' + fits_name, tmp_tmp, verbose=debug)
                 # bar.update()
                 if remove:
-                    os.system("rm " + self.outpath + '3_AGPM_aligned_' + fits_name)
+                    system("rm " + self.outpath + '3_AGPM_aligned_' + fits_name)
 
             if verbose:
                 print('Finished PCA dark subtraction', flush=True)
@@ -3179,6 +3136,6 @@ class raw_dataset:
         # os.system("rm "+self.outpath+'TMP_med_bef_SKY_subtr.fits')
         # os.system("rm "+self.outpath+'TMP_npc_opt.fits')
         # os.system("rm "+self.outpath+'unsat_dark_cube.fits')
-        os.system("rm " + self.outpath + '1_*.fits')
-        os.system("rm " + self.outpath + '2_*.fits')
-        os.system("rm " + self.outpath + '3_*.fits')
+        system("rm " + self.outpath + '1_*.fits')
+        system("rm " + self.outpath + '2_*.fits')
+        system("rm " + self.outpath + '3_*.fits')

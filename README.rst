@@ -28,17 +28,10 @@ Capability
 - Nelder-Mead minimisation and MCMC Sampling for source location
 - NEGFC injection and post-processing
 
-Under testing
-------------
-- fast reduction (likely to be scrapped in favour of performance improvements)
-
 Known Issues:
 ------------
-- fast reduction doesnt work in some sections
-- some calibration plots are messy
-- debug mode needs further testing in calibration
 - occasional imperfect horizontal bar correction with PCA dark subtraction
 
 Maintainer:
 ------------
-Iain Hammond (Iain.Hammond@monash.edu)
+Iain Hammond (iain.hammond@monash.edu)
