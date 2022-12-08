@@ -212,6 +212,7 @@ class raw_dataset:
         self.fast_reduction = dataset_dict['fast_reduction']
         self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
                 self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
+        self.nproc = dataset_dict['nproc']
 
     def get_final_sz(self, final_sz=None, verbose=True, debug=False):
         """
@@ -1512,7 +1513,7 @@ class raw_dataset:
         bar = pyprind.ProgBar(n_sci, stream=1, title='Correcting NaN pixels in SCI frames')
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
-            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
+            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
             write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
@@ -1535,7 +1536,7 @@ class raw_dataset:
         bar = pyprind.ProgBar(n_sky, stream=1, title='Correcting NaN pixels in SKY frames')
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
-            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
+            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
             write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
             if remove:
@@ -1559,7 +1560,7 @@ class raw_dataset:
             bar = pyprind.ProgBar(n_unsat, stream=1, title='Correcting NaN pixels in UNSAT frames')
             for un, fits_name in enumerate(unsat_list):
                 tmp = open_fits(self.outpath + '2_ff_unsat_' + fits_name, verbose=debug)
-                tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug)
+                tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
                 write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 bar.update()
                 if remove:
@@ -2427,9 +2428,10 @@ class raw_dataset:
             tmp_tmp, _, _ = cube_crop_frames(tmp, crop_sz_tmp, xy=xy, verbose=debug, full_output=True)
             cy, cx = frame_center(tmp_tmp[0], verbose=debug)
             write_fits(self.outpath + '4_tmp_crop_' + fits_name, tmp_tmp, verbose=debug)
-            tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7, nproc=1,
-                                          model='gauss', full_output=False, verbose=debug, save_shifts=False,
-                                          offset=None, negative=False, debug=False, threshold=False, plot=False)
+            tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7,
+                                          nproc=self.nproc, model='gauss', full_output=False, verbose=debug,
+                                          save_shifts=False, offset=None, negative=False, debug=False,
+                                          threshold=False, plot=False)
             tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=verbose)
             write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
             for dd in range(self.new_ndit_unsat):
@@ -2636,7 +2638,7 @@ class raw_dataset:
             psfn = open_fits(self.outpath + "master_unsat_psf_norm.fits", verbose=debug)
             table_det = detection(tmp, psf=psfn, bkg_sigma=1, mode='lpeaks', matched_filter=True,
                                   mask=True, snr_thresh=snr_thr, plot=False, debug=False,
-                                  full_output=True, verbose=debug)
+                                  full_output=True, verbose=debug, nproc=self.nproc)
             y_dust = table_det['y']
             x_dust = table_det['x']
             snr_dust = table_det['px_snr']

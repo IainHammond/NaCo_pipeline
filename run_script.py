@@ -37,9 +37,10 @@ dit_flat = 0.2           # integration time for flat frames
 fast_reduction = False   # not used anymore
 
 # Can be ignored. Dictionary to pass through the pipeline saving all the static dataset information.
-dataset_dict = {'wavelength':wavelength,'size_telescope':size_telescope,'pixel_scale':pixel_scale, 'source': source,
-                'details': details,'ndit_sci': ndit_sci, 'ndit_sky':ndit_sky,'ndit_unsat':ndit_unsat,'dit_sci':dit_sci,
-                'dit_unsat':dit_unsat,'dit_flat':dit_flat,'fast_reduction':fast_reduction}
+dataset_dict = {'wavelength': wavelength, 'size_telescope': size_telescope, 'pixel_scale': pixel_scale,
+                'source': source, 'details': details, 'ndit_sci': ndit_sci, 'ndit_sky':ndit_sky,
+                'ndit_unsat':ndit_unsat, 'dit_sci': dit_sci,  'dit_unsat': dit_unsat, 'dit_flat':dit_flat,
+                'fast_reduction': fast_reduction, 'nproc': nproc}
 
 # ************************* Activate various functions and set common path ***************************************
 path = '/your/common/path/to/data/'
@@ -61,7 +62,7 @@ calib.subtract_sky(npc=1, debug=False, plot='save')
 
 preproc = calib_dataset(inpath=path+'calibrated/', outpath=path+'preproc/', dataset_dict=dataset_dict,
                         recenter_method='speckle', recenter_model='gauss', coro=True)
-preproc.recenter(nproc=nproc, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
+preproc.recenter(sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
 preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
 preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
 preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annular and contrast curves, reduces S/N

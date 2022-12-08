@@ -53,13 +53,14 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 del tmp
         self.dataset_dict = dataset_dict
         self.fast_reduction = dataset_dict['fast_reduction']
+        self.nproc = dataset_dict['nproc']
         if not isdir(self.outpath):
             makedirs(self.outpath)
         system("cp " + self.inpath + 'master_unsat-stellarpsf_fluxes.fits ' + self.outpath)  # for use later
         system("cp " + self.inpath + 'fwhm.fits ' + self.outpath)  # for use later
         system("cp " + self.inpath + 'master_unsat_psf_norm.fits ' + self.outpath)  # for use later
 
-    def recenter(self, nproc=1, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
+    def recenter(self, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
         """
         Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
@@ -135,13 +136,11 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
                 if debug:
                     get_available_memory()
-                recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None,
-                                                      alignment_iter=5, gammaval=1,
-                                                      min_spat_freq=0.5, max_spat_freq=3,
-                                                      fwhm=fwhm, debug=debug,
-                                                      recenter_median=True, negative=coro,
-                                                      fit_type='gaus', crop=True, subframesize=subi_size,
-                                                      imlib='opencv', interpolation='lanczos4', plot=plot, full_output=True)
+                recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None, alignment_iter=5, gammaval=1,
+                                                      min_spat_freq=0.5, max_spat_freq=3, fwhm=fwhm, debug=debug,
+                                                      recenter_median=True, negative=coro, fit_type='gaus', crop=True,
+                                                      subframesize=subi_size, imlib='opencv', interpolation='lanczos4',
+                                                      plot=plot, full_output=True, nproc=self.nproc)
                 sy = recenter[4]
                 sx = recenter[3]
         elif self.recenter_method == '2dfit':	
@@ -151,7 +150,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     get_available_memory()
                 params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
                 recenter = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
-                                               model=self.recenter_model, nproc=nproc, imlib='opencv',
+                                               model=self.recenter_model, nproc=self.nproc, imlib='opencv',
                                                interpolation='lanczos4', offset=None,
                                                negative=False, threshold=True, sigfactor=sigfactor,
                                                fix_neg=False, params_2g=params_2g,
