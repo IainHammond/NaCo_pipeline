@@ -117,7 +117,7 @@ def find_AGPM(path, size=151, verbose=True, debug=False):
     size : int
         Pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
     verbose : bool
-        If True the final location is printed.
+        If True the final (x, y) location is printed.
     debug : bool, False by default
         Prints significantly more information.
     Returns
@@ -143,7 +143,7 @@ def find_AGPM(path, size=151, verbose=True, debug=False):
     xcom = cornerx + xcom_tmp
 
     if verbose:
-        print('The (y,x) location of the AGPM/star is ({},{})'.format(ycom, xcom), flush=True)
+        print('The (x,y) location of the AGPM/star is ({},{})'.format(xcom, ycom), flush=True)
     return [ycom, xcom]
 
 
