@@ -102,51 +102,37 @@ def find_filtered_max(frame):
     return [ycom, xcom]
 
 
-def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=False):
+def find_AGPM(path, size=151, verbose=True, debug=False):
     """
-    added by Iain to prevent dust grains being picked up as the AGPM
+    To prevent dust grains being picked up as the AGPM.
 
-    This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
-    using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a
-    subset square image around the expected location and applies a low pass filter + max search method and returns
-    the (y,x) location of the AGPM/star
+    This function will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
+    by creating a subset square image around the expected location and applies a low pass filter + max search method
+    and returns the (y,x) location of the AGPM/star
 
     Parameters
     ----------
     path : str
         Path to cube
-    rel_AGPM_pos_xy : tuple, float
-        relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
-        calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
-        with VLT/NaCo as the AGPM is always in the same approximate position
     size : int
-        pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
+        Pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
     verbose : bool
-        If True extra messages are shown.
+        If True the final location is printed.
     debug : bool, False by default
-        Enters pdb once the location has been found
+        Prints significantly more information.
     Returns
     ----------
     [ycom, xcom] : location of AGPM or star
     """
-    cube = open_fits(path, verbose=debug)  # opens first sci/sky cube
-
-    cy, cx = frame_center(cube, verbose=verbose)  # find central pixel coordinates
-    # then the position will be that plus the relative shift in y and x
-    rel_shift_x = rel_AGPM_pos_xy[
-        0]  # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
-    rel_shift_y = rel_AGPM_pos_xy[
-        1]  # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-    # the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations
-    y_tmp = cy + rel_shift_y
-    x_tmp = cx + rel_shift_x
+    cube = open_fits(path, verbose=debug)
+    cy, cx = frame_center(cube, verbose=verbose)
     if cube.ndim == 3:
-        median_frame = cube[-1]
+        median_frame = cube[-1]  # last frame is median
     else:
         median_frame = cube.copy()
 
-    # define a square of 100 x 100 with the center being the approximate AGPM/star position
-    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=y_tmp, x=x_tmp, position=True, verbose=True)
+    # define a square with the center being the approximate AGPM/star position
+    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=cy, x=cx, position=True, verbose=debug)
     # apply low pass filter
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
@@ -157,9 +143,7 @@ def find_AGPM(path, rel_AGPM_pos_xy=(50.5, 6.5), size=101, verbose=True, debug=F
     xcom = cornerx + xcom_tmp
 
     if verbose:
-        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom, flush=True)
-    if debug:
-        pdb.set_trace()
+        print('The (y,x) location of the AGPM/star is ({},{})'.format(ycom, xcom), flush=True)
     return [ycom, xcom]
 
 
