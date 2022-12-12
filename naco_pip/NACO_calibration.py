@@ -1588,9 +1588,6 @@ class raw_dataset:
         plot options: 'save', 'show', None. Show or save relevant plots for debugging
         remove options: True, False. Cleans file for unused fits
         """
-        if verbose:
-            print('Running bad pixel correction...', flush=True)
-            start_time = time_ini(verbose=False)
 
         sci_list = []
         with open(self.inpath + "sci_list.txt", "r") as f:
@@ -1694,7 +1691,7 @@ class raw_dataset:
                     cropper = cube_crop_frames
                 else:
                     cropper = frame_crop
-            tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True)
+            tmp_tmp = cropper(tmp, self.final_sz, self.crop_cen, force=True, verbose=debug)
             write_fits(self.outpath + '2_crop_' + fits_name, tmp_tmp, verbose=debug)
             if remove:
                 system("rm " + self.outpath + '2_nan_corr_' + fits_name)
@@ -1734,6 +1731,10 @@ class raw_dataset:
 
         # self.crop_cen = find_filtered_max(self, self.outpath + '2_crop_' + sci_list[0])
         # self.crop_cen = [self.crop_cen[1],self.crop_cen[0]]
+
+        if verbose:
+            print('Running bad pixel correction...', flush=True)
+            start_time = time_ini(verbose=False)
 
         # t0 = time_ini()
         for sc, fits_name in enumerate(sci_list):
