@@ -1580,7 +1580,7 @@ class raw_dataset:
                             vmax=(np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)), label=('Before', 'After'),
                             title='Unsat NaN Pixel Correction', dpi=300, save=self.outpath + 'UNSAT_nan_correction.pdf')
 
-    def correct_bad_pixels(self, verbose=True, debug=False, plot=None, remove=False):
+    def correct_bad_pixels(self, verbose=True, overwrite=True, debug=False, plot=None, remove=False):
         """
         Correct bad pixels twice, once for the bad pixels determined from the flat fields
         Another correction is needed to correct bad pixels in each frame caused by residuals, hot pixels and gamma-rays.
@@ -1737,151 +1737,166 @@ class raw_dataset:
 
         # t0 = time_ini()
         for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-            # first with the bp max defined from the flat field (without protecting radius)
-            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
-            write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
+            if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
+                # first with the bp max defined from the flat field (without protecting radius)
+                tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
+                write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # timing(t0)
             # second, residual hot pixels
-            if tmp_tmp.ndim == 3:
-                tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, 
-                                                   sigma_clip=8, num_neig=5,
-                                                   size=5, protect_mask=10, 
-                                                   frame_by_frame=True, 
-                                                   verbose=debug)
-            else:
-                tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, 
-                                                    sigma_clip=8, num_neig=5,
-                                                    size=5, protect_mask=10, 
-                                                    verbose=debug)
-            # create a bpm for the 2nd correction
-            tmp_tmp_tmp = tmp_tmp - tmp
-            tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
-            write_fits(self.outpath + '2_bpix_corr2_' + fits_name, tmp_tmp, verbose=debug)
-            write_fits(self.outpath + '2_bpix_corr2_map_' + fits_name, tmp_tmp_tmp, verbose=debug)
-            # timing(t0)
-            if remove:
-                system("rm " + self.outpath + '2_crop_' + fits_name)
+            if overwrite or not (isfile(self.outpath + '2_bpix_corr2_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_' + fits_name)):
+                tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
+                if tmp_tmp.ndim == 3:
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
+                                                       sigma_clip=8, num_neig=5,
+                                                       size=5, protect_mask=10,
+                                                       frame_by_frame=True,
+                                                       verbose=debug)
+                else:
+                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
+                                                        sigma_clip=8, num_neig=5,
+                                                        size=5, protect_mask=10,
+                                                        verbose=debug)
+                # create a bpm for the 2nd correction
+                tmp_tmp_tmp = tmp_tmp - tmp
+                tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
+                write_fits(self.outpath + '2_bpix_corr2_' + fits_name, tmp_tmp, verbose=debug)
+                write_fits(self.outpath + '2_bpix_corr2_map_' + fits_name, tmp_tmp_tmp, verbose=debug)
+                # timing(t0)
+
+        if plot:
+            tmp = open_fits(self.outpath + '2_crop_' + sci_list[-1], verbose=debug)
+            tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sci_list[-1], verbose=debug)
+            tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_map_' + sci_list[-1], verbose=debug)
+            if tmp.ndim == 3:
+                tmp = tmp[0]
+                tmp_tmp = tmp_tmp[0]
+                tmp_tmp_tmp = tmp_tmp_tmp[0]
+            if plot == 'show':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
+                            vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)))
+            if plot == 'save':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
+                            vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            save=self.outpath + 'SCI_badpx_corr')
         if verbose:
             print('*************Bad pixels corrected in SCI cubes*************', flush=True)
-        if plot and tmp.ndim == 3:
-            tmp = tmp[0]
-            tmp_tmp = tmp_tmp[0]
-            tmp_tmp_tmp = tmp_tmp_tmp[0]
-        if plot == 'show':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
-                        vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp, 99.9)))
-        if plot == 'save':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
-                        vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp, 99.9)),
-                        save=self.outpath + 'SCI_badpx_corr')
 
         bpix_map = open_fits(self.outpath + 'master_bpix_map_2ndcrop.fits', verbose=debug)
         # t0 = time_ini()
         for sk, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-            # first with the bp max defined from the flat field (without protecting radius)
-            tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
-            write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
+            if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
+                # first with the bp max defined from the flat field (without protecting radius)
+                tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
+                write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # timing(t0)
             # second, residual hot pixels
-            if tmp_tmp.ndim == 3:
-                tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, 
-                                                   sigma_clip=8, num_neig=5,
-                                                   size=5, protect_mask=10, 
-                                                   frame_by_frame=True, 
-                                                   verbose=debug)
-            else:
-                tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, 
-                                                    sigma_clip=8, num_neig=5,
-                                                    size=5, protect_mask=10, 
-                                                    verbose=debug)                
-            # create a bpm for the 2nd correction
-            tmp_tmp_tmp = tmp_tmp - tmp
-            tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
-            write_fits(self.outpath + '2_bpix_corr2_' + fits_name, tmp_tmp, 
-                       verbose=debug)
-            write_fits(self.outpath + '2_bpix_corr2_map_' + fits_name, tmp_tmp_tmp, 
-                       verbose=debug)
-            # timing(t0)
-            if remove:
-                system("rm " + self.outpath + '2_crop_' + fits_name)
-        if verbose:
-            print('*************Bad pixels corrected in SKY cubes*************', flush=True)
-        if plot and tmp.ndim == 3:
-            tmp = tmp[0]
-            tmp_tmp = tmp_tmp[0]
-            tmp_tmp_tmp = tmp_tmp_tmp[0]
-        if plot == 'show':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0), 
-                        vmax=(1, 16000, 16000))
-        if plot == 'save':
-            plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0), 
-                        vmax=(1, 16000, 16000),
-                        save=self.outpath + 'SKY_badpx_corr')
-
-        if len(unsat_list) > 0:
-            bpix_map_unsat = open_fits(self.outpath + 'master_bpix_map_unsat.fits', 
-                                       verbose=debug)
-            # t0 = time_ini()
-            for un, fits_name in enumerate(unsat_list):
-                tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, verbose=debug)
-                # first with the bp max defined from the flat field (without protecting radius)
-                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, verbose=debug)
-                write_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
-                # timing(t0)
-                # second, residual hot pixels
-                tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                                   size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
+            if overwrite or not (isfile(self.outpath + '2_bpix_corr2_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_' + fits_name)):
+                tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
+                if tmp_tmp.ndim == 3:
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
+                                                       sigma_clip=8, num_neig=5,
+                                                       size=5, protect_mask=10,
+                                                       frame_by_frame=True,
+                                                       verbose=debug)
+                else:
+                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
+                                                        sigma_clip=8, num_neig=5,
+                                                        size=5, protect_mask=10,
+                                                        verbose=debug)
                 # create a bpm for the 2nd correction
                 tmp_tmp_tmp = tmp_tmp - tmp
                 tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
-                write_fits(self.outpath + '2_bpix_corr2_unsat_' + fits_name, tmp_tmp, verbose=debug)
-                write_fits(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name, tmp_tmp_tmp, verbose=debug)
+                write_fits(self.outpath + '2_bpix_corr2_' + fits_name, tmp_tmp, verbose=debug)
+                write_fits(self.outpath + '2_bpix_corr2_map_' + fits_name, tmp_tmp_tmp, verbose=debug)
+
+        if plot:
+            tmp = open_fits(self.outpath + '2_crop_' + sky_list[-1], verbose=debug)
+            tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sky_list[-1], verbose=debug)
+            tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_map_' + sky_list[-1], verbose=debug)
+            if tmp.ndim == 3:
+                tmp_tmp = tmp_tmp[0]
+                tmp_tmp_tmp = tmp_tmp_tmp[0]
+            if plot == 'show':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
+                            vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)))
+            if plot == 'save':
+                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmin=(0, 0, 0),
+                            vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                            save=self.outpath + 'SKY_badpx_corr')
+        if verbose:
+            print('*************Bad pixels corrected in SKY cubes*************', flush=True)
+
+        if len(unsat_list) > 0:
+            bpix_map_unsat = open_fits(self.outpath + 'master_bpix_map_unsat.fits', verbose=debug)
+            # t0 = time_ini()
+            for un, fits_name in enumerate(unsat_list):
+                if overwrite or not isfile(self.outpath + '2_bpix_corr_unsat_' + fits_name):
+                    # first with the bp max defined from the flat field (without protecting radius)
+                    tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, verbose=debug)
+                    tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, verbose=debug)
+                    write_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 # timing(t0)
-                if remove:
-                    system("rm " + self.outpath + '2_nan_corr_unsat_' + fits_name)
+                if overwrite or not (isfile(self.outpath + '2_bpix_corr2_unsat_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)):
+                    # second, residual hot pixels
+                    tmp_tmp = open_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, verbose=debug)
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
+                                                       size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
+                    # create a bpm for the 2nd correction
+                    tmp_tmp_tmp = tmp_tmp - tmp
+                    tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
+                    write_fits(self.outpath + '2_bpix_corr2_unsat_' + fits_name, tmp_tmp, verbose=debug)
+                    write_fits(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name, tmp_tmp_tmp, verbose=debug)
+                    # timing(t0)
+
+            if plot:
+                tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + unsat_list[-1], verbose=debug)
+                tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_unsat_' + unsat_list[-1])
+                tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_map_unsat_' + unsat_list[-1])
+                if plot == 'show':
+                    plot_frames((tmp_tmp_tmp[0], tmp[0], tmp_tmp[0]), vmin=(0, 0, 0), vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)))
+                if plot == 'save':
+                    plot_frames((tmp_tmp_tmp[0], tmp[0], tmp_tmp[0]), vmin=(0, 0, 0), vmax=(1, np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
+                                save=self.outpath + 'UNSAT_badpx_corr')
             if verbose:
                 print('*************Bad pixels corrected in UNSAT cubes*************', flush=True)
-            if plot == 'show':
-                plot_frames((tmp_tmp_tmp[0], tmp[0], tmp_tmp[0]), vmin=(0, 0, 0), vmax=(1, 16000, 16000))
-            if plot == 'save':
-                plot_frames((tmp_tmp_tmp[0], tmp[0], tmp_tmp[0]), vmin=(0, 0, 0), vmax=(1, 16000, 16000),
-                            save=self.outpath + 'UNSAT_badpx_corr')
 
         # FIRST CREATE MASTER CUBE FOR SCI
-        tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sci_list[0], verbose=debug)
-        n_y = tmp_tmp_tmp.shape[-2]
-        n_x = tmp_tmp_tmp.shape[-1]
-        tmp_tmp_tmp = np.zeros([n_sci, n_y, n_x])
-        for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            if tmp.ndim == 3:
-                tmp_tmp_tmp[sc] = np.median(tmp[:int(min(ndit_sci))], axis=0)
-            else:
-                tmp_tmp_tmp[sc] = tmp.copy()
-        write_fits(self.outpath + 'TMP_2_master_median_SCI_cube.fits', tmp_tmp_tmp, verbose=debug)
-        tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
-        write_fits(self.outpath + 'TMP_2_master_median_SCI.fits', tmp_tmp_tmp, verbose=debug)
-        if verbose:
-            print('Median SCI cube and frame have been created', flush=True)
+        if overwrite or not (isfile(self.outpath + 'TMP_2_master_median_SCI_cube.fits') and isfile(self.outpath + 'TMP_2_master_median_SCI.fits')):
+            tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sci_list[0], verbose=debug)
+            n_y = tmp_tmp_tmp.shape[-2]
+            n_x = tmp_tmp_tmp.shape[-1]
+            tmp_tmp_tmp = np.zeros([n_sci, n_y, n_x])
+            for sc, fits_name in enumerate(sci_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    tmp_tmp_tmp[sc] = np.median(tmp[:int(min(ndit_sci))], axis=0)
+                else:
+                    tmp_tmp_tmp[sc] = tmp.copy()
+            write_fits(self.outpath + 'TMP_2_master_median_SCI_cube.fits', tmp_tmp_tmp, verbose=debug)
+            tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
+            write_fits(self.outpath + 'TMP_2_master_median_SCI.fits', tmp_tmp_tmp, verbose=debug)
+            if verbose:
+                print('Median SCI cube and frame have been created', flush=True)
 
         # THEN CREATE MASTER CUBE FOR SKY
-        tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sky_list[0], verbose=debug)
-        n_y = tmp_tmp_tmp.shape[-2]
-        n_x = tmp_tmp_tmp.shape[-1]
-        tmp_tmp_tmp = np.zeros([n_sky, n_y, n_x])
-        for sk, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-            if tmp.ndim == 3:
-                tmp_tmp_tmp[sk] = np.median(tmp[:int(min(ndit_sky))], axis=0)
-            else:
-                tmp_tmp_tmp[sk] = tmp.copy()
-        write_fits(self.outpath + 'TMP_2_master_median_SKY_cube.fits', tmp_tmp_tmp, verbose=debug)
-        tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
-        write_fits(self.outpath + 'TMP_2_master_median_SKY.fits', tmp_tmp_tmp, verbose=debug)
-        if verbose:
-            print('Median SKY cube and frame have been created', flush=True)
+        if overwrite or not (isfile(self.outpath + 'TMP_2_master_median_SKY_cube.fits') and isfile(self.outpath + 'TMP_2_master_median_SKY.fits')):
+            tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sky_list[0], verbose=debug)
+            n_y = tmp_tmp_tmp.shape[-2]
+            n_x = tmp_tmp_tmp.shape[-1]
+            tmp_tmp_tmp = np.zeros([n_sky, n_y, n_x])
+            for sk, fits_name in enumerate(sky_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
+                if tmp.ndim == 3:
+                    tmp_tmp_tmp[sk] = np.median(tmp[:int(min(ndit_sky))], axis=0)
+                else:
+                    tmp_tmp_tmp[sk] = tmp.copy()
+            write_fits(self.outpath + 'TMP_2_master_median_SKY_cube.fits', tmp_tmp_tmp, verbose=debug)
+            tmp_tmp_tmp = np.median(tmp_tmp_tmp, axis=0)
+            write_fits(self.outpath + 'TMP_2_master_median_SKY.fits', tmp_tmp_tmp, verbose=debug)
+            if verbose:
+                print('Median SKY cube and frame have been created', flush=True)
 
         if plot:
             bpix_map_ori = open_fits(self.outpath + 'master_bpix_map_2ndcrop.fits')
@@ -1923,6 +1938,11 @@ class raw_dataset:
             plot_frames(bpix_maps, save=self.outpath + 'badpx_maps')
             plot_frames((tmp, tmp - tmpSKY, tmp_tmp, tmp_tmp - tmpSKY, tmp2, tmp2 - tmpSKY,
                          tmp_tmp2, tmp_tmp2 - tmpSKY), save=self.outpath + 'Badpx_comparison')
+
+        if remove:
+            system("rm " + self.outpath + '2_nan_corr_unsat_*')
+            system("rm " + self.outpath + '2_crop_*')
+
         if verbose:
             timing(start_time)
 
