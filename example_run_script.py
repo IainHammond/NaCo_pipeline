@@ -55,7 +55,7 @@ calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', datas
 calib.dark_subtract(method='pca', bad_quadrant=[3], debug=False, plot='save')
 calib.flat_field_correction(debug=False, plot='save')
 calib.correct_nan(debug=False, plot='save')
-calib.correct_bad_pixels(verbose=True, debug=False, plot='save')
+calib.correct_bad_pixels(verbose=True, overwrite=False, debug=False, plot='save')
 calib.first_frames_removal(verbose=True, debug=False, plot='save')
 calib.get_stellar_psf(nd_filter=False, debug=False, plot='save')
 calib.subtract_sky(npc=1, debug=False, plot='save')
