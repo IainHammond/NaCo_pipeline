@@ -12,7 +12,7 @@ from vip_hci.config import get_available_memory
 sep = '―' * 45  # used in printing functions
 print('\n'+sep+'\n'+'Starting NaCo pipeline (Hammond et al. 2022)'+'\n'+sep+'\n')
 try:
-    nproc = int(getenv('SLURM_CPUS_PER_TASK', default=1)) * int(getenv('SLURM_NNODES', default=1))
+    nproc = int(getenv('SLURM_CPUS_PER_TASK', default=1)) * int(getenv('SLURM_NNODES'))
 except:
     nproc = int(cpu_count()/2)  # set to cpu_count()/2 for efficiency
 get_available_memory()
@@ -46,7 +46,7 @@ dataset_dict = {'wavelength': wavelength, 'size_telescope': size_telescope, 'pix
 path = '/your/common/path/to/data/'
 
 clas = input_dataset(inpath=path + 'raw/', outpath=path + 'classified/', dataset_dict=dataset_dict, coro=True)
-clas.bad_columns(verbose=True, debug=False)
+clas.bad_columns(correct=True, overwrite=False, sat_val=32768, plot=True, verbose=True, debug=False)
 clas.mk_dico()
 clas.find_sky_in_sci_cube(plot='save')
 clas.find_derot_angles()

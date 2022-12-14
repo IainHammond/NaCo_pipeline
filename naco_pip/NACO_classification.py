@@ -17,6 +17,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from photutils import CircularAperture, aperture_photometry
 
+from hciplot import plot_frames
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import frame_fix_badpix_isolated
 from vip_hci.var import frame_filter_lowpass, frame_center, get_square
@@ -109,7 +110,7 @@ class input_dataset():
         if not isdir(self.outpath):
             makedirs(self.outpath)
 
-    def bad_columns(self, correct=True, overwrite=True, sat_val=32768, verbose=True, debug=False):
+    def bad_columns(self, correct=True, overwrite=False, sat_val=32768, plot=True, verbose=True, debug=False):
         """
         In NACO data there are systematic bad columns in the lower left quadrant.
         This method will correct those bad columns with the median of the neighbouring pixels.
@@ -121,7 +122,13 @@ class input_dataset():
         overwrite : bool, optional
             Whether to re-run correction and overwrite the file if it already exists.
         sat_val : int, optional
-            Value of the saturated column. Default 32768
+            Value of the saturated column. Default 32768.
+        plot : bool, optional
+            Saves a before and after pdf of the first science frame/cube correction.
+        verbose : bool, optional
+            Prints starting and finishing messages.
+        debug : book, optional
+            Full print output from each VIP function.
         """
         # creating bad pixel map
         # bcm = np.zeros((1026, 1024) ,dtype=np.float64)
@@ -130,18 +137,18 @@ class input_dataset():
         #         bcm[j,i] = 1
 
         for fname in self.file_list:
-            tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
             if correct:
                 if overwrite or not isfile(self.outpath + fname):
+                    tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
                     # ADD code here that checks for bad column and updates the mask
                     if verbose:
                         print('Fixing {} of shape {} and type {}'.format(fname, tmp.shape,
                                                                          header_fname['HIERARCH ESO DPR TYPE']), flush=True)
                     # crop the bad pixel map to the same dimensions of the frames
                     if len(tmp.shape) == 3:
-                        nz, ny, nx = tmp.shape
-                        bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as cube
+                        nz, _, _ = tmp.shape
                         tmp_median = np.median(tmp, axis=0)  # median frame of cube
+                        bcm = np.zeros_like(tmp_median, dtype=np.int8)  # make mask the same dimensions as cube
                         # loop through the median cube pixels and if any are 32768, add the location to the mask
                         bcm[np.where(tmp_median == sat_val)] = 1
                         # for i in range(0,nx): # all x pixels
@@ -154,13 +161,12 @@ class input_dataset():
                         # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
                         for j in range(nz):
                             # replace bad columns in each frame of the cubes
-                            tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5,
+                            tmp[j] = frame_fix_badpix_isolated(tmp[j], bpm_mask=bcm, correct_only=True, size=5,
                                                                protect_mask=False, verbose=debug)
                         write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
                     else:
                         print('File {} is not a cube ({})'.format(fname, header_fname['HIERARCH ESO DPR TYPE']), flush=True)
-                        ny, nx = tmp.shape
-                        bcm = np.zeros((ny, nx), dtype=np.int8)  # make mask the same dimensions as frame
+                        bcm = np.zeros_like(tmp, dtype=np.int8)  # make mask the same dimensions as frame
                         bcm[np.where(tmp == sat_val)] = 1
                         # for i in range(0,nx):
                         #     for j in range(0,ny):
@@ -170,13 +176,33 @@ class input_dataset():
                         # ini_y, fin_y = int(512-cy), int(512+cy)
                         # ini_x, fin_x = int(512-cx), int(512+cx)
                         # bcm_crop = bcm[ini_y:fin_y,ini_x:fin_x]
-                        tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, sigma_clip=3, num_neig=5, size=5, protect_mask=False,
-                                                        verbose=debug)
+                        tmp = frame_fix_badpix_isolated(tmp, bpm_mask=bcm, correct_only=True, size=5,
+                                                        protect_mask=False, verbose=debug)
                         write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
                     if verbose:
                         print('Fixed file {}'.format(fname), flush=True)
+
+                    # plot the first science frame
+                    if plot and header_fname['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
+                            header_fname['HIERARCH ESO DPR TYPE'] == 'OBJECT' and \
+                            header_fname['HIERARCH ESO DET DIT'] == self.dit_sci and \
+                            header_fname['HIERARCH ESO DET NDIT'] in self.ndit_sci:
+                        science_before = open_fits(self.inpath + fname, verbose=debug)
+                        science_after = open_fits(self.outpath + fname, verbose=debug)
+                        if len(science_before.shape) == 3:
+                            science_before = np.median(science_before, axis=0)
+                        if len(science_after.shape) == 3:
+                            science_after = np.median(science_after, axis=0)
+                        # note the cuts are the same on purpose for a fair comparison
+                        plot_frames((science_before, bcm, science_after), label=('Before', 'Detected Pixels', 'After'),
+                                    vmin=(np.percentile(science_after, 0.5), 0, np.percentile(science_after, 0.5)),
+                                    vmax=(np.percentile(science_after, 99.5), 1, np.percentile(science_after, 99.5)),
+                                    top_colorbar=True, cmap='inferno', horsp=0.2, label_pad=(5, 280), dpi=300,
+                                    save=self.outpath + 'bad_columns_correction.pdf')
+                        plot = False
             else:
                 if overwrite or not isfile(self.outpath + fname):
+                    tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
                     write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
 
     def mk_dico(self, coro=True, verbose=True, debug=False):
