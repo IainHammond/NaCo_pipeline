@@ -100,4 +100,4 @@ Conventions
 
 Acknowledgements:
 ------------
-If you use this pipeline, please cite `Hammond et al. (2021) <https://ui.adsabs.harvard.edu/abs/2022MNRAS.515.6109H>`_. This repository is maintained by Iain Hammond (iain.hammond@monash.edu), with signicant contributions by Dr Valentin Christiaens and Lewis Picker.
+If you use this pipeline, please cite `Hammond et al. (2021) <https://ui.adsabs.harvard.edu/abs/2022MNRAS.515.6109H>`_. This repository is maintained by Iain Hammond (iain.hammond@monash.edu), with significant contributions by Dr Valentin Christiaens and Lewis Picker.
