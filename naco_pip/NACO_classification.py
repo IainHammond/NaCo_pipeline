@@ -6,7 +6,7 @@ Classifies cubes and find derotation angles
 @author: lewis, iain
 """
 __author__ = 'Lewis Picker, Iain Hammond'
-__all__ = ['input_dataset', 'find_AGPM_or_star']
+__all__ = ['input_dataset', 'find_AGPM']
 
 import pdb
 from os import listdir, makedirs
@@ -19,75 +19,54 @@ from photutils import CircularAperture, aperture_photometry
 
 from hciplot import plot_frames
 from vip_hci.fits import open_fits, write_fits
-from vip_hci.preproc import frame_fix_badpix_isolated
+from vip_hci.preproc import frame_fix_badpix_isolated, approx_stellar_position
 from vip_hci.var import frame_filter_lowpass, frame_center, get_square
 
 matplotlib.use('Agg')
 
-def find_AGPM_or_star(self, file_list, rel_AGPM_pos_xy=(50.5, 6.5), size=101, 
-                      verbose=True, debug=False):
+
+def find_AGPM(path, size=151, verbose=True, debug=False):
     """
-        added by Iain to prevent dust grains being picked up as the AGPM
-        
-        This method will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
-        using the known relative distance of the AGPM from the frame center in all VLT/NaCO datasets. It then creates a
-        subset square image around the expected location and applies a low pass filter + max search method and returns
-        the (y,x) location of the AGPM/star
-        
-        Parameters
-        ----------
-        file_list : list of str
-            List containing all science cube names
-        rel_AGPM_pos_xy : tuple, float
-            relative location of the AGPM from the frame center in pixels, should be left unchanged. This is used to
-            calculate how many pixels in x and y the AGPM is from the center and can be applied to almost all datasets
-            with VLT/NaCO as the AGPM is always in the same approximate position
-        size : int
-            pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
-        verbose : bool
-            If True extra messages are shown
-        debug : bool, False by default
-            Enters pdb once the location has been found
+    To prevent dust grains being picked up as the AGPM.
 
-        Returns
-        ----------
-        [ycom, xcom] : location of AGPM or star        
-        """
-    sci_cube = open_fits(self.inpath + file_list[0], verbose=debug)  # opens first sci/sky cube
-    nz, ny, nx = sci_cube.shape  # gets size of it. science and sky cubes have same shape. assumes all cubes are the same ny and nx (they should be!)
+    This function will find the location of the AGPM/star (even when sky frames are mixed with science frames), by
+    by creating a subset square image around the expected location and applies a low pass filter + max search method
+    and returns the (y,x) location of the AGPM/star
 
-    cy, cx = frame_center(sci_cube, verbose=verbose)  # find central pixel coordinates
-    # then the position will be that plus the relative shift in y and x
-    rel_shift_x = rel_AGPM_pos_xy[
-        0]  # 50.5 is pixels from frame center to AGPM in x in an example data set, thus providing the relative shift
-    rel_shift_y = rel_AGPM_pos_xy[
-        1]  # 6.5 is pixels from frame center to AGPM in y in an example data set, thus providing the relative shift
+    Parameters
+    ----------
+    path : str
+        Path to cube
+    size : int
+        Pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
+    verbose : bool
+        If True the final (x, y) location is printed.
+    debug : bool, False by default
+        Prints significantly more information.
+    Returns
+    ----------
+    [ycom, xcom] : location of AGPM/star
+    """
+    cube = open_fits(path, verbose=debug)
+    cy, cx = frame_center(cube, verbose=verbose)
+    if cube.ndim == 3:
+        median_frame = cube[-1]  # last frame is median
+    else:
+        median_frame = cube.copy()
 
-    # the center of the square to apply the low pass filter to - is the approximate position of the AGPM/star based on previous observations
-    y_tmp = cy + rel_shift_y
-    x_tmp = cx + rel_shift_x
-    median_all_cubes = np.zeros([len(file_list), ny, nx])  # makes empty array
-    for sc, fits_name in enumerate(file_list):  # loops over all images
-        tmp = open_fits(self.inpath + fits_name, verbose=debug)  # opens the cube
-        median_all_cubes[sc] = tmp[
-            -1]  # takes the last entry (the median) and adds it to the empty array
-    median_frame = np.median(median_all_cubes, axis=0)  # median of all median frames
-
-    # define a square of 100 x 100 with the center being the approximate AGPM/star position
-    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=y_tmp, x=x_tmp, position=True, verbose=True)
+    # define a square with the center being the approximate AGPM/star position
+    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=cy, x=cx, position=True, verbose=debug)
     # apply low pass filter
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
-    # find coordiates of max flux in the square
+    # find coordinates of max flux in the square
     ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
     # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
     ycom = cornery + ycom_tmp
     xcom = cornerx + xcom_tmp
 
     if verbose:
-        print('The location of the AGPM/star is', 'ycom =', ycom, 'xcom =', xcom, flush=True)
-    if debug:
-        pdb.set_trace()
+        print('The (x,y) location of the AGPM/star is ({},{})'.format(xcom, ycom), flush=True)
     return [ycom, xcom]
 
 
@@ -362,6 +341,8 @@ class input_dataset():
 
         nres : float, optional
             Number of resolution elements
+        coro : bool, optional
+            If an AGPM was used or not during the observation.
         plot : bool, optional
             Save plot of the flux measured in all science frames and saves a bar graph of the final breakdown of
             each file type.
@@ -400,13 +381,25 @@ class input_dataset():
         self.resel = (self.dataset_dict['wavelength'] * 180 * 3600) / (self.dataset_dict['size_telescope'] * np.pi *
                                                                        self.dataset_dict['pixel_scale'])
 
-        agpm_pos = find_AGPM_or_star(self, sci_list, verbose=debug, debug=debug)
+        test_cube = open_fits(self.outpath + sci_list[0], verbose=debug)
+        if coro:
+            yx = find_AGPM(self.outpath + sci_list[0], verbose=debug, debug=debug)
+        elif not coro:
+            yx = approx_stellar_position(test_cube, fwhm=self.resel + 1, verbose=debug)
+            yx = (np.median(yx[:, 1]), np.median(yx[:, 0]))
+
+        if plot:
+            plot_frames(test_cube[-1], vmin=np.percentile(test_cube[-1], 0.5), vmax=np.percentile(test_cube[-1], 99.5),
+                        cmap='inferno', dpi=300, circle_label='Inferred star/AGPM position', circle=(int(yx[1]), int(yx[0])),
+                        circle_radius=3*(self.resel+1), circle_alpha=1, label_size=8, label=sci_list[0],
+                        save=self.outpath + 'Inferred_star-AGPM_position.pdf')
+
         if verbose:
-            print('The rough location of the star/AGPM is', 'y=', agpm_pos[0], 'x=', agpm_pos[1], flush=True)
+            print('The rough location of the star/AGPM is', 'y=', yx[0], 'x=', yx[1], flush=True)
             print('Measuring flux in SCI cubes...', flush=True)
 
         # create the aperture
-        circ_aper = CircularAperture((agpm_pos[1], agpm_pos[0]), round(nres * self.resel))
+        circ_aper = CircularAperture((yx[1], yx[0]), round(nres * self.resel))
 
         # total flux through the aperture
         for fname in sci_list:
