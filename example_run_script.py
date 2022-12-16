@@ -47,8 +47,8 @@ path = '/your/common/path/to/data/'
 
 clas = input_dataset(inpath=path + 'raw/', outpath=path + 'classified/', dataset_dict=dataset_dict, coro=True)
 clas.bad_columns(correct=True, overwrite=False, sat_val=32768, plot=True, verbose=True, debug=False)
-clas.mk_dico()
-clas.find_sky_in_sci_cube(plot='save')
+clas.mk_dico(plot=True, verbose=True, debug=False)
+clas.find_sky_in_sci_cube(nres=3, plot=True, verbose=True, debug=False)
 clas.find_derot_angles()
 
 calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', dataset_dict=dataset_dict, final_sz=None)
