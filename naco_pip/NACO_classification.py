@@ -655,7 +655,7 @@ class input_dataset():
 
         if plot:
             plt.plot(final_derot_angs)
-            plt.xlabel('Science frame')
+            plt.xlabel('Science cube')
             plt.ylabel('Derotation angle [deg]')
             plt.minorticks_on()
             plt.grid(alpha=0.1)
