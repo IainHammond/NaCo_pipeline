@@ -519,24 +519,25 @@ class input_dataset():
         if verbose:
             print('done sorting :)', flush=True)
 
-    def find_derot_angles(self, verbose=False):
+    def find_derot_angles(self, plot=True, verbose=True, debug=False):
         """ 
-        For datasets with significant rotation when the telescope derotator is switched off.
-        Requires sci_list.txt to exist in the outpath, thus previous classification steps must have been completed.
-        Finds the derotation angle vector to apply to a set of NACO cubes to align it with North up. 
-        IMPORTANT: The list of fits should be in chronological order of acquisition, however the code should sort them itself.
-        
-        verbose: str
-            Whether to print the derotation angles as they are computed
+        For datasets with significant rotation when the telescope derotator is switched off. Finds the derotation
+        angle vector to apply to a set of NACO cubes to align it with North up. Derotated offset is included here.
+        Requires previous classification steps must have been completed.
+
+        plot : bool, optional
+            Saves a plot of the derotation angle vs time as a pdf.
+        verbose: bool, optional
+            Prints important information regarding the sequence.
+        debug : bool, optional
+            Whether to print each angle as it is computed.
             
-        Returns:
-        ********
-        derot_angles: 2d numpy array (n_cubes x n_frames_max)
+        Writes to FITS file:
+        --------------------
+        derot_angles_uncropped: 2d numpy array (n_cubes x n_frames_max)
             vector of n_frames derot angles for each cube
             Important: n_frames may be different from one cube to the other!
             For cubes where n_frames < n_frames_max the last values of the row are padded with zeros.
-        n_frames_vec: 1d numpy array
-            Vector with number of frames in each cube
         """
         # open the list of science images and add them to sci_list to be used in _derot_ang_ipag
         sci_list = []
@@ -569,13 +570,13 @@ class input_dataset():
                 kw_pos = 'HIERARCH ESO ADA POSANG END'  # Position angle at exposure end
             # FIRST COMPILE PARANG, POSANG and PUPILPOS 
             for ff in range(len(sci_list)):
-                cube, header = open_fits(self.inpath + sci_list[ff], header=True, verbose=False)
+                cube, header = open_fits(self.inpath + sci_list[ff], header=True, verbose=debug)
                 n_frames_vec[ff] = cube.shape[0] - 1  # "-1" is because the last frame is the median of all others
                 parang[ff] = header[kw_par]
                 posang[ff] = header[kw_pos]
                 pupilpos = 180.0 - parang[ff] + posang[ff]
                 rot_pt_off[ff] = 90 + 89.44 - pupilpos
-                if verbose:
+                if debug:
                     print("parang: {}, posang: {}, rot_pt_off: {}".format(parang[ff], posang[ff], rot_pt_off[ff]), flush=True)
 
             # NEXT CHECK IF THE OBSERVATION WENT THROUGH TRANSIT (change of sign in parang OR stddev of rot_pt_off > 1.)       
@@ -648,6 +649,15 @@ class input_dataset():
                 # final_derot_angs[sc] = np.apply_along_axis(lambda v: np.median(v[np.nonzero(v)]), 0, final_derot_angs[sc])
                 final_derot_angs_median[sc] = np.median(final_derot_angs[sc])
             final_derot_angs = final_derot_angs_median
-        write_fits(self.outpath + "derot_angles_uncropped.fits", final_derot_angs, verbose=verbose)
-        print('Derotation angles have been computed and saved to file', flush=True)
-        # return final_derot_angs, n_frames_vec
+        write_fits(self.outpath + "derot_angles_uncropped.fits", final_derot_angs, verbose=debug)
+        if verbose:
+            print('Derotation angles have been computed and saved to file', flush=True)
+
+        if plot:
+            plt.plot(final_derot_angs)
+            plt.xlabel('Science frame')
+            plt.ylabel('Derotation angle [deg]')
+            plt.minorticks_on()
+            plt.grid(alpha=0.1)
+            plt.savefig(self.outpath + 'Derotation_angle_vector.pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
