@@ -106,7 +106,7 @@ class input_dataset():
         self.dit_flat = dataset_dict['dit_flat']
         self.fast_reduction = dataset_dict['fast_reduction']
         self.dataset_dict = dataset_dict
-        print('##### Number of FITS files:', len(self.file_list), '#####', flush=True)
+        print('##### Number of raw FITS files:', len(self.file_list), '#####', flush=True)
         if not isdir(self.outpath):
             makedirs(self.outpath)
 
@@ -210,7 +210,8 @@ class input_dataset():
         Reads the header of each FITS file and sorts them based on DIT and NDIT provided in the run script.
 
         plot : bool, optional
-            Produces a plot of the number of files and airmass vs. time in the flats.
+            Produces a plot of the number of files and airmass vs. time in the flats. If no airmass is in the flat
+            header it will use the median pixel value as a proxy.
         verbose : bool, optional
             Prints starting and finishing messages.
         debug : bool, optional
@@ -266,7 +267,7 @@ class input_dataset():
                         flat_list.append(fname)
                         flat_list_mjd.append(header['MJD-OBS'])
                         try:
-                            airmass.append(header['AIRMASS'])
+                            airmass.append(str(header['AIRMASS']))
                         except:
                             pass
 
@@ -294,20 +295,34 @@ class input_dataset():
             raise ValueError(msg)
 
         if len(airmass) > 0:
+            no_airmass = False
             with open(self.outpath + "airmass.txt", "w") as f:
                 for airmasses in airmass:
                     f.write(airmasses + '\n')
-            if plot:
-                plt.scatter(flat_list_mjd, airmass, label='Airmass')
-                plt.xlabel('Time [MJD]')
-                plt.ylabel('Airmass')
-                plt.minorticks_on()
-                plt.legend()
-                plt.grid(alpha=0.1)
-                plt.savefig(self.outpath + 'Airmasses.pdf', bbox_inches='tight', pad_inches=0)
         else:
-            print('WARNING: No airmass detected in header. Flats will be sorted by median pixel value later.')
-                        
+            print('WARNING: No airmass detected in flat header. Flats will be sorted by median pixel value later.', flush=True)
+            no_airmass = True
+            airmass = []
+            for fl, flat_name in enumerate(flat_list):
+                tmp = open_fits(self.outpath + flat_name, verbose=debug)
+                airmass.append(np.median(tmp))
+
+        if plot:
+            plt.scatter(flat_list_mjd, airmass, label='Flat')
+            plt.xlabel('Time [MJD]')
+            plt.xticks(rotation=45)
+            plt.ticklabel_format(useOffset=False, axis='x')  # to prevent scientific notation.
+            plt.minorticks_on()
+            plt.legend()
+            plt.grid(alpha=0.1)
+            if no_airmass:
+                plt.ylabel('Median flat value')
+                plt.savefig(self.outpath + 'Inferred_airmasses.pdf', bbox_inches='tight', pad_inches=0.1)
+            else:
+                plt.ylabel('Airmass')
+                plt.savefig(self.outpath + 'Airmasses.pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
+
         with open(self.outpath + "sci_list_mjd.txt", "w") as f:
             for sci_time in sci_list_mjd:
                 f.write(str(sci_time) + '\n')
@@ -335,16 +350,26 @@ class input_dataset():
         with open(self.outpath + "flat_list.txt", "w") as f:
             for flat in flat_list:
                 f.write(flat + '\n')
+
         if verbose:
             print('Done :)', flush=True)
 
-    def find_sky_in_sci_cube(self, nres=3, coro=True, verbose=True, plot=None, debug=False):
+    def find_sky_in_sci_cube(self, nres=3, coro=True, plot=True, verbose=True, debug=False):
         """
-       Empty SKY list could be caused by a misclassification of the header in NACO data
-       This method will check the flux of the SCI cubes around the location of the AGPM 
-       A SKY cube should be less bright at that location allowing the separation of cubes
-       
-       """
+        Empty SKY list could be caused by a misclassification of the header in NACO data.
+        This method will check the flux of the SCI cubes around the location of the AGPM.
+        A SKY cube should be less bright at that location allowing the separation of cubes.
+
+        nres : float, optional
+            Number of resolution elements
+        plot : bool, optional
+            Save plot of the flux measured in all science frames and saves a bar graph of the final breakdown of
+            each file type.
+        verbose : bool, optional
+            Prints information about the location of the star and flux.
+        debug : bool, optional
+            Significantly more information printed.
+        """
 
         flux_list = []
         fname_list = []
@@ -418,17 +443,11 @@ class input_dataset():
                 plt.plot(i, flux_list[i] / median_flux, symbol)
         if plot:
             plt.title('Normalised flux around star')
-            plt.ylabel('normalised flux')
-            plt.xlabel('cube')
-            if plot == 'save':
-                plt.savefig(self.outpath + 'flux_plot.pdf')
-            if plot == 'show':
-                plt.show()
+            plt.ylabel('Normalised flux')
+            plt.xlabel('Cube')
+            plt.savefig(self.outpath + 'flux_plot.pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
 
-        # sci_list.sort()
-        # with open(self.outpath + "sci_list.txt", "w") as f:
-        #     for sci in sci_list:
-        #         f.write(sci + '\n')
         sci_list.sort()
         if self.fast_reduction:
             with open(self.outpath + "sci_list_ori.txt", "w") as f:
@@ -461,6 +480,43 @@ class input_dataset():
         with open(self.outpath + "sky_list_mjd.txt", "w") as f:
             for time in sky_list_mjd:
                 f.write(str(time) + '\n')
+
+        if plot:
+            unsat_list = []
+            flat_list = []
+            sci_dark_list = []
+            unsat_dark_list = []
+            flat_dark_list = []
+            with open(self.outpath + "unsat_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    unsat_list.append(line.split('\n')[0])
+            with open(self.outpath + "flat_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    flat_list.append(line.split('\n')[0])
+            with open(self.outpath + "sci_dark_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    sci_dark_list.append(line.split('\n')[0])
+            with open(self.outpath + "unsat_dark_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    unsat_dark_list.append(line.split('\n')[0])
+            with open(self.outpath + "flat_dark_list.txt", "r") as f:
+                tmp = f.readlines()
+                for line in tmp:
+                    flat_dark_list.append(line.split('\n')[0])
+
+            types = ['OBJ', 'SKY', 'UNSAT', 'FLAT', 'SCI DARK', 'UNSAT DARK', 'FLAT DARK']
+            count = [len(sci_list), len(sky_list), len(unsat_list), len(flat_list), len(sci_dark_list),
+                     len(unsat_dark_list), len(flat_dark_list)]
+            plt.bar(x=types, height=count, zorder=2, color=['black', 'red', 'green', 'blue', 'cyan', 'grey', 'purple'])
+            plt.ylabel('Number of files')
+            plt.xticks(rotation=45)
+            plt.grid(alpha=0.1, zorder=1)
+            plt.savefig(self.outpath + 'File_summary.pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
 
         if len(sci_list_mjd) != len(sci_list):
             print('======== WARNING: SCI observation time list is a different length to SCI cube list!! ========', flush=True)
