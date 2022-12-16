@@ -127,7 +127,7 @@ class input_dataset():
             Saves a before and after pdf of the first science frame/cube correction.
         verbose : bool, optional
             Prints starting and finishing messages.
-        debug : book, optional
+        debug : bool, optional
             Full print output from each VIP function.
         """
         # creating bad pixel map
@@ -205,11 +205,19 @@ class input_dataset():
                     tmp, header_fname = open_fits(self.inpath + fname, header=True, verbose=debug)
                     write_fits(self.outpath + fname, tmp, header_fname, verbose=debug, output_verify='fix')
 
-    def mk_dico(self, coro=True, verbose=True, debug=False):
+    def mk_dico(self, coro=True, plot=True, verbose=True, debug=False):
+        """
+        Reads the header of each FITS file and sorts them based on DIT and NDIT provided in the run script.
 
+        plot : bool, optional
+            Produces a plot of the number of files and airmass vs. time in the flats.
+        verbose : bool, optional
+            Prints starting and finishing messages.
+        debug : bool, optional
+            Full print output from each VIP function, such as opening each file.
+        """
         # creating a dictionary
-        file_list = [f for f in listdir(self.outpath) if
-                     isfile(join(self.outpath, f))]
+        file_list = [f for f in listdir(self.outpath) if isfile(join(self.outpath, f))]
         fits_list = []
         sci_list = []
         sci_list_mjd = []
@@ -217,11 +225,11 @@ class input_dataset():
         sky_list_mjd = []
         unsat_list = []
         flat_list = []
+        flat_list_mjd = []
+        airmass = []
         flat_dark_list = []
         sci_dark_list = []
         unsat_dark_list = []
-        master_mjd = []
-        master_airmass = []
 
         if verbose:
             print('Creating dictionary', flush=True)
@@ -238,7 +246,6 @@ class input_dataset():
 
                     sci_list.append(fname)
                     sci_list_mjd.append(header['MJD-OBS'])
-                    # sci_list_airmass.append(header['AIRMASS'])
 
                 elif (header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
                       header['HIERARCH ESO DPR TYPE'] == 'SKY' and \
@@ -248,20 +255,20 @@ class input_dataset():
 
                     sky_list.append(fname)
                     sky_list_mjd.append(header['MJD-OBS'])
-                    # sky_list_airmass.append(header['AIRMASS'])
 
                 elif header['HIERARCH ESO DPR CATG'] == 'SCIENCE' and \
                         header['HIERARCH ESO DET DIT'] == self.dit_unsat and \
                         header['HIERARCH ESO DET NDIT'] in self.ndit_unsat:
                     unsat_list.append(fname)
-                    # unsat_list_mjd.append(header['MJD-OBS'])
-                    # unsat_list_airmass.append(header['AIRMASS'])
 
                 elif 'FLAT,SKY' in header['HIERARCH ESO DPR TYPE']:
                     if header['HIERARCH ESO DET DIT'] == self.dit_flat:
                         flat_list.append(fname)
-                    # flat_list_mjd.append(header['MJD-OBS'])
-                    # flat_list_airmass.append(header['AIRMASS'])
+                        flat_list_mjd.append(header['MJD-OBS'])
+                        try:
+                            airmass.append(header['AIRMASS'])
+                        except:
+                            pass
 
                 elif 'DARK' in header['HIERARCH ESO DPR TYPE']:
                     if header['HIERARCH ESO DET DIT'] == self.dit_flat:
@@ -285,34 +292,49 @@ class input_dataset():
         if len(flat_list) == 0:
             msg = "No appropriate flat fields found. Double-check requested FLAT DIT?"
             raise ValueError(msg)
+
+        if len(airmass) > 0:
+            with open(self.outpath + "airmass.txt", "w") as f:
+                for airmasses in airmass:
+                    f.write(airmasses + '\n')
+            if plot:
+                plt.scatter(flat_list_mjd, airmass, label='Airmass')
+                plt.xlabel('Time [MJD]')
+                plt.ylabel('Airmass')
+                plt.minorticks_on()
+                plt.legend()
+                plt.grid(alpha=0.1)
+                plt.savefig(self.outpath + 'Airmasses.pdf', bbox_inches='tight', pad_inches=0)
+        else:
+            print('WARNING: No airmass detected in header. Flats will be sorted by median pixel value later.')
                         
         with open(self.outpath + "sci_list_mjd.txt", "w") as f:
-            for time in sci_list_mjd:
-                f.write(str(time) + '\n')
+            for sci_time in sci_list_mjd:
+                f.write(str(sci_time) + '\n')
         with open(self.outpath + "sky_list_mjd.txt", "w") as f:
-            for time in sky_list_mjd:
-                f.write(str(time) + '\n')
+            for sky_time in sky_list_mjd:
+                f.write(str(sky_time) + '\n')
         with open(self.outpath + "sci_list.txt", "w") as f:
             for sci in sci_list:
                 f.write(sci + '\n')
         with open(self.outpath + "sky_list.txt", "w") as f:
-            for sci in sky_list:
-                f.write(sci + '\n')
+            for sky in sky_list:
+                f.write(sky + '\n')
         with open(self.outpath + "unsat_list.txt", "w") as f:
-            for sci in unsat_list:
-                f.write(sci + '\n')
+            for unsat in unsat_list:
+                f.write(unsat + '\n')
         with open(self.outpath + "unsat_dark_list.txt", "w") as f:
-            for sci in unsat_dark_list:
-                f.write(sci + '\n')
+            for unsat_dark in unsat_dark_list:
+                f.write(unsat_dark + '\n')
         with open(self.outpath + "flat_dark_list.txt", "w") as f:
-            for sci in flat_dark_list:
-                f.write(sci + '\n')
+            for flat_dark in flat_dark_list:
+                f.write(flat_dark + '\n')
         with open(self.outpath + "sci_dark_list.txt", "w") as f:
-            for sci in sci_dark_list:
-                f.write(sci + '\n')
+            for sci_dark in sci_dark_list:
+                f.write(sci_dark + '\n')
         with open(self.outpath + "flat_list.txt", "w") as f:
-            for sci in flat_list:
-                f.write(sci + '\n')
+            for flat in flat_list:
+                f.write(flat + '\n')
         if verbose:
             print('Done :)', flush=True)
 
