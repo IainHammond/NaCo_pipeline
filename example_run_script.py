@@ -49,7 +49,7 @@ clas = input_dataset(inpath=path + 'raw/', outpath=path + 'classified/', dataset
 clas.bad_columns(correct=True, overwrite=False, sat_val=32768, plot=True, verbose=True, debug=False)
 clas.mk_dico(plot=True, verbose=True, debug=False)
 clas.find_sky_in_sci_cube(nres=3, coro=True, plot=True, verbose=True, debug=False)
-clas.find_derot_angles()
+clas.find_derot_angles(plot=True, verbose=True, debug=False)
 
 calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', dataset_dict=dataset_dict, final_sz=None)
 calib.dark_subtract(method='pca', bad_quadrant=[3], debug=False, plot='save')
