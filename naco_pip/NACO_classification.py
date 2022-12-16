@@ -654,9 +654,9 @@ class input_dataset():
             print('Derotation angles have been computed and saved to file', flush=True)
 
         if plot:
-            plt.plot(final_derot_angs)
+            plt.plot(final_derot_angs[:,0])  # plot the first one from each cube
             plt.xlabel('Science cube')
-            plt.ylabel('Derotation angle [deg]')
+            plt.ylabel('Starting derotation angle [deg]')
             plt.minorticks_on()
             plt.grid(alpha=0.1)
             plt.savefig(self.outpath + 'Derotation_angle_vector.pdf', bbox_inches='tight', pad_inches=0.1)
