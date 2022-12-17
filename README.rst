@@ -88,7 +88,7 @@ A Python script called ``example_run_script.py`` is bundled with the code. This 
     1. Download a dataset from the ESO archive, including all raw calibration files.
     2. Uncompress the files and place them in a folder called "raw".
     3. Make a copy of ``example_run_script.py``
-    4. Modify the ``path`` variable to point to the directory where "raw" is located
+    4. Modify the ``path`` variable to point to the directory above where "raw" is located
     5. Update the run script with the number of frames and integration time of the science, sky and unsaturated cubes. We recommend ``dfitspy`` (https://astrom-tom.github.io/dfitspy/build/html/index.html) for this
     6. Activate your conda environment if you made one, and start the reduction with ``python <your-run-script.py>``
 
