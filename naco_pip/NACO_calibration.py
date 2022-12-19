@@ -29,7 +29,8 @@ from vip_hci.preproc import frame_crop, cube_crop_frames, frame_shift, \
     cube_subtract_sky_pca, cube_correct_nan, cube_fix_badpix_isolated, cube_fix_badpix_clump, \
     cube_recenter_2dfit, frame_fix_badpix_isolated, cube_detect_badfr_pxstats, approx_stellar_position
 from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass, \
-    mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle, get_square
+    mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle
+from naco_pip.NACO_classification import find_AGPM
 
 matplotlib.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
 
@@ -100,52 +101,6 @@ def find_filtered_max(frame):
     # obtain location of the bright source
     ycom, xcom = np.unravel_index(np.argmax(frame), frame.shape)
     return [ycom, xcom]
-
-
-def find_AGPM(path, size=151, verbose=True, debug=False):
-    """
-    To prevent dust grains being picked up as the AGPM.
-
-    This function will find the location of the AGPM or star (even when sky frames are mixed with science frames), by
-    by creating a subset square image around the expected location and applies a low pass filter + max search method
-    and returns the (y,x) location of the AGPM/star
-
-    Parameters
-    ----------
-    path : str
-        Path to cube
-    size : int
-        Pixel dimensions of the square to sample for the AGPM/star (ie size = 100 is 100 x 100 pixels)
-    verbose : bool
-        If True the final (x, y) location is printed.
-    debug : bool, False by default
-        Prints significantly more information.
-    Returns
-    ----------
-    [ycom, xcom] : location of AGPM or star
-    """
-    cube = open_fits(path, verbose=debug)
-    cy, cx = frame_center(cube, verbose=verbose)
-    if cube.ndim == 3:
-        median_frame = cube[-1]  # last frame is median
-    else:
-        median_frame = cube.copy()
-
-    # define a square with the center being the approximate AGPM/star position
-    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=cy, x=cx, position=True, verbose=debug)
-    # apply low pass filter
-    median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
-    median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
-    # find coordinates of max flux in the square
-    ycom_tmp, xcom_tmp = np.unravel_index(np.argmax(median_frame), median_frame.shape)
-    # AGPM/star is the bottom-left corner coordinates plus the location of the max in the square
-    ycom = cornery + ycom_tmp
-    xcom = cornerx + xcom_tmp
-
-    if verbose:
-        print('The (x,y) location of the AGPM/star is ({},{})'.format(xcom, ycom), flush=True)
-    return [ycom, xcom]
-
 
 class raw_dataset:
     """
@@ -1325,7 +1280,7 @@ class raw_dataset:
             msg = '{} (!=15) flat-fields found => assuming old way of calculating flats'
             print(msg.format(len(flat_list)), flush=True)
             all_flats = []
-            flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', header=False, verbose=debug)
+            flat_cube = open_fits(self.outpath + '1_crop_flat_cube.fits', verbose=debug)
             for fl, flat_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + flat_list[fl], verbose=debug)
                 flat_X.append(np.median(tmp))
@@ -1636,7 +1591,7 @@ class raw_dataset:
         # update final crop size
         if self.coro:
             self.crop_cen = find_AGPM(self.outpath + '2_nan_corr_' + sci_list[0], verbose=verbose,
-                                      debug=debug)  # originally self.agpm_pos = find_filtered_max(self, self.outpath + '2_nan_corr_' + sci_list[0])
+                                      debug=debug)
             self.final_sz = self.get_final_sz(self.final_sz, verbose=verbose, 
                                               debug=debug)
         else:
@@ -1725,7 +1680,7 @@ class raw_dataset:
             if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
                 # first with the bp max defined from the flat field (without protecting radius)
                 tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug)
                 write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # timing(t0)
             # second, residual hot pixels
@@ -1773,7 +1728,7 @@ class raw_dataset:
             if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
                 # first with the bp max defined from the flat field (without protecting radius)
                 tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug)
                 write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # timing(t0)
             # second, residual hot pixels
@@ -1820,7 +1775,7 @@ class raw_dataset:
                 if overwrite or not isfile(self.outpath + '2_bpix_corr_unsat_' + fits_name):
                     # first with the bp max defined from the flat field (without protecting radius)
                     tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, verbose=debug)
-                    tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, verbose=debug)
+                    tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, correct_only=True, verbose=debug)
                     write_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 # timing(t0)
                 if overwrite or not (isfile(self.outpath + '2_bpix_corr2_unsat_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)):
