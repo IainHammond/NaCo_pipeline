@@ -18,7 +18,7 @@ import pyprind
 from matplotlib import pyplot as plt
 from photutils import CircularAperture, aperture_photometry
 from scipy.optimize import minimize
-from skimage.feature import register_translation
+from skimage.registration import phase_cross_correlation
 
 from hciplot import plot_frames
 from vip_hci.config import time_ini, timing
@@ -32,7 +32,7 @@ from vip_hci.var import frame_center, get_annulus_segments, frame_filter_lowpass
     mask_circle, dist, fit_2dgaussian, frame_filter_highpass, get_circle
 from naco_pip.NACO_classification import find_AGPM
 
-matplotlib.use('Agg')  # show option for plot is unavailable with this option, set specifically to save plots on m3
+matplotlib.use('Agg')  # show option for plot is unavailable with this option
 
 def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, plot=None):
     """
@@ -48,11 +48,14 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
         median_frame = cube.copy()
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
-    ycom, xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)  # location of AGPM
+    #ycom, xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)  # location of AGPM
+    yx = find_AGPM(self.inpath + file_list[0], verbose=verbose, debug=debug)
+    ycom = yx[0]
+    xcom = yx[1]
     if debug:
         write_fits(self.outpath + 'shadow_median_frame', median_frame, verbose=debug)
 
-    shadow = np.where(median_frame > threshold, 1, 0)  # lyot shadow
+    shadow = np.where((median_frame > threshold) & (median_frame < 32768), 1, 0)  # lyot shadow
     # create similar shadow centred at the origin
     area = sum(sum(shadow))
     r = np.sqrt(area / np.pi)
@@ -60,7 +63,7 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     tmp = mask_circle(tmp, radius=r, fillwith=1)
     tmp = frame_shift(tmp, ycom - ny / 2, xcom - nx / 2, imlib='opencv')  # no vip_fft because the image isn't square
     # measure translation
-    shift_yx, _, _ = register_translation(tmp, shadow, upsample_factor=100)
+    shift_yx, _, _ = phase_cross_correlation(tmp, shadow, upsample_factor=100)
     # express as a coordinate
     y, x = shift_yx
     cy = np.round(ycom - y)
@@ -68,7 +71,7 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     if debug:
         pdb.set_trace()
     if verbose:
-        print('The centre of the shadow is', 'cy = ', cy, 'cx = ', cx, flush=True)
+        print('The centre of the {:.1f} px radius shadow is'.format(r), 'cy = ', cy, 'cx = ', cx, flush=True)
     if plot == 'show':
         plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame, 99.9), 1, 1),
                     vmin=(np.percentile(median_frame, 0.1), 0, 0), label=('Median frame', 'Shadow', ''), title='Shadow')
@@ -112,7 +115,7 @@ class raw_dataset:
         5. first_frames_removal()
         6. get_stellar_psf()
         7. subtract_sky()
-    This will prevent any undefined variables.
+    This will prevent any missing files.
     """
 
     def __init__(self, inpath, outpath, dataset_dict, final_sz=None, coro=True):
@@ -257,7 +260,7 @@ class raw_dataset:
                 sci_dark_list.append(line.split('\n')[0])
 
         if not isfile(self.inpath + sci_list[-1]):
-            raise NameError('Missing .fits. Double check the contents of the input path')
+            raise NameError('Missing OBJ files. Double check the contents of the input path')
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz', verbose=debug)[0])
 
@@ -269,9 +272,10 @@ class raw_dataset:
 
         # cropping the flat dark cubes to com_sz
         for fd, fd_name in enumerate(flat_dark_list):
-            tmp_tmp = open_fits(self.inpath + fd_name, header=False, verbose=debug)
+            tmp_tmp = open_fits(self.inpath + fd_name, verbose=debug)
             tmp[fd] = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
-            print(tmp[fd].shape, flush=True)
+            if (fd == 0) and verbose:
+                print('Flat dark dimensions: {}'.format(tmp[fd].shape), flush=True)
             master_all_darks.append(tmp[fd])
         write_fits(self.outpath + 'flat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
@@ -281,7 +285,7 @@ class raw_dataset:
 
         # cropping the SCI dark cubes to com_sz
         for sd, sd_name in enumerate(sci_dark_list):
-            tmp_tmp = open_fits(self.inpath + sd_name, header=False, verbose=debug)
+            tmp_tmp = open_fits(self.inpath + sd_name, verbose=debug)
             n_dim = tmp_tmp.ndim
             if sd == 0:
                 if n_dim == 2:
@@ -289,22 +293,23 @@ class raw_dataset:
                                          verbose=debug)
                     tmp = np.array([tmp_tmp])
                     master_all_darks.append(tmp_tmp)
-                    print(tmp_tmp.shape, flush=True)
+                    if verbose:
+                        print('Science dark dimensions: {}'.format(tmp_tmp.shape), flush=True)
                 else:
                     tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
                     for i in range(tmp.shape[0]):
                         master_all_darks.append(tmp[i])
-                    print(tmp[-1].shape, flush=True)
+                    if verbose:
+                        print('Science dark dimensions: {}'.format(tmp[0].shape), flush=True)
             else:
                 if n_dim == 2:
                     tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
                     master_all_darks.append(tmp[-1])
-                    print(tmp[-1].shape, flush=True)
                 else:
                     tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug), axis=0)
                     for i in range(tmp_tmp.shape[0]):
                         master_all_darks.append(tmp[-tmp_tmp.shape[0]+i])
-                    print(tmp[-1].shape, flush=True)
+
         write_fits(self.outpath + 'sci_dark_cube.fits', tmp, verbose=debug)
         if verbose:
             print('Sci dark cubes have been cropped and saved', flush=True)
@@ -321,43 +326,40 @@ class raw_dataset:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.array([frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)])
-                        print(tmp.shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
                         tmp = np.array([tmp_tmp])
                         master_all_darks.append(tmp_tmp)
-                        print(tmp.shape, flush=True)
+                    if verbose:
+                        print('Unsat dark dimensions: {}'.format(tmp_tmp.shape), flush=True)
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug)
-                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
                         else:
                             tmp = tmp_tmp
                         master_all_darks.append(np.median(tmp[-nz:], axis=0))
-                        print(tmp[-1].shape, flush=True)
+                    if verbose:
+                        print('Unsat dark dimensions: {}'.format(tmp[-1].shape), flush=True)
             else:
                 if n_dim == 2:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.append(tmp, [frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)], axis=0)
-                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
                         else:
                             tmp = np.append(tmp, [tmp_tmp])
                         master_all_darks.append(tmp[-1])
-                        print(tmp[-1].shape, flush=True)
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
                         tmp = np.append(tmp, cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug), axis=0)
-                        print(tmp[-1].shape, flush=True)
                     else:
                         if nx > self.com_sz:
                             tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug),
@@ -365,7 +367,6 @@ class raw_dataset:
                         else:
                             tmp = np.append(tmp, tmp_tmp)
                         master_all_darks.append(np.median(tmp[-nz:], axis=0))
-                        print(tmp[-1].shape, flush=True)
 
         write_fits(self.outpath + 'unsat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
@@ -377,7 +378,7 @@ class raw_dataset:
         write_fits(self.outpath + "master_all_darks.fits", master_all_darks, verbose=debug)
 
         # defining the mask for the sky/sci pca dark subtraction
-        _, _, self.shadow_r = find_shadow_list(self, sci_list, verbose=verbose, debug=debug, plot=plot)
+        _, _, self.shadow_r = find_shadow_list(self, sci_list, threshold=-3000, verbose=verbose, debug=debug, plot=plot)
 
         if self.coro:
             self.crop_cen = find_AGPM(self.inpath + sci_list[0], verbose=verbose, debug=debug)
@@ -403,8 +404,15 @@ class raw_dataset:
             yx = approx_stellar_position(tmp_tmp, 
                                          int(self.resel_ori+1), 
                                          verbose=debug)
-            self.crop_cen = (np.median(yx[:,1]), np.median(yx[:,0]))
-            #raise ValueError('Pipeline does not handle non-coronagraphic data here yet')
+            self.crop_cen = (np.median(yx[:, 0]), np.median(yx[:, 1]))
+
+        if plot:
+            test_cube = open_fits(self.inpath + sci_list[0], verbose=debug)
+            plot_frames(test_cube[-1], vmin=np.percentile(test_cube[-1], 0.5), vmax=np.percentile(test_cube[-1], 99.5),
+                        cmap='inferno', dpi=300, circle_label='Inferred star/AGPM position', circle=(int(self.crop_cen[1]), int(self.crop_cen[0])),
+                        circle_radius=3 * (self.resel_ori + 1), circle_alpha=1, label_size=8, label=sci_list[0],
+                        save=self.outpath + 'Dark_subtract_inferred_star-AGPM_position.pdf')
+            plt.close('all')
 
         mask_AGPM_com = np.ones([self.com_sz, self.com_sz])
         cy, cx = frame_center(mask_AGPM_com)
@@ -1756,6 +1764,7 @@ class raw_dataset:
             tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_' + sky_list[-1], verbose=debug)
             tmp_tmp_tmp = open_fits(self.outpath + '2_bpix_corr2_map_' + sky_list[-1], verbose=debug)
             if tmp.ndim == 3:
+                tmp = tmp[0]
                 tmp_tmp = tmp_tmp[0]
                 tmp_tmp_tmp = tmp_tmp_tmp[0]
             if plot == 'show':
