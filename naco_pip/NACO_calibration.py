@@ -155,7 +155,7 @@ class raw_dataset:
         self.sci_list_mjd = sci_list_mjd
         self.sky_list_mjd = sky_list_mjd
         self.dataset_dict = dataset_dict
-        self.fast_reduction = dataset_dict['fast_reduction']
+        self.fast_calibration = dataset_dict['fast_calibration']
         self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
                 self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
         self.nproc = dataset_dict['nproc']
@@ -1627,16 +1627,11 @@ class raw_dataset:
             if overwrite or not (isfile(self.outpath + '2_bpix_corr2_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_' + fits_name)):
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
-                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
-                                                       sigma_clip=8, num_neig=5,
-                                                       size=5, protect_mask=10,
-                                                       frame_by_frame=True,
-                                                       verbose=debug)
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
+                                                       protect_mask=10, frame_by_frame=self.fast_calibration, verbose=debug)
                 else:
-                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
-                                                        sigma_clip=8, num_neig=5,
-                                                        size=5, protect_mask=10,
-                                                        verbose=debug)
+                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
+                                                        protect_mask=10, verbose=debug)
                 # create a bpm for the 2nd correction
                 tmp_tmp_tmp = tmp_tmp - tmp
                 tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1675,16 +1670,12 @@ class raw_dataset:
             if overwrite or not (isfile(self.outpath + '2_bpix_corr2_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_' + fits_name)):
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
-                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
-                                                       sigma_clip=8, num_neig=5,
-                                                       size=5, protect_mask=10,
-                                                       frame_by_frame=True,
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
+                                                       protect_mask=10, frame_by_frame=self.fast_calibration,
                                                        verbose=debug)
                 else:
-                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None,
-                                                        sigma_clip=8, num_neig=5,
-                                                        size=5, protect_mask=10,
-                                                        verbose=debug)
+                    tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
+                                                        protect_mask=10, verbose=debug)
                 # create a bpm for the 2nd correction
                 tmp_tmp_tmp = tmp_tmp - tmp
                 tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1722,8 +1713,9 @@ class raw_dataset:
                 if overwrite or not (isfile(self.outpath + '2_bpix_corr2_unsat_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)):
                     # second, residual hot pixels
                     tmp_tmp = open_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, verbose=debug)
-                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5,
-                                                       size=5, protect_mask=10, frame_by_frame=True, verbose=debug)
+                    tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
+                                                       protect_mask=10, frame_by_frame=self.fast_calibration,
+                                                       verbose=debug)
                     # create a bpm for the 2nd correction
                     tmp_tmp_tmp = tmp_tmp - tmp
                     tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1913,53 +1905,49 @@ class raw_dataset:
         mask_inner_rad = int(3.0 / self.dataset_dict['pixel_scale'])
         mask_width = int((self.final_sz / 2.) - mask_inner_rad - 2)
 
-        if self.fast_reduction:
-            tmp_fluxes = np.ones([n_sci, min_ndit_sci])
-            nfr_rm = 0
-        else:
-            # measure the flux in sci avoiding the star at the centre (3'' should be enough)
-            tmp_fluxes = np.zeros([n_sci, min_ndit_sci])
-            bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in SCI frames')
-            for sc, fits_name in enumerate(sci_list):
-                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-                for ii in range(min_ndit_sci):
-                    tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width, mode='mask')[0]
-                    tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
-                bar.update()
-            tmp_flux_med = np.median(tmp_fluxes, axis=0)
-            if verbose:
-                print('total Flux in SCI frames has been measured', flush=True)
-
-            # create a plot of the median flux in the frames
-            med_flux = np.median(tmp_flux_med)
-            std_flux = np.std(tmp_flux_med)
-            if verbose:
-                print("median flux: ", med_flux)
-                print("std flux: ", std_flux, flush=True)
-            first_time = True
+        # measure the flux in sci avoiding the star at the centre (3'' should be enough)
+        tmp_fluxes = np.zeros([n_sci, min_ndit_sci])
+        bar = pyprind.ProgBar(n_sci, stream=1, title='Estimating flux in SCI frames')
+        for sc, fits_name in enumerate(sci_list):
+            tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
             for ii in range(min_ndit_sci):
-                if tmp_flux_med[ii] > med_flux + 2 * std_flux or tmp_flux_med[ii] < med_flux - 2 * std_flux or ii == 0:
-                    symbol = 'ro'
-                    label = 'bad'
-                else:
-                    symbol = 'bo'
-                    label = 'good'
-                    if first_time:
-                        nfr_rm = ii  # the ideal number is when the flux is within 3 standar deviations
-                        nfr_rm = min(nfr_rm, 10)  # if above 10 frames to remove, it will cap nfr_rm to 10
-                        if verbose:
-                            print("The ideal number of frames to remove at the beginning is: ", nfr_rm, flush=True)
-                        first_time = False
-                if plot:
-                    plt.plot(ii, tmp_flux_med[ii] / med_flux, symbol, label=label)
+                tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width, mode='mask')[0]
+                tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
+            bar.update()
+        tmp_flux_med = np.median(tmp_fluxes, axis=0)
+        if verbose:
+            print('total Flux in SCI frames has been measured', flush=True)
+
+        # create a plot of the median flux in the frames
+        med_flux = np.median(tmp_flux_med)
+        std_flux = np.std(tmp_flux_med)
+        if verbose:
+            print("median flux: ", med_flux)
+            print("std flux: ", std_flux, flush=True)
+        first_time = True
+        for ii in range(min_ndit_sci):
+            if tmp_flux_med[ii] > med_flux + 2 * std_flux or tmp_flux_med[ii] < med_flux - 2 * std_flux or ii == 0:
+                symbol = 'ro'
+                label = 'bad'
+            else:
+                symbol = 'bo'
+                label = 'good'
+                if first_time:
+                    nfr_rm = ii  # the ideal number is when the flux is within 3 standar deviations
+                    nfr_rm = min(nfr_rm, 10)  # if above 10 frames to remove, it will cap nfr_rm to 10
+                    if verbose:
+                        print("The ideal number of frames to remove at the beginning is: ", nfr_rm, flush=True)
+                    first_time = False
             if plot:
-                plt.title("Flux in SCI frames")
-                plt.ylabel('Normalised flux')
-                plt.xlabel('Frame number')
-            if plot == 'save':
-                plt.savefig(self.outpath + "variability_of_dit.pdf", bbox_inches='tight')
-            if plot == 'show':
-                plt.show()
+                plt.plot(ii, tmp_flux_med[ii] / med_flux, symbol, label=label)
+        if plot:
+            plt.title("Flux in SCI frames")
+            plt.ylabel('Normalised flux')
+            plt.xlabel('Frame number')
+        if plot == 'save':
+            plt.savefig(self.outpath + "variability_of_dit.pdf", bbox_inches='tight')
+        if plot == 'show':
+            plt.show()
 
         # update the range of frames that will be cut off.
         for zz in range(len(self.real_ndit_sci)):
@@ -1982,9 +1970,7 @@ class raw_dataset:
 
         if isfile(self.inpath + "derot_angles_uncropped.fits"):
             angles = open_fits(self.inpath + "derot_angles_uncropped.fits", verbose=debug)
-            if not self.fast_reduction:
-                angles = angles[:,
-                         nfr_rm:]  # crops each cube of rotation angles file, by keeping all cubes but removing the number of frames at the start
+            angles = angles[:, nfr_rm:]  # crops each cube of rotation angles file, by keeping all cubes but removing the number of frames at the start
             write_fits(self.outpath + 'derot_angles_cropped.fits', angles, verbose=debug)
 
         # Actual cropping of the cubes to remove the first frames, and the last one (median) AND RESCALING IN FLUX
@@ -2017,32 +2003,31 @@ class raw_dataset:
                 bar.update()
             tmp_flux_med2 = np.median(tmp_fluxes, axis=0)
     
-            # reestimating how many frames should be removed at the begining of the cube
+            # re-estimating how many frames should be removed at the beginning of the cube
             # hint: if done correctly there should be 0
             med_flux = np.median(tmp_flux_med2)
             std_flux = np.std(tmp_flux_med2)
             if verbose:
                 print("median flux: ", med_flux)
                 print("std flux: ", std_flux, flush=True)
-    
-            if not self.fast_reduction:
-                for ii in range(min_ndit_sci - nfr_rm):
-                    if tmp_flux_med2[ii] > med_flux + std_flux or tmp_flux_med[ii] < med_flux - std_flux:
-                        symbol = 'ro'
-                        label = "bad"
-                    else:
-                        symbol = 'bo'
-                        label = "good"
-                    if plot:
-                        plt.plot(ii, tmp_flux_med2[ii] / np.amax(tmp_flux_med2), symbol, label=label)
+
+            for ii in range(min_ndit_sci - nfr_rm):
+                if tmp_flux_med2[ii] > med_flux + std_flux or tmp_flux_med[ii] < med_flux - std_flux:
+                    symbol = 'ro'
+                    label = "bad"
+                else:
+                    symbol = 'bo'
+                    label = "good"
                 if plot:
-                    plt.title("Flux in frames 2nd pass")
-                    plt.xlabel('Frame number')
-                    plt.ylabel('Flux')
-                if plot == 'save':
-                    plt.savefig(self.outpath + "Bad_frames_2.pdf", bbox_inches='tight')
-                if plot == 'show':
-                    plt.show()
+                    plt.plot(ii, tmp_flux_med2[ii] / np.amax(tmp_flux_med2), symbol, label=label)
+            if plot:
+                plt.title("Flux in frames 2nd pass")
+                plt.xlabel('Frame number')
+                plt.ylabel('Flux')
+            if plot == 'save':
+                plt.savefig(self.outpath + "Bad_frames_2.pdf", bbox_inches='tight')
+            if plot == 'show':
+                plt.show()
     
             # FOR SCI
             tmp_fluxes = np.zeros([n_sci, self.new_ndit_sci])
@@ -2058,34 +2043,31 @@ class raw_dataset:
                     tmp_fluxes[sc, ii] = np.sum(tmp_tmp)
                 bar.update()
             tmp_flux_med = np.median(tmp_fluxes, axis=0)
-    
-            if self.fast_reduction:
-                tmp_fluxes_sky = np.ones([n_sky, self.new_ndit_sky])
-            else:
-                # FOR SKY
-                tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
-                bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
-                for sk, fits_name in enumerate(sky_list):
-                    tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)  ##
-                    for ii in range(nfr_rm, nfr_rm + self.new_ndit_sky):
-                        tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
-                                                       mode='mask')[0]
-                        tmp_fluxes_sky[sk, ii - nfr_rm] = np.sum(tmp_tmp)
-                    bar.update()
-                tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
-    
-                # COMPARE
-                if plot:
-                    plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sci), tmp_flux_med, 'bo', label='Sci')
-                    plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro', label='Sky')
-                    plt.plot(range(1, n_sky + 1), np.median(tmp_fluxes_sky, axis=1), 'yo', label='Medain sky')
-                    plt.xlabel('Frame number')
-                    plt.ylabel('Flux')
-                    plt.legend()
-                if plot == 'save':
-                    plt.savefig(self.outpath + "Frame_sky_compare", bbox_inches='tight')
-                if plot == 'show':
-                    plt.show()
+
+            # FOR SKY
+            tmp_fluxes_sky = np.zeros([n_sky, self.new_ndit_sky])
+            bar = pyprind.ProgBar(n_sky, stream=1, title='Estimating flux in SKY frames')
+            for sk, fits_name in enumerate(sky_list):
+                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)  ##
+                for ii in range(nfr_rm, nfr_rm + self.new_ndit_sky):
+                    tmp_tmp = get_annulus_segments(tmp[ii], mask_inner_rad, mask_width,
+                                                   mode='mask')[0]
+                    tmp_fluxes_sky[sk, ii - nfr_rm] = np.sum(tmp_tmp)
+                bar.update()
+            tmp_flux_med_sky = np.median(tmp_fluxes_sky, axis=0)
+
+            # COMPARE
+            if plot:
+                plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sci), tmp_flux_med, 'bo', label='Sci')
+                plt.plot(range(nfr_rm, nfr_rm + self.new_ndit_sky), tmp_flux_med_sky, 'ro', label='Sky')
+                plt.plot(range(1, n_sky + 1), np.median(tmp_fluxes_sky, axis=1), 'yo', label='Medain sky')
+                plt.xlabel('Frame number')
+                plt.ylabel('Flux')
+                plt.legend()
+            if plot == 'save':
+                plt.savefig(self.outpath + "Frame_sky_compare", bbox_inches='tight')
+            if plot == 'show':
+                plt.show()
     
             for sk, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)

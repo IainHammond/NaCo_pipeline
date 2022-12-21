@@ -26,21 +26,21 @@ pixel_scale = 0.027208  # arcsecs per pixel, Launhardt et al. 2020, +/- 0.000008
 # ***************************************** PARAMETERS TO CHANGE *******************************************************
 
 # example HD206893
-source = 'HD206893'      # used in some saved filenames and plots
-details = '(NACO+AGPM)'  # info displayed in plots and figures
-ndit_sci = [200]         # number of frames per science cube
-ndit_sky = [50]          # number of frames per sky cube
-ndit_unsat = [100]       # number of frames in unsaturated cubes
-dit_sci = 0.3            # integration time for science frames
-dit_unsat = 0.1          # integration time for unsaturated non coronagraphic images
-dit_flat = 0.2           # integration time for flat frames
-fast_reduction = False   # not used anymore
+source = 'HD206893'       # used in some saved filenames and plots
+details = '(NACO+AGPM)'   # info displayed in plots and figures
+ndit_sci = [200]          # number of frames per science cube
+ndit_sky = [50]           # number of frames per sky cube
+ndit_unsat = [100]        # number of frames in unsaturated cubes
+dit_sci = 0.3             # integration time for science frames
+dit_unsat = 0.1           # integration time for unsaturated non coronagraphic images
+dit_flat = 0.2            # integration time for flat frames
+fast_calibration = False  # uses the median frame only to identify bad pixels, only use if really needed
 
 # Can be ignored. Dictionary to pass through the pipeline saving all the static dataset information.
 dataset_dict = {'wavelength': wavelength, 'size_telescope': size_telescope, 'pixel_scale': pixel_scale,
                 'source': source, 'details': details, 'ndit_sci': ndit_sci, 'ndit_sky':ndit_sky,
                 'ndit_unsat':ndit_unsat, 'dit_sci': dit_sci,  'dit_unsat': dit_unsat, 'dit_flat':dit_flat,
-                'fast_reduction': fast_reduction, 'nproc': nproc}
+                'fast_calibration': fast_calibration, 'nproc': nproc}
 
 # ************************* Activate various functions and set common path ***************************************
 path = '/your/common/path/to/data/'
