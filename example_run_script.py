@@ -52,7 +52,7 @@ clas.find_sky_in_sci_cube(nres=3, coro=True, plot=True, verbose=True, debug=Fals
 clas.find_derot_angles(plot=True, verbose=True, debug=False)
 
 calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', dataset_dict=dataset_dict, final_sz=None)
-calib.dark_subtract(method='pca', bad_quadrant=[3], debug=False, plot='save')
+calib.dark_subtract(method='median', bad_quadrant=[3], plot=True, verbose=True, debug=False)
 calib.flat_field_correction(debug=False, plot='save')
 calib.correct_nan(debug=False, plot='save')
 calib.correct_bad_pixels(verbose=True, overwrite=False, debug=False, plot='save')

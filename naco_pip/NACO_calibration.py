@@ -8,7 +8,7 @@ Applies necessary calibration to the cubes and corrects NACO biases
 __author__ = 'Lewis Picker, Iain Hammond'
 __all__ = ['raw_dataset', 'find_filtered_max']
 
-import pdb
+from pdb import set_trace
 from os import makedirs, system
 from os.path import isdir, isfile
 
@@ -34,7 +34,7 @@ from naco_pip.NACO_classification import find_AGPM
 
 matplotlib.use('Agg')  # show option for plot is unavailable with this option
 
-def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, plot=None):
+def find_shadow_list(self, file_list, threshold=None, plot=True, verbose=True, debug=False):
     """
     In coronographic NACO data there is a Lyot stop causing an outer shadow on the detector.
     This function will return the radius and central position of the circular shadow.
@@ -43,44 +43,48 @@ def find_shadow_list(self, file_list, threshold=0, verbose=True, debug=False, pl
     cube = open_fits(self.inpath + file_list[0], verbose=debug)
     ny, nx = cube.shape[-2:]
     if cube.ndim == 3:
-        median_frame = np.median(cube, axis=0)
+        median_frame = cube[-1]
     else:
         median_frame = cube.copy()
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
-    #ycom, xcom = np.unravel_index(np.argmax(median_frame), median_frame.shape)  # location of AGPM
-    yx = find_AGPM(self.inpath + file_list[0], verbose=verbose, debug=debug)
+    yx = find_AGPM(self.inpath + file_list[0], verbose=False, debug=debug)
     ycom = yx[0]
     xcom = yx[1]
-    if debug:
-        write_fits(self.outpath + 'shadow_median_frame', median_frame, verbose=debug)
+    write_fits(self.outpath + 'shadow_median_frame.fits', median_frame, verbose=debug)
 
-    shadow = np.where((median_frame > threshold) & (median_frame < 32768), 1, 0)  # lyot shadow
     # create similar shadow centred at the origin
+    if threshold is None:
+        shadow = np.where(median_frame < np.nanmedian(median_frame), 1, 0)
+        #shadow = np.where(median_frame < np.percentile(median_frame, 45), 1, 0)
+        # shadow[:, :10] = 1
+        # shadow[:10, :] = 1
+        # shadow[:, -10:] = 1
+        # shadow[-10:, :] = 1
+    else:
+        shadow = np.where(median_frame > threshold, 1, 0)  # lyot shadow
     area = sum(sum(shadow))
     r = np.sqrt(area / np.pi)
     tmp = np.zeros([ny, nx])
     tmp = mask_circle(tmp, radius=r, fillwith=1)
-    tmp = frame_shift(tmp, ycom - ny / 2, xcom - nx / 2, imlib='opencv')  # no vip_fft because the image isn't square
+    tmp = frame_shift(tmp, ycom - (ny/2), xcom - (nx/2), imlib='opencv', border_mode='constant')  # no vip_fft because the image isn't square
     # measure translation
-    shift_yx, _, _ = phase_cross_correlation(tmp, shadow, upsample_factor=100)
+    shift_yx = phase_cross_correlation(tmp, shadow, upsample_factor=10)
     # express as a coordinate
-    y, x = shift_yx
-    cy = np.round(ycom - y)
-    cx = np.round(xcom - x)
-    if debug:
-        pdb.set_trace()
+    y = abs(shift_yx[0][0])
+    x = abs(shift_yx[0][1])
+    cy = np.round(ycom - y, 1)
+    cx = np.round(xcom - x, 1)
     if verbose:
-        print('The centre of the {:.1f} px radius shadow is'.format(r), 'cy = ', cy, 'cx = ', cx, flush=True)
-    if plot == 'show':
-        plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame, 99.9), 1, 1),
-                    vmin=(np.percentile(median_frame, 0.1), 0, 0), label=('Median frame', 'Shadow', ''), title='Shadow')
-    if plot == 'save':
-        plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame, 99.9), 1, 1),
-                    vmin=(np.percentile(median_frame, 0.1), 0, 0), label=('Median frame', 'Shadow', ''), title='Shadow',
-                    dpi=300, save=self.outpath + 'shadow_fit.pdf')
+        print('The shadow has a {:.1f} px radius and is offset from the star in x,y by ({:.1f}, {:.1f}) px'.format(r, cx, cy), flush=True)
+    if plot:
+        plot_frames((median_frame, shadow, tmp), vmax=(np.percentile(median_frame, 99.5), 1, 1),
+                    vmin=(np.percentile(median_frame, 0.5), 0, 0), label=('Median Lowpass Science', 'Inferred Shadow', 'Inferred Sky'),
+                    dpi=300, circle=(int(xcom+cx), int(ycom+cy)), circle_radius=r,
+                    label_color=('white', 'black', 'white'), cmap='inferno', top_colorbar=True,
+                    horsp=0.2, save=self.outpath + 'shadow_fit.pdf')
 
-    return cy, cx, r
+    return r
 
 
 def find_filtered_max(frame):
@@ -177,7 +181,7 @@ class raw_dataset:
         if verbose:
             print('the final crop size is ', final_sz, flush=True)
         if debug:
-            pdb.set_trace()
+            set_trace()
         return final_sz
 
     def dark_subtract(self, bad_quadrant=[3], method='pca', npc_dark=1, 
@@ -193,14 +197,11 @@ class raw_dataset:
         bad_quadrant : list, optional
             list of bad quadrants to ignore. quadrants are in format  2 | 1  Default = 3 (inherently bad NaCO quadrant)
                                                                       3 | 4
-
         method : str, default = 'pca'
             'pca' for dark subtraction via principal component analysis
             'median' for median subtraction of dark
-
         npc_dark : int, optional
             number of principal components subtracted during dark subtraction. Default = 1 (most variance in the PCA library)
-
         plot options : 'save' 'show' or None
             Whether to show plot or save it, or do nothing
         """
@@ -378,7 +379,7 @@ class raw_dataset:
         write_fits(self.outpath + "master_all_darks.fits", master_all_darks, verbose=debug)
 
         # defining the mask for the sky/sci pca dark subtraction
-        _, _, self.shadow_r = find_shadow_list(self, sci_list, threshold=-3000, verbose=verbose, debug=debug, plot=plot)
+        self.shadow_r = find_shadow_list(self, sci_list, threshold=None, plot=plot, verbose=verbose, debug=debug)
 
         if self.coro:
             self.crop_cen = find_AGPM(self.inpath + sci_list[0], verbose=verbose, debug=debug)
@@ -465,14 +466,26 @@ class raw_dataset:
         if verbose:
             print('Masks have been saved as fits file', flush=True)
 
-        if method == 'median':
+        def _plot_dark_median(fits_name, dark, before, after, file_type, outpath):
+            if before.ndim == 3:
+                before = np.median(before, axis=0)
+            if after.ndim == 3:
+                after = np.median(after, axis=0)
+            plot_frames((dark, before, after), dpi=300,
+                        vmax=(np.percentile(dark, 99.5), np.percentile(before, 99.5), np.percentile(after, 99.5)),
+                        vmin=(np.percentile(dark, 0.5), np.percentile(before, 0.5), np.percentile(after, 0.5)),
+                        label=('Median {} Dark'.format(file_type), 'Raw {} \n'.format(file_type) + fits_name, '{} Median Dark Subtracted'.format(file_type)),
+                        cmap='inferno', top_colorbar=True, horsp=0.2,
+                        save=outpath + '{}_median_dark_subtract.pdf'.format(file_type))
+            plt.close('all')
 
+        if method == 'median':
             # median dark subtraction of SCI cubes
             tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits', verbose=debug)
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
             #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_com)])  # consider the median within the mask # this is a float!
             for sc, fits_name in enumerate(sci_list):
-                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.ndim == 3:
                     tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
                     tmp_tmp = tmp.copy()
@@ -481,34 +494,12 @@ class raw_dataset:
                 else:
                     tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp_median
-                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
+                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp, verbose=debug)
             if verbose:
                 print('Dark has been median subtracted from SCI cubes', flush=True)
 
             if plot:
-                if tmp.ndim == 3:
-                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
-                    tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
-                else:
-                    tmp_tmp_med = tmp.copy()
-                    tmp_tmp_med_after = tmp_tmp.copy()
-            if plot == 'show':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                   np.percentile(tmp_tmp_med_after,
-                                                                                                 99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Sci', 'Sci Median Dark Subtracted',
-                                   'Pixel Mask'), title='Sci Median Dark Subtraction')
-            if plot == 'save':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                   np.percentile(tmp_tmp_med_after,
-                                                                                                 99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Sci', 'Sci Median Dark Subtracted',
-                                   'Pixel Mask'), title='Sci Median Dark Subtraction',
-                            dpi=300, save=self.outpath + 'SCI_median_dark_subtract.pdf')
+                _plot_dark_median(fits_name, tmp_tmp_tmp_median, tmp, tmp_tmp, 'Science', self.outpath)
 
             # median dark subtract of sky cubes
             tmp_tmp_tmp = open_fits(self.outpath + 'sci_dark_cube.fits', verbose=debug)
@@ -524,34 +515,12 @@ class raw_dataset:
                 else:
                     tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp_median
-                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp)
+                write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp, verbose=debug)
             if verbose:
                 print('Dark has been median subtracted from SKY cubes', flush=True)
                 
             if plot:
-                if tmp.ndim == 3:
-                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
-                    tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
-                else:
-                    tmp_tmp_med = tmp.copy()
-                    tmp_tmp_med_after = tmp_tmp.copy()
-            if plot == 'show':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                   np.percentile(tmp_tmp_med_after,
-                                                                                                 99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Sky', 'Sky Median Dark Subtracted',
-                                   'Pixel Mask'), title='Sky Median Dark Subtraction')
-            if plot == 'save':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_com), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                   np.percentile(tmp_tmp_med_after,
-                                                                                                 99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Sky', 'Sky Median Dark Subtracted',
-                                   'Pixel Mask'), title='Sky Median Dark Subtraction',
-                            dpi=300, save=self.outpath + 'SKY_median_dark_subtract.pdf')
+                _plot_dark_median(fits_name, tmp_tmp_tmp_median, tmp, tmp_tmp, 'Sky', self.outpath)
 
             # median dark subtract of flat cubes
             tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
@@ -559,7 +528,7 @@ class raw_dataset:
             tmp_tmp_tmp_median = np.median(tmp_tmp_tmp, axis=0)
             #tmp_tmp_tmp_median = np.median(tmp_tmp_tmp_median[np.where(mask_AGPM_flat)]) # this is a float!
             for sc, fits_name in enumerate(flat_list):
-                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.ndim == 2:
                     tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
                 else:
@@ -570,28 +539,9 @@ class raw_dataset:
                 print('Dark has been median subtracted from FLAT frames', flush=True)
 
             if plot:
-                if tmp.ndim == 3:
-                    tmp_tmp_med = np.median(tmp, axis=0)  # sci before subtraction
-                else:
-                    tmp_tmp_med = tmp.copy()
-                tmp_tmp_med_after = np.median(tmp_tmp, axis=0)  # sci after dark subtract
-            if plot == 'show':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                    np.percentile(tmp_tmp_med_after,
-                                                                                                  99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Flat', 'Flat Median Dark Subtracted',
-                                   'Pixel Mask'), title='Flat Median Dark Subtraction')
-            if plot == 'save':
-                plot_frames((tmp_tmp_med, tmp_tmp_med_after, mask_AGPM_flat), vmax=(np.percentile(tmp_tmp_med, 99.9),
-                                                                                    np.percentile(tmp_tmp_med_after,
-                                                                                                  99.9), 1),
-                            vmin=(np.percentile(tmp_tmp_med, 0.1),
-                                  np.percentile(tmp_tmp_med_after, 0.1), 0),
-                            label=('Raw Flat', 'Flat Median Dark Subtracted',
-                                   'Pixel Mask'), title='Flat Median Dark Subtraction',
-                            dpi=300, save=self.outpath + 'FLAT_median_dark_subtract.pdf')
+                tmp_tmp = np.median(tmp_tmp, axis=0)
+                _plot_dark_median(fits_name, tmp_tmp_tmp_median, tmp, tmp_tmp, 'Flat', self.outpath)
+
         # original code           ####################
         #        #now begin the dark subtraction using PCA
         #        npc_dark=1 #The ideal number of components to consider in PCA
@@ -686,7 +636,7 @@ class raw_dataset:
             diff = np.zeros([len(flat_list)])
             bar = pyprind.ProgBar(len(flat_list), stream=1, title='Finding difference between DARKS and FLATS')
             for fl, flat_name in enumerate(flat_list):
-                tmp = open_fits(self.inpath + flat_name, header=False, verbose=False)
+                tmp = open_fits(self.inpath + flat_name, verbose=False)
                 tmp_tmp[fl] = frame_crop(tmp, self.com_sz, force=True, verbose=False)  # added force = True
                 diff[fl] = np.median(tmp_tmp_tmp) - np.median(
                     tmp_tmp[fl])  # median of pixels in all darks - median of all pixels in flat frame
@@ -1131,7 +1081,7 @@ class raw_dataset:
             # no need to crop the unsat frame at the same size as the sci images if they are smaller
             bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Correcting dark current in unsaturated cubes')
             for un, fits_name in enumerate(unsat_list):
-                tmp = open_fits(self.inpath + fits_name, header=False, verbose=debug)
+                tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.shape[2] > self.com_sz:
                     nx_unsat_crop = self.com_sz
                     tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
@@ -1148,27 +1098,9 @@ class raw_dataset:
     
             if verbose:
                 print('Dark has been subtracted from UNSAT cubes', flush=True)
-    
+
             if plot:
-                tmp = np.median(tmp, axis=0)  # unsat before subtraction
-                tmp_tmp = np.median(tmp_tmp, axis=0)  # unsat after dark subtract
-    
-            # plots unsat dark, raw unsat, dark subtracted unsat
-            if plot == 'show':
-                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
-                                                               np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                            vmin=(np.percentile(tmp_tmp_tmp, 0.1),
-                                  np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                            label=('Raw Unsat Dark', 'Raw Unsat',
-                                   'Unsat Dark Subtracted'), title='Unsat Dark Subtraction')
-            if plot == 'save':
-                plot_frames((tmp_tmp_tmp, tmp, tmp_tmp), vmax=(np.percentile(tmp_tmp_tmp, 99.9),
-                                                               np.percentile(tmp, 99.9), np.percentile(tmp_tmp, 99.9)),
-                            vmin=(np.percentile(tmp_tmp_tmp, 0.1),
-                                  np.percentile(tmp, 0.1), np.percentile(tmp_tmp, 0.1)),
-                            label=('Raw Unsat Dark', 'Raw Unsat',
-                                   'Unsat Dark Subtracted'), title='Unsat Dark Subtraction',
-                            dpi=300, save=self.outpath + 'UNSAT_dark_subtract.pdf')
+                _plot_dark_median(fits_name, tmp_tmp_tmp, tmp, tmp_tmp, 'Unsat', self.outpath)
 
     def flat_field_correction(self, verbose=True, debug=False, plot=None, remove=False):
         """
