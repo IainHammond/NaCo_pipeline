@@ -83,7 +83,6 @@ class input_dataset():
         self.dit_unsat = dataset_dict['dit_unsat']
         self.ndit_unsat = dataset_dict['ndit_unsat']
         self.dit_flat = dataset_dict['dit_flat']
-        self.fast_reduction = dataset_dict['fast_reduction']
         self.dataset_dict = dataset_dict
         print('##### Number of raw FITS files:', len(self.file_list), '#####', flush=True)
         if not isdir(self.outpath):
@@ -442,22 +441,9 @@ class input_dataset():
             plt.close('all')
 
         sci_list.sort()
-        if self.fast_reduction:
-            with open(self.outpath + "sci_list_ori.txt", "w") as f:
-                for ss, sci in enumerate(sci_list):
-                    tmp = open_fits(self.inpath + sci, verbose=debug)
-                    if ss == 0:
-                        master_sci = np.zeros([len(sci_list), tmp.shape[1], tmp.shape[2]])
-                    master_sci[ss] = tmp[-1]
-                    f.write(sci + '\n')
-            with open(self.outpath + "sci_list.txt", "w") as f:
-                f.write('master_sci_fast_reduction.fits')
-            write_fits(self.outpath + 'master_sci_fast_reduction.fits', master_sci, verbose=debug)
-            print('Saved fast reduction master science cube', flush=True)
-        else:
-            with open(self.outpath + "sci_list.txt", "w") as f:
-                for sci in sci_list:
-                    f.write(sci + '\n')
+        with open(self.outpath + "sci_list.txt", "w") as f:
+            for sci in sci_list:
+                f.write(sci + '\n')
         sky_list.sort()
         with open(self.outpath + "sky_list.txt", "w") as f:
             for sky in sky_list:
@@ -541,16 +527,10 @@ class input_dataset():
         """
         # open the list of science images and add them to sci_list to be used in _derot_ang_ipag
         sci_list = []
-        if self.fast_reduction:
-            with open(self.outpath + "sci_list_ori.txt", "r") as f:
-                tmp = f.readlines()
-                for line in tmp:
-                    sci_list.append(line.split('\n')[0])
-        else:
-            with open(self.outpath + "sci_list.txt", "r") as f:
-                tmp = f.readlines()
-                for line in tmp:
-                    sci_list.append(line.split('\n')[0])
+        with open(self.outpath + "sci_list.txt", "r") as f:
+            tmp = f.readlines()
+            for line in tmp:
+                sci_list.append(line.split('\n')[0])
         sci_list.sort()
 
         print('Calculating derotation angles from header data...', flush=True)
@@ -633,9 +613,6 @@ class input_dataset():
         derot_angles_st, _ = _derot_ang_ipag(self, sci_list, loc='st')
         derot_angles_nd, n_frames_vec = _derot_ang_ipag(self, sci_list, loc='nd')
 
-        # if self.fast_reduction:
-        # final_derot_angs = np.zeros([1, n_sci])
-
         final_derot_angs = np.zeros([n_sci, int(np.amax(n_frames_vec))])
         for sc in range(n_sci):
             n_frames = int(n_frames_vec[sc])
@@ -643,12 +620,6 @@ class input_dataset():
             final_derot_angs[sc, :n_frames] = derot_angles_st[sc] + (
                         (derot_angles_nd[sc] - derot_angles_st[sc]) * nfr_vec / (n_frames - 1))
 
-        if self.fast_reduction:
-            final_derot_angs_median = np.zeros([n_sci])
-            for sc in range(n_sci):
-                # final_derot_angs[sc] = np.apply_along_axis(lambda v: np.median(v[np.nonzero(v)]), 0, final_derot_angs[sc])
-                final_derot_angs_median[sc] = np.median(final_derot_angs[sc])
-            final_derot_angs = final_derot_angs_median
         write_fits(self.outpath + "derot_angles_uncropped.fits", final_derot_angs, verbose=debug)
         if verbose:
             print('Derotation angles have been computed and saved to file', flush=True)
