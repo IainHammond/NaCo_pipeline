@@ -2334,11 +2334,11 @@ class raw_dataset:
             cy, cx = frame_center(tmp_tmp[0], verbose=debug)
             write_fits(self.outpath + '4_tmp_crop_' + fits_name, tmp_tmp, verbose=debug)
             try:
-                tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7,
+                tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=9,
                                               nproc=self.nproc, model='gauss', full_output=False, verbose=debug,
                                               save_shifts=False, offset=None, negative=False, debug=False,
                                               threshold=False, plot=False)
-                tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=verbose)
+                tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=debug)
                 write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 for dd in range(self.new_ndit_unsat):
                     # combining all frames in unsat to make master cube
@@ -2350,7 +2350,7 @@ class raw_dataset:
                 psf_tmp = psf_tmp[:-1]  # remove one frame since there is one less cube for each failed fit
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
-        good_unsat_idx = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=10, top_sigma=1, low_sigma=1,
+        good_unsat_idx = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1, low_sigma=1,
                                                    window=None, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', format='pdf', bbox='tight')
