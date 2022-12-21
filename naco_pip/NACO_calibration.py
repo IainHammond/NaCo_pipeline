@@ -1615,7 +1615,12 @@ class raw_dataset:
             print('Running bad pixel correction...', flush=True)
             start_time = time_ini(verbose=False)
 
-        # t0 = time_ini()
+        # whether to use median to find bad pixels or go frame by frame
+        if self.fast_calibration:
+            frame_by_frame = False
+        else:
+            frame_by_frame = True
+
         for sc, fits_name in enumerate(sci_list):
             if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
                 # first with the bp max defined from the flat field (without protecting radius)
@@ -1628,7 +1633,7 @@ class raw_dataset:
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=self.fast_calibration, verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
                 else:
                     tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
                                                         protect_mask=10, verbose=debug)
@@ -1671,8 +1676,7 @@ class raw_dataset:
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=self.fast_calibration,
-                                                       verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
                 else:
                     tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
                                                         protect_mask=10, verbose=debug)
@@ -1714,8 +1718,7 @@ class raw_dataset:
                     # second, residual hot pixels
                     tmp_tmp = open_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, verbose=debug)
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=self.fast_calibration,
-                                                       verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
                     # create a bpm for the 2nd correction
                     tmp_tmp_tmp = tmp_tmp - tmp
                     tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
