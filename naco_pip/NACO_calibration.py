@@ -467,6 +467,8 @@ class raw_dataset:
             print('Masks have been saved as fits file', flush=True)
 
         def _plot_dark_median(fits_name, dark, before, after, file_type, outpath):
+            if dark.ndim == 3:
+                dark = np.median(dark, axis=0)
             if before.ndim == 3:
                 before = np.median(before, axis=0)
             if after.ndim == 3:
@@ -539,7 +541,6 @@ class raw_dataset:
                 print('Dark has been median subtracted from FLAT frames', flush=True)
 
             if plot:
-                tmp_tmp = np.median(tmp_tmp, axis=0)
                 _plot_dark_median(fits_name, tmp_tmp_tmp_median, tmp, tmp_tmp, 'Flat', self.outpath)
 
         # original code           ####################
@@ -629,6 +630,22 @@ class raw_dataset:
         #        #master_all_darks[:len(flat_dark_list)] = tmp.copy()
         #        #master_all_darks[len(flat_dark_list):] = tmp.copy()
         if method == 'pca':
+            def _plot_dark_pca(fits_name, dark, before, after, file_type, outpath):
+                if dark.ndim == 3:
+                    dark = np.median(dark, axis=0)
+                if before.ndim == 3:
+                    before = np.median(before, axis=0)
+                if after.ndim == 3:
+                    after = np.median(after, axis=0)
+                plot_frames((dark, before, after), dpi=300,
+                            vmax=(np.percentile(dark, 99.5), np.percentile(before, 99.5), np.percentile(after, 99.5)),
+                            vmin=(np.percentile(dark, 0.5), np.percentile(before, 0.5), np.percentile(after, 0.5)),
+                            label=('Median {} Dark'.format(file_type), 'Raw {} \n'.format(file_type) + fits_name,
+                                   '{} PCA Dark Subtracted'.format(file_type)),
+                            cmap='inferno', top_colorbar=True, horsp=0.2,
+                            save=outpath + '{}_PCA_dark_subtract.pdf'.format(file_type))
+                plt.close('all')
+
             tmp_tmp_tmp = open_fits(self.outpath + 'master_all_darks.fits',
                                     verbose=debug)  # the cube of all darks - PCA works better with a larger library of DARKs
             tmp_tmp = np.zeros([len(flat_list), self.com_sz, self.com_sz])
@@ -2241,7 +2258,7 @@ class raw_dataset:
             'pixel_scale'])  # threshold: difference in star pos must be greater than 1 arc sec
         if verbose:
             print('Unsaturated cube observation time (MJD):', unsat_mjd_list)
-            print('Distance threshold: {} px'.format(thr_d), flush=True)
+            print('Distance threshold: {:.3f} px'.format(thr_d), flush=True)
 
         index_dither = [0]  # first position to start measuring offset/dithering distance
         unique_pos = [unsat_pos[0]]  # we know the first position is unique, so its first entry of unique positions
@@ -2279,9 +2296,6 @@ class raw_dataset:
                 tmp_sky = np.median(open_fits(self.outpath + '3_rmfr_unsat_' + unsat_list[good_idx[best_idx]],
                                               verbose=debug), axis=0)
                 write_fits(self.outpath + '4_sky_subtr_unsat_' + unsat_list[un], tmp - tmp_sky, verbose=debug)
-        if remove:
-            for un, fits_name in enumerate(unsat_list):
-                system("rm " + self.outpath + '3_rmfr_unsat_' + fits_name)
 
         if plot:
             # plot cubes before and after sky subtraction, with original on left and sky subtracted on right
@@ -2301,6 +2315,11 @@ class raw_dataset:
                         label=labels, label_size=8, cmap='inferno', dpi=300,
                         save=self.outpath + 'Unsat_skysubtracted.pdf')
             plt.close('all')
+
+        if remove:
+            for un, fits_name in enumerate(unsat_list):
+                system("rm " + self.outpath + '3_rmfr_unsat_' + fits_name)
+
         crop_sz_tmp = int(8 * self.resel_ori)
         crop_sz = int(7 * self.resel_ori)
         if not crop_sz_tmp % 2:  # if it's not even, crop
@@ -2314,15 +2333,21 @@ class raw_dataset:
             tmp_tmp, _, _ = cube_crop_frames(tmp, crop_sz_tmp, xy=xy, verbose=debug, full_output=True)
             cy, cx = frame_center(tmp_tmp[0], verbose=debug)
             write_fits(self.outpath + '4_tmp_crop_' + fits_name, tmp_tmp, verbose=debug)
-            tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7,
-                                          nproc=self.nproc, model='gauss', full_output=False, verbose=debug,
-                                          save_shifts=False, offset=None, negative=False, debug=False,
-                                          threshold=False, plot=False)
-            tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=verbose)
-            write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
-            for dd in range(self.new_ndit_unsat):
-                # combining all frames in unsat to make master cube
-                psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
+            try:
+                tmp_tmp = cube_recenter_2dfit(tmp_tmp, xy=(int(cx), int(cy)), fwhm=self.resel_ori, subi_size=7,
+                                              nproc=self.nproc, model='gauss', full_output=False, verbose=debug,
+                                              save_shifts=False, offset=None, negative=False, debug=False,
+                                              threshold=False, plot=False)
+                tmp_tmp = cube_crop_frames(tmp_tmp, crop_sz, xy=(cx, cy), verbose=verbose)
+                write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
+                for dd in range(self.new_ndit_unsat):
+                    # combining all frames in unsat to make master cube
+                    psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
+            except:
+                msg = 'Warning: Unable to fit to unsaturated frame 4_sky_subtr_unsat_{}\nIt is safe to continue, ' \
+                      'but you may want to check the final unsaturated master cube'.format(fits_name)
+                print(msg)
+                psf_tmp = psf_tmp[:-1]  # remove one frame since there is one less cube for each failed fit
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
         good_unsat_idx = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=10, top_sigma=1, low_sigma=1,
