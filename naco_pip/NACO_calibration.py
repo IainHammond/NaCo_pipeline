@@ -2357,7 +2357,7 @@ class raw_dataset:
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
         good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1,
-                                                                   low_sigma=0, window=None, plot=True, verbose=verbose)
+                                                                   low_sigma=0.2, window=10, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
@@ -2550,7 +2550,7 @@ class raw_dataset:
             if plot == 'save':
                 plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
                             dpi=300, save=self.outpath + 'Isolated_grains.pdf')
-            # then use the automatic detection tool of vip_hci.metrics
+            # then use the automatic detection tool
             snr_thr = 10
             snr_thr_all = 30
             psfn = open_fits(self.outpath + "master_unsat_psf_norm.fits", verbose=debug)
@@ -2788,7 +2788,7 @@ class raw_dataset:
 
         ############## PCA ##############
 
-        if mode == 'PCA':
+        if mode == 'PCA' or mode == 'pca':
             master_skies2 = np.zeros([n_sky, self.final_sz, self.final_sz])
             master_sky_times = np.zeros(n_sky)
             for sk, fits_name in enumerate(sky_list):
