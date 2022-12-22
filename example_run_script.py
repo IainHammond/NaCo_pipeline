@@ -57,7 +57,7 @@ calib.flat_field_correction(debug=False, plot='save')
 calib.correct_nan(debug=False, plot='save')
 calib.correct_bad_pixels(verbose=True, overwrite=False, debug=False, plot='save')
 calib.first_frames_removal(verbose=True, debug=False, plot='save')
-calib.get_stellar_psf(nd_filter=False, debug=False, plot='save')
+calib.get_stellar_psf(nd_filter=False, plot=True, verbose=True, debug=False)
 calib.subtract_sky(npc=1, debug=False, plot='save')
 
 preproc = calib_dataset(inpath=path+'calibrated/', outpath=path+'preproc/', dataset_dict=dataset_dict,
