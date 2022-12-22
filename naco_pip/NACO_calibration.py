@@ -2357,7 +2357,7 @@ class raw_dataset:
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
         good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1,
-                                                                   low_sigma=0.5, window=None, plot=True, verbose=verbose)
+                                                                   low_sigma=0, window=None, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
@@ -2413,13 +2413,13 @@ class raw_dataset:
             print('The median PSF of the star has been obtained', flush=True)
         if plot:
             plot_frames(psf_med, dpi=300, label='Median PSF', vmin=np.percentile(psf_med, 0.1), vmax=np.percentile(psf_med, 99.9),
-                        cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(), log=True,
+                        cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(self.dit_unsat), log=True,
                         save=self.outpath + 'Median_PSF.pdf')
             plt.close('all')
 
         data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
                                     threshold=False, sigfactor=6, full_output=True, debug=plot)
-        if plot:  # saves the last model
+        if plot:  # saves the model
             plt.savefig(self.outpath + 'PSF_fitting.pdf')
             plt.close('all')
 
@@ -2522,8 +2522,7 @@ class raw_dataset:
         sky_list_mjd = []
         # get times of sky cubes (modified jullian calander)
         for fname in sky_list:
-            tmp, header = open_fits(self.inpath + fname, header=True,
-                                    verbose=debug)
+            tmp, header = open_fits(self.inpath + fname, header=True, verbose=debug)
             sky_list_mjd.append(header['MJD-OBS'])
 
         # SORT SKY_LIST in chronological order (important for calibration)
