@@ -2327,6 +2327,7 @@ class raw_dataset:
         if not crop_sz % 2:
             crop_sz += 1
         psf_tmp = np.zeros([len(good_unsat_list) * self.new_ndit_unsat, crop_sz, crop_sz])
+        successful_unsat_idx = []
         for un, fits_name in enumerate(good_unsat_list):
             tmp = open_fits(self.outpath + '4_sky_subtr_unsat_' + fits_name, verbose=debug)
             xy = (good_unsat_pos[un][1], good_unsat_pos[un][0])
@@ -2343,14 +2344,15 @@ class raw_dataset:
                 for dd in range(self.new_ndit_unsat):
                     # combining all frames in unsat to make master cube
                     psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
+                successful_unsat_idx.append(un)
             except:
                 msg = 'Warning: Unable to fit to unsaturated frame 4_sky_subtr_unsat_{}\nIt is safe to continue, ' \
                       'but you may want to check the final unsaturated master cube'.format(fits_name)
-                print(msg)
-                psf_tmp = psf_tmp[:-1]  # remove one frame since there is one less cube for each failed fit
+                print(msg, flush=True)
+        psf_tmp = psf_tmp[successful_unsat_idx]
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
-        good_unsat_idx = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1, low_sigma=1,
+        good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1, low_sigma=1,
                                                    window=None, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', format='pdf', bbox='tight')
