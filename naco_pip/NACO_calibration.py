@@ -2412,9 +2412,9 @@ class raw_dataset:
         if verbose:
             print('The median PSF of the star has been obtained', flush=True)
         if plot:
-            plot_frames(psf_med, dpi=300, label='Median PSF', vmin=np.percentile(psf_med, 0.1), vmax=np.percentile(99.9),
+            plot_frames(psf_med, dpi=300, label='Median PSF', vmin=np.percentile(psf_med, 0.1), vmax=np.percentile(psf_med, 99.9),
                         cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(), log=True,
-                        save=self.oupath + 'Median_PSF.pdf')
+                        save=self.outpath + 'Median_PSF.pdf')
             plt.close('all')
 
         data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
