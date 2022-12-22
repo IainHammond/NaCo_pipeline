@@ -2150,7 +2150,7 @@ class raw_dataset:
                     system("rm " + self.outpath + '2_bpix_corr2_unsat_' + fits_name)
                     system("rm " + self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)
 
-    def get_stellar_psf(self, nd_filter=False, verbose=True, debug=False, plot='save', remove=False):
+    def get_stellar_psf(self, nd_filter=False, plot=True, verbose=True, debug=False, remove=False):
         """
         Obtain a PSF model of the star based off of the unsaturated cubes.
 
@@ -2170,11 +2170,11 @@ class raw_dataset:
 
         nd_filter : bool, default: None
             when a ND filter is used in L' the transmission is ~0.01777. Used for scaling
+        plot : bool, optional
+            Save relevant plots to the outpath as PDF.
         verbose and debug : bool
             prints more info, if debug it prints when files are opened and gives some additional info.
             verbose is on by default.
-        plot options : 'save', 'show', or None.
-            Show or save relevant plots
         remove options : bool, False by default
             Cleans previous calibration files
         """
@@ -2357,7 +2357,7 @@ class raw_dataset:
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
         good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1,
-                                                                   low_sigma=1, window=None, plot=True, verbose=verbose)
+                                                                   low_sigma=0.5, window=None, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
@@ -2413,11 +2413,12 @@ class raw_dataset:
             print('The median PSF of the star has been obtained', flush=True)
         if plot:
             plot_frames(psf_med, dpi=300, label='Median PSF', vmin=np.percentile(psf_med, 0.1), vmax=np.percentile(99.9),
-                        cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(), save=self.oupath + 'Median_PSF.pdf')
+                        cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(), log=True,
+                        save=self.oupath + 'Median_PSF.pdf')
             plt.close('all')
 
         data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
-                                    threshold=False, sigfactor=6, full_output=True, debug=debug)
+                                    threshold=False, sigfactor=6, full_output=True, debug=plot)
         if plot:  # saves the last model
             plt.savefig(self.outpath + 'PSF_fitting.pdf')
             plt.close('all')
