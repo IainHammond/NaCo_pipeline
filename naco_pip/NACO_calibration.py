@@ -155,6 +155,7 @@ class raw_dataset:
         self.sci_list_mjd = sci_list_mjd
         self.sky_list_mjd = sky_list_mjd
         self.dataset_dict = dataset_dict
+        self.dit_unsat = dataset_dict['dit_unsat']
         self.fast_calibration = dataset_dict['fast_calibration']
         self.resel_ori = self.dataset_dict['wavelength'] * 206265 / (
                 self.dataset_dict['size_telescope'] * self.dataset_dict['pixel_scale'])
@@ -2326,8 +2327,9 @@ class raw_dataset:
             crop_sz_tmp += 1
         if not crop_sz % 2:
             crop_sz += 1
-        psf_tmp = np.zeros([len(good_unsat_list) * self.new_ndit_unsat, crop_sz, crop_sz])
-        successful_unsat_idx = []
+        # psf_tmp = np.zeros([len(good_unsat_list) * self.new_ndit_unsat, crop_sz, crop_sz])
+        psf_tmp = []
+        #successful_unsat_idx = []
         for un, fits_name in enumerate(good_unsat_list):
             tmp = open_fits(self.outpath + '4_sky_subtr_unsat_' + fits_name, verbose=debug)
             xy = (good_unsat_pos[un][1], good_unsat_pos[un][0])
@@ -2343,19 +2345,21 @@ class raw_dataset:
                 write_fits(self.outpath + '4_centered_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 for dd in range(self.new_ndit_unsat):
                     # combining all frames in unsat to make master cube
-                    psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
-                successful_unsat_idx.append(un)
+                    # psf_tmp[un * self.new_ndit_unsat + dd] = tmp_tmp[dd]
+                    psf_tmp.append(tmp_tmp[dd])
+                #successful_unsat_idx.append(un)
             except:
                 msg = 'Warning: Unable to fit to unsaturated frame 4_sky_subtr_unsat_{}\nIt is safe to continue, ' \
                       'but you may want to check the final unsaturated master cube'.format(fits_name)
                 print(msg, flush=True)
-        psf_tmp = psf_tmp[successful_unsat_idx]
+        #psf_tmp = psf_tmp[successful_unsat_idx]
+        psf_tmp = np.array(psf_tmp)
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
-        good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1, low_sigma=1,
-                                                   window=None, plot=True, verbose=verbose)
+        good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1,
+                                                                   low_sigma=1, window=None, plot=True, verbose=verbose)
         if plot:
-            plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', format='pdf', bbox='tight')
+            plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
         # use only the good frames, median combine and save
         psf_tmp = psf_tmp[good_unsat_idx]
@@ -2407,8 +2411,9 @@ class raw_dataset:
 
         if verbose:
             print('The median PSF of the star has been obtained', flush=True)
-        if plot == 'show':
-            plot_frames(psf_med)
+        if plot:
+            plot_frames(psf_med, dpi=300, label='Median PSF', vmin=np.percentile(psf_med, 0.1), vmax=np.percentile(99.9),
+                        cmap='inferno', colorbar_label='Flux [adu per {}s]'.format(), save=self.oupath + 'Median_PSF.pdf')
             plt.close('all')
 
         data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
