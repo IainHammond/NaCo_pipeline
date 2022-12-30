@@ -52,7 +52,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 self.real_ndit_sci.append(tmp.shape[0])  # gets length of each cube for later use
                 del tmp
         self.dataset_dict = dataset_dict
-        self.fast_reduction = dataset_dict['fast_reduction']
         self.nproc = dataset_dict['nproc']
         if not isdir(self.outpath):
             makedirs(self.outpath)
@@ -267,19 +266,20 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # self.ndit came from the z dimension of the first calibrated science cube above in recentring
         # x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
         # y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
-        if not self.fast_reduction:  # long are shifts to be apply to each frame in each cube. fast reduction only has one cube
-            x_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
-            y_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
 
-            for i in range(len(self.sci_list)):  # from 0 to the length of sci_list
-                ndit = self.real_ndit_sci[i]  # gets the dimensions of the cube
-                x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i]  # sets the average shifts of all frames in that cube
-                y_shifts_long[i*ndit:(i+1)*ndit] = y_shifts[i]
+        # long are shifts to be applied to each frame in each cube
+        x_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
+        y_shifts_long = np.zeros([int(np.sum(self.real_ndit_sci))])
 
-            write_fits(self.outpath+'x_shifts_long.fits', x_shifts_long, verbose=debug)  # saves shifts to file
-            write_fits(self.outpath+'y_shifts_long.fits', y_shifts_long, verbose=debug)
-            x_shifts = x_shifts_long
-            y_shifts = y_shifts_long
+        for i in range(len(self.sci_list)):  # from 0 to the length of sci_list
+            ndit = self.real_ndit_sci[i]  # gets the dimensions of the cube
+            x_shifts_long[i*ndit:(i+1)*ndit] = x_shifts[i]  # sets the average shifts of all frames in that cube
+            y_shifts_long[i*ndit:(i+1)*ndit] = y_shifts[i]
+
+        write_fits(self.outpath+'x_shifts_long.fits', x_shifts_long, verbose=debug)  # saves shifts to file
+        write_fits(self.outpath+'y_shifts_long.fits', y_shifts_long, verbose=debug)
+        x_shifts = x_shifts_long
+        y_shifts = y_shifts_long
 
         if verbose:
             print("x shift median:", median_sx)
@@ -289,7 +289,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         good = []
 
         i = 0 
-        shifts = list(zip(x_shifts,y_shifts))
+        shifts = list(zip(x_shifts, y_shifts))
         bar = ProgBar(len(x_shifts), stream=1, title='Running pixel shift check...')
         for sx, sy in shifts:  # iterate over the shifts to find any greater or less than pxl_shift_thres pixels from median
             if abs(sx) < ((abs(median_sx)) + pxl_shift_thres) and abs(sx) > ((abs(median_sx)) - pxl_shift_thres) and abs(sy) < ((abs(median_sy)) + pxl_shift_thres) and abs(sy) > ((abs(median_sy)) - pxl_shift_thres):
