@@ -70,7 +70,7 @@ preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annu
 postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dataset_dict=dataset_dict, nproc=nproc, npc=20) # npc can be int (for a single number of Principal
                                                                                                                              # Components), tuple or list for a range and step
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
-                        first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], cropped=True, do_snr_map=True,
+                        first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], do_snr_map=True,
                         do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, coronagraph=True,
                         overwrite=True, verbose=True, debug=False)
 # only to be run if there is a source/blob detected by running post-processing
