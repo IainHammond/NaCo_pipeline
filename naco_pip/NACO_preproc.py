@@ -61,7 +61,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
     def recenter(self, sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=False, coro=True):
         """
-        Recenters cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
+        Centers cropped science images by fitting a double Gaussian (negative+positive) to each median combined SCI cube,
         or by fitting a single negative Gaussian to the coronagraph using the speckle pattern of each median combined SCI cube.
         
         Parameters:
@@ -72,13 +72,13 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         subi_size: int, default = 21
             Size of the square subimage sides in pixels.
         crop_sz: int, optional, in units of pixels. 251 by default
-            Crops to this size after recentring for memory management purposes. Useful for very large datasets
+            Crops to this size after recentering for memory management purposes. Useful for very large datasets
         verbose: bool
             To provide extra information about the progress and results of the pipeline
         plot: bool
             If True, a plot of the shifts is saved (PDF)
         coro: bool
-            For coronagraph data. False otherwise. Recentring requires coronagraphic data
+            For coronagraph data. False otherwise. Recentering requires coronagraphic data
         
         Writes fits to file:
         ----------
@@ -90,7 +90,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if not coro:
             if self.recenter_method != '2dfit':
-                raise ValueError('Recentering method invalid')
+                raise ValueError('Centering method invalid')
             if self.recenter_model == '2gauss':
                 raise ValueError('2Gauss requires coronagraphic data')
         
@@ -104,7 +104,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
         if not subi_size % 2:
             subi_size -= 1
-            print('WARNING: Recentring sub image size not odd. Adjusted to {} px'.format(subi_size), flush=True)
+            print('WARNING: Sub image size not odd. Adjusted to {} px'.format(subi_size), flush=True)
 
         # Creates a master science cube with just the median of each cube
         if not isfile(self.outpath+'median_calib_cube.fits'):
@@ -115,19 +115,19 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                     _, ny, nx = tmp.shape  # dimensions of cube
                     if subi_size > ny:  # check if bigger than science frame
                         subi_size = ny  # ny should be odd already from calibration
-                        print('WARNING: Recentring sub image size larger than frame. Adjusted to {} px'.format(subi_size), flush=True)
+                        print('WARNING: Sub image size larger than frame. Adjusted to {} px'.format(subi_size), flush=True)
                     tmp_tmp = np.zeros([ncubes, ny, ny])  # template cube with the median of each SCI cube
                 tmp_tmp[sc] = np.median(tmp, axis=0)  # median frame of cube tmp
                 get_available_memory()
                 bar.update()
             write_fits(self.outpath+'median_calib_cube.fits', tmp_tmp, verbose=debug)
             if verbose:
-                print('Median science cube created for recentring', flush=True)
+                print('Median science cube created for recentering', flush=True)
         else:
             tmp_tmp = open_fits(self.outpath+'median_calib_cube.fits', verbose=debug)
             _, ny, nx = tmp_tmp.shape
             if verbose:
-                print('Median science cube for recentring has been read from file', flush=True)
+                print('Median science cube for recentering has been read from file', flush=True)
 
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
@@ -158,12 +158,12 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 sy = recenter[1]
                 sx = recenter[2]
         else:
-            raise ValueError('Recentring method is not recognised. Use either speckle or 2dfit.')
+            raise ValueError('Centering method is not recognised. Use either speckle or 2dfit.')
         if plot:  # save the shift plot
-            plt.savefig(self.outpath+'shifts-xy.pdf', format='pdf')
+            plt.savefig(self.outpath+'shifts-xy.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
         del recenter
-        print('Recentring complete', flush=True)
+        print('Centering complete', flush=True)
         if debug:
             get_available_memory()
 #                true_agpm_cen = (res[4][0],res[3][0])
@@ -226,7 +226,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
     def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot=True):
         """
-        For removing outlier frames often caused by AO errors. To be run after recentring is complete. Takes the
+        For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the
         recentred mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
         the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube.
         Removes all those frames below the threshold from the mastercube and rotation file, then saves both as new files
@@ -263,7 +263,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         y_shifts = open_fits(self.outpath+"y_shifts.fits", verbose=debug)
         median_sy = np.median(y_shifts)  # median of y shifts
 
-        # self.ndit came from the z dimension of the first calibrated science cube above in recentring
+        # self.ndit came from the z dimension of the first calibrated science cube above in recentering
         # x_shifts_long = np.zeros([len(self.sci_list)*self.ndit]) # list with number of cubes times number of frames in each cube as the length
         # y_shifts_long = np.zeros([len(self.sci_list)*self.ndit])
 
@@ -322,7 +322,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         # frame_ref = frame_crop(tmp_median, size = sub_frame_sz, verbose=verbose) # crops the median of all frames to a common size
         distances = cube_distance(subarray, frame_ref, mode='full', dist='pearson', plot=plot)  # calculates the correlation of each frame to the median and saves as a list
         if plot:  # save a plot of distances compared to the median for each frame if set to 'save'
-            plt.savefig(self.outpath+'distances.pdf', format='pdf')
+            plt.savefig(self.outpath+'distances.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
         correlation_thres = np.median(distances) - np.std(distances)  # threshold is the median of the distances minus one stddev
         
@@ -333,7 +333,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                                                                 plot=plot,
                                                                 verbose=verbose)
         if plot:
-            plt.savefig(self.outpath+'frame_correlation.pdf', format='pdf')
+            plt.savefig(self.outpath+'frame_correlation.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
 
         # only keeps the files that were above the correlation threshold
@@ -354,9 +354,9 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
 
     def crop_cube(self, arcsecond_diameter=3, verbose=True, debug=False):
         """
-        Crops frames in the master cube after recentring and bad frame removal. Recommended for post-processing ie.
+        Crops frames in the master cube after recentering and bad frame removal. Recommended for post-processing ie.
         PCA in concentric annuli. If the provided arcsecond diameter happens to be larger than the cropping provided in
-        recentring, no cropping will occur.
+        recentering, no cropping will occur.
 
         Parameters
         ----------
@@ -374,7 +374,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             Cube with cropped frames
         """
         if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
-            raise NameError('Missing master cube from recentring and bad frame removal!')
+            raise NameError('Missing master cube from recentering and bad frame removal!')
 
         master_cube = open_fits(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source']),
                                 verbose=debug)
@@ -429,10 +429,10 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             raise TypeError('Invalid binning_factor! Use either int, list or tuple')        
         
         if not isfile(self.outpath+'{}_master_cube.fits'.format(self.dataset_dict['source'])):
-            raise NameError('Missing master cube from recentring and bad frame removal!')
+            raise NameError('Missing master cube from recentering and bad frame removal!')
             
         if not isfile(self.outpath+'derot_angles.fits'):
-            raise NameError('Missing derotation angles files from recentring and bad frame removal!')
+            raise NameError('Missing derotation angles files from recentering and bad frame removal!')
 
         bin_fac = int(binning_factor)  # ensure integer
         if bin_fac != 1 and bin_fac != 0:
