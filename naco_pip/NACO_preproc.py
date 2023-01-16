@@ -15,12 +15,14 @@ import numpy as np
 from pyprind import ProgBar
 import matplotlib
 from matplotlib import pyplot as plt
+from hciplot import plot_frames
 
 from vip_hci.config import get_available_memory, time_ini, timing
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, \
     cube_detect_badfr_correlation, cube_crop_frames, cube_subsample
 from vip_hci.stats import cube_distance
+from vip_hci.var import frame_center
 
 matplotlib.use('Agg')
 
@@ -100,7 +102,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         fwhm = fwhm_all[0] # fwhm is the first entry in the file 
         fwhm = fwhm.item() # changes from numpy.float32 to regular float so it will work in VIP
         if verbose:
-            print('FWHM = {:3f} px of type: {}'.format(fwhm,type(fwhm)), flush=True)
+            print('FWHM = {:3f} px'.format(fwhm), flush=True)
 
         if not subi_size % 2:
             subi_size -= 1
@@ -130,39 +132,50 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 print('Median science cube for recentering has been read from file', flush=True)
 
         if self.recenter_method == 'speckle':
-                # FOR GAUSSIAN
-                print('##### Recentering via speckle pattern #####', flush=True)
-                if debug:
-                    get_available_memory()
-                recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None, alignment_iter=5, gammaval=1,
-                                                      min_spat_freq=0.5, max_spat_freq=3, fwhm=fwhm, debug=debug,
-                                                      recenter_median=True, negative=coro, fit_type='gaus', crop=True,
-                                                      subframesize=subi_size, imlib='opencv', interpolation='lanczos4',
-                                                      plot=plot, full_output=True, nproc=self.nproc)
-                sy = recenter[4]
-                sx = recenter[3]
+            # FOR GAUSSIAN
+            print('##### Recentering via speckle pattern #####', flush=True)
+            if debug:
+                get_available_memory()
+            recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None, alignment_iter=5, gammaval=1,
+                                                  min_spat_freq=0.5, max_spat_freq=3, fwhm=fwhm, debug=debug,
+                                                  recenter_median=True, negative=coro, fit_type='gaus', crop=True,
+                                                  subframesize=subi_size, imlib='opencv', interpolation='lanczos4',
+                                                  plot=plot, full_output=True, nproc=self.nproc)
+            sy = recenter[4]
+            sx = recenter[3]
         elif self.recenter_method == '2dfit':	
-                # DOUBLE GAUSSIAN
-                print('##### Recentering via 2dfit #####', flush=True)
-                if debug:
-                    get_available_memory()
-                params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
-                recenter = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
-                                               model=self.recenter_model, nproc=self.nproc, imlib='opencv',
-                                               interpolation='lanczos4', offset=None,
-                                               negative=False, threshold=True, sigfactor=sigfactor,
-                                               fix_neg=False, params_2g=params_2g,
-                                               save_shifts=False, full_output=True, verbose=verbose,
-                                               debug=debug, plot=plot)
-                sy = recenter[1]
-                sx = recenter[2]
+            # DOUBLE GAUSSIAN
+            print('##### Recentering via 2dfit #####', flush=True)
+            if debug:
+                get_available_memory()
+            params_2g = {'fwhm_neg': 0.8*fwhm, 'fwhm_pos': 2*fwhm, 'theta_neg': 48., 'theta_pos':135., 'neg_amp': 0.8}
+            recenter = cube_recenter_2dfit(tmp_tmp, xy=None, fwhm=fwhm, subi_size=subi_size,
+                                           model=self.recenter_model, nproc=self.nproc, imlib='opencv',
+                                           interpolation='lanczos4', offset=None,
+                                           negative=False, threshold=True, sigfactor=sigfactor,
+                                           fix_neg=False, params_2g=params_2g,
+                                           save_shifts=False, full_output=True, verbose=verbose,
+                                           debug=debug, plot=plot)
+            sy = recenter[1]
+            sx = recenter[2]
+        elif self.recenter_method == 'as_observed':
+            tmp_med = np.median(tmp_tmp, axis=0)
+            tmp_med = tmp_med[np.newaxis, :, :]
+            cy, cx = frame_center(tmp_med)
+            recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=5,
+                                           nproc=self.nproc, fwhm=fwhm, debug=True)
+            sy = [float(recenter[1])] * len(self.sci_list)
+            sx = [float(recenter[2])] * len(self.sci_list)
+            plt.savefig(self.outpath+'frame_center_as_observed.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
         else:
             raise ValueError('Centering method is not recognised. Use either speckle or 2dfit.')
+
         if plot:  # save the shift plot
             plt.savefig(self.outpath+'shifts-xy.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
         del recenter
-        print('Centering complete', flush=True)
+
         if debug:
             get_available_memory()
 
