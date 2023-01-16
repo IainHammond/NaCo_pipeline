@@ -132,7 +132,6 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         if self.recenter_method == 'speckle':
                 # FOR GAUSSIAN
                 print('##### Recentering via speckle pattern #####', flush=True)
-                #registered science sube, low+high pass filtered cube,cube with stretched values, x shifts, y shifts
                 if debug:
                     get_available_memory()
                 recenter = cube_recenter_via_speckles(tmp_tmp, cube_ref=None, alignment_iter=5, gammaval=1,
@@ -166,27 +165,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         print('Centering complete', flush=True)
         if debug:
             get_available_memory()
-#                true_agpm_cen = (res[4][0],res[3][0])
-#                true_fwhm_pos = (res[5][0],res[6][0])
-#                true_fwhm_neg = (res[7][0],res[8][0])
-#                true_theta_pos = res[9][0]
-#                true_theta_neg = res[10][0]
-#                amp_pos = res[11][0]
-#                amp_neg = res[12][0]
-#                true_neg_amp = amp_neg/amp_pos
-#                params_2g = {'fwhm_neg': true_fwhm_neg, 'fwhm_pos': true_fwhm_pos, 
-#			                 'theta_neg': true_theta_neg, 'theta_pos':true_theta_pos, 
-#			                 'neg_amp': true_neg_amp}
-#		# second: fixing params for neg gaussian - applied on individual frames. returns recentered array, and x-y shifts             
-#                tmp_tmp, sy, sx = cube_recenter_2dfit(tmp_tmp, xy=true_agpm_cen, 
-#			                                        fwhm=self.fwhm, subi_size=subi_size, 
-#			                                        model=model, nproc=nproc, imlib='opencv', 
-#			                                        interpolation='lanczos4',
-#			                                        offset=None, negative=False, 
-#			                                        threshold=True, sigfactor=sigfactor, 
-#			                                        fix_neg=True, params_2g=params_2g,
-#			                                        save_shifts=False, full_output=True, 
-#			                                        verbose=verbose, debug=debug, plot=plot)		
+
         # LOAD IN REAL_NDIT_SCI
         # Load original cubes, shift them, and create master cube
         if crop_sz is not None:
@@ -227,7 +206,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
     def bad_frame_removal(self, pxl_shift_thres=0.5, sub_frame_sz=31, verbose=True, debug=False, plot=True):
         """
         For removing outlier frames often caused by AO errors. To be run after recentering is complete. Takes the
-        recentred mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
+        recentered mastercube and removes frames with a shift greater than a user defined pixel threshold in x or y above
         the median shift. It then takes the median of those cubes and correlates them to the median combined mastercube.
         Removes all those frames below the threshold from the mastercube and rotation file, then saves both as new files
         for use in post processing
@@ -326,12 +305,8 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             plt.close('all')
         correlation_thres = np.median(distances) - np.std(distances)  # threshold is the median of the distances minus one stddev
         
-        good_frames, bad_frames = cube_detect_badfr_correlation(subarray,
-                                                                frame_ref=frame_ref,
-                                                                dist='pearson',
-                                                                threshold=correlation_thres,
-                                                                plot=plot,
-                                                                verbose=verbose)
+        good_frames, bad_frames = cube_detect_badfr_correlation(subarray, frame_ref=frame_ref, dist='pearson',
+                                                                threshold=correlation_thres, plot=plot, verbose=verbose)
         if plot:
             plt.savefig(self.outpath+'frame_correlation.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
