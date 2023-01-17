@@ -161,7 +161,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         elif self.recenter_method == 'as_observed':
             # uses center found in median of all frames, and applies the same x-y shift to all frames
             print('##### Recentering to median of all frames #####', flush=True)
-            subi_size = 7
+            subi_size = 11
             tmp_med = np.median(tmp_tmp, axis=0)
             cy, cx = frame_center(tmp_med)
             if plot:
@@ -171,7 +171,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                             save=self.outpath + 'frame_center_as_observed.pdf')
             tmp_med = tmp_med[np.newaxis, :, :]  # make 3D to use in cube_recenter_2dfit
             recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=subi_size, nproc=self.nproc,
-                                           fwhm=fwhm, debug=verbose, plot=plot)
+                                           fwhm=fwhm, debug=verbose, plot=plot, negative=True)
             sy = np.repeat(recenter[1], len(self.sci_list))  # make array of shifts equal to number of science cubes
             sx = np.repeat(recenter[2], len(self.sci_list))
         else:
