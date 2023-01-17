@@ -20,7 +20,7 @@ from hciplot import plot_frames
 from vip_hci.config import get_available_memory, time_ini, timing
 from vip_hci.fits import open_fits, write_fits
 from vip_hci.preproc import cube_recenter_via_speckles, cube_recenter_2dfit, frame_shift, \
-    cube_detect_badfr_correlation, cube_crop_frames, cube_subsample
+    cube_detect_badfr_correlation, cube_crop_frames, cube_subsample, frame_crop
 from vip_hci.stats import cube_distance
 from vip_hci.var import frame_center
 
@@ -159,20 +159,25 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
             sy = recenter[1]
             sx = recenter[2]
         elif self.recenter_method == 'as_observed':
+            # uses center found in median of all frames, and applies the same x-y shift to all frames
+            print('##### Recentering to median of all frames #####', flush=True)
             tmp_med = np.median(tmp_tmp, axis=0)
-            tmp_med = tmp_med[np.newaxis, :, :]
+            tmp_med = tmp_med[np.newaxis, :, :]  # make 3D to use in cube_recenter_2dfit
             cy, cx = frame_center(tmp_med)
-            recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=5,
-                                           nproc=self.nproc, fwhm=fwhm, debug=True)
-            sy = [float(recenter[1])] * len(self.sci_list)
-            sx = [float(recenter[2])] * len(self.sci_list)
-            plt.savefig(self.outpath+'frame_center_as_observed.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
-            plt.close('all')
+            if plot:
+                med_subframe = frame_crop(tmp_med, size=7, cenxy=(cx, cy), verbose=debug)
+                plot_frames(med_subframe, vmin=np.percentile(med_subframe, 0.5), vmax=np.percentile(med_subframe, 99.5),
+                            label='Median frame for centering', cmap='inferno', dpi=300,
+                            save=self.outpath + 'frame_center_as_observed.pdf')
+            recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=7, nproc=self.nproc,
+                                           fwhm=fwhm, debug=verbose, plot=plot)
+            sy = np.repeat(recenter[1], len(self.sci_list))  # make array of shifts equal to number of science cubes
+            sx = np.repeat(recenter[2], len(self.sci_list))
         else:
-            raise ValueError('Centering method is not recognised. Use either speckle or 2dfit.')
+            raise ValueError("Centering method is not recognised. Use either `speckle', `2dfit' or `as_observed'.")
 
         if plot:  # save the shift plot
-            plt.savefig(self.outpath+'shifts-xy.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
+            plt.savefig(self.outpath+'shifts-xy_{}.pdf'.format(self.recenter_method), bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
         del recenter
 
@@ -200,7 +205,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                 tmp = cube_crop_frames(tmp, crop_sz, force=False, verbose=debug, full_output=False)
             dim = int(self.real_ndit_sci[sc])  # gets the integer dimensions of this science cube
             for dd in range(dim):  # dd goes from 0 to the largest dimension
-                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='opencv')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
+                tmp_tmp[int(np.sum(self.real_ndit_sci[:sc]))+dd] = frame_shift(tmp[dd], shift_y=sy[sc], shift_x=sx[sc], imlib='vip-fft')  # this line applies the shifts to all the science images in the cube the loop is currently on. it also converts all cubes to a single long cube by adding the first dd frames, then the next dd frames from the next cube and so on
                 angles_1dvector[int(np.sum(self.real_ndit_sci[:sc]))+dd] = self.derot_angles_cropped[sc][dd]  # turn 2d rotation file into a vector here same as for the mastercube above
                 # sc*ndit+dd i don't think this line works for variable sized cubes
             if debug:
