@@ -171,7 +171,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
                             save=self.outpath + 'frame_center_as_observed.pdf')
             tmp_med = tmp_med[np.newaxis, :, :]  # make 3D to use in cube_recenter_2dfit
             recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=subi_size, nproc=self.nproc,
-                                           fwhm=fwhm, debug=verbose, plot=plot, negative=True)
+                                           fwhm=fwhm, debug=verbose, plot=plot)
             sy = np.repeat(recenter[1], len(self.sci_list))  # make array of shifts equal to number of science cubes
             sx = np.repeat(recenter[2], len(self.sci_list))
         else:
