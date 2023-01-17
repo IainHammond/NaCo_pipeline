@@ -161,15 +161,16 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         elif self.recenter_method == 'as_observed':
             # uses center found in median of all frames, and applies the same x-y shift to all frames
             print('##### Recentering to median of all frames #####', flush=True)
+            subi_size = 7
             tmp_med = np.median(tmp_tmp, axis=0)
-            tmp_med = tmp_med[np.newaxis, :, :]  # make 3D to use in cube_recenter_2dfit
             cy, cx = frame_center(tmp_med)
             if plot:
-                med_subframe = frame_crop(tmp_med, size=7, cenxy=(cx, cy), verbose=debug)
+                med_subframe = frame_crop(tmp_med, size=subi_size, cenxy=(cx, cy), verbose=debug)
                 plot_frames(med_subframe, vmin=np.percentile(med_subframe, 0.5), vmax=np.percentile(med_subframe, 99.5),
                             label='Median frame for centering', cmap='inferno', dpi=300,
                             save=self.outpath + 'frame_center_as_observed.pdf')
-            recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=7, nproc=self.nproc,
+            tmp_med = tmp_med[np.newaxis, :, :]  # make 3D to use in cube_recenter_2dfit
+            recenter = cube_recenter_2dfit(tmp_med, full_output=True, xy=(cx, cy), subi_size=subi_size, nproc=self.nproc,
                                            fwhm=fwhm, debug=verbose, plot=plot)
             sy = np.repeat(recenter[1], len(self.sci_list))  # make array of shifts equal to number of science cubes
             sx = np.repeat(recenter[2], len(self.sci_list))
