@@ -161,7 +161,7 @@ class calib_dataset:  # this class is for pre-processing of the calibrated data
         elif self.recenter_method == 'as_observed':
             # uses center found in median of all frames, and applies the same x-y shift to all frames
             print('##### Recentering to median of all frames #####', flush=True)
-            subi_size = 11
+            subi_size = 9
             tmp_med = np.median(tmp_tmp, axis=0)
             cy, cx = frame_center(tmp_med)
             if plot:
