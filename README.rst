@@ -73,9 +73,9 @@ out or a bug is fixed:
   $ git add remote upstream https://github.com/IainHammond/NACO_pipeline
 
 
-Requirements (bundled)
+Requirements
 ------------
-The following are installed with the pipeline:
+The following are required for the pipeline:
 
 - VIP: https://github.com/vortex-exoplanet/VIP
 - hciplot: https://github.com/carlos-gg/hciplot
