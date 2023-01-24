@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Apr 12 13:11:12 2020
-@author: iain, lewis
+@author: Iain
 """
 from naco_pip import input_dataset, raw_dataset, calib_dataset, preproc_dataset
 from os import getenv
@@ -16,7 +15,7 @@ try:
 except:
     nproc = int(cpu_count()/2)  # set to cpu_count()/2 for efficiency
 get_available_memory()
-print('Number of CPUs: {} \n'.format(nproc), flush=True)
+print('Using {} CPUs\n'.format(nproc), flush=True)
 
 # VLT/NaCo info, doesn't need to be changed
 wavelength = 3.78e-6  # meters
@@ -53,10 +52,10 @@ clas.find_derot_angles(plot=True, verbose=True, debug=False)
 
 calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', dataset_dict=dataset_dict, final_sz=None)
 calib.dark_subtract(method='median', bad_quadrant=[3], plot=True, verbose=True, debug=False)
-calib.flat_field_correction(debug=False, plot='save')
-calib.correct_nan(debug=False, plot='save')
-calib.correct_bad_pixels(verbose=True, overwrite=False, debug=False, plot='save')
-calib.first_frames_removal(verbose=True, debug=False, plot='save')
+calib.flat_field_correction(plot=True, debug=False)
+calib.correct_nan(debug=False)
+calib.correct_bad_pixels(verbose=True, plot=True, overwrite=False, debug=False)
+calib.first_frames_removal(nrm='auto', verbose=True, plot=True, debug=False)
 calib.get_stellar_psf(nd_filter=False, plot=True, verbose=True, debug=False)
 calib.subtract_sky(npc=1, debug=False, plot='save')
 
