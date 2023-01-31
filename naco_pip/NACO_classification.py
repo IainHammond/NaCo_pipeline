@@ -55,7 +55,10 @@ def find_AGPM(path, size=151, verbose=True, debug=False):
         median_frame = cube.copy()
 
     # define a square with the center being the approximate AGPM/star position
-    median_frame, cornery, cornerx = get_square(median_frame, size=size, y=cy, x=cx, position=True, verbose=debug)
+    if path[-28:-18] >= '2015-12-14':  # star is never placed on the bad quadrant which started 14 December 2015
+        median_frame, cornery, cornerx = get_square(median_frame, size=101, y=cy+5, x=cx+50, position=True, verbose=debug)
+    else:
+        median_frame, cornery, cornerx = get_square(median_frame, size=size, y=cy, x=cx, position=True, verbose=debug)
     # apply low pass filter
     median_frame = frame_filter_lowpass(median_frame, median_size=7, mode='median')
     median_frame = frame_filter_lowpass(median_frame, mode='gauss', fwhm_size=5)
