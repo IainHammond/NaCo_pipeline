@@ -425,9 +425,9 @@ class input_dataset():
         for i in range(len(flux_list)):
             if flux_list[i] < median_flux - 2.5 * sd_flux:
                 sky_list.append(fname_list[i])  # add the sky cube to the sky cube list
-                sky_list_mjd.append(sci_list_mjd[i])  # add the observation to the sky obs list from the sci obs list
-
+                sky_list_mjd.append(sci_list_mjd[i])  # add the time to the sky obs list
                 sci_list.remove(fname_list[i])  # remove the sky cube from the sci list
+                sci_list_mjd.remove(sci_list_mjd[i])  # remove the time from the sci list
             if plot:
                 if flux_list[i] > median_flux - 2.5 * sd_flux:
                     symbol = 'go'
@@ -438,7 +438,7 @@ class input_dataset():
             plt.title('Normalised flux around star')
             plt.ylabel('Normalised flux')
             plt.xlabel('Cube')
-            plt.axhline(y=median_flux - 2.5 * sd_flux, color='black', alpha=0.3, linestyle="--")
+            plt.axhline(y=median_flux - 2.5 * sd_flux / median_flux, color='black', alpha=0.3, linestyle="--")
             plt.savefig(self.outpath + 'Flux_plot.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
 
