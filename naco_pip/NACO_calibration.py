@@ -185,25 +185,33 @@ class raw_dataset:
             set_trace()
         return final_sz
 
-    def dark_subtract(self, bad_quadrant=[3], method='pca', npc_dark=1, imlib='vip-fft', verbose=True, debug=False,
-                      plot=True, NACO=True):
+    def dark_subtract(self, method='pca', npc_dark=1, imlib='vip-fft', NACO=True,
+                      bad_quadrant=[3], verbose=True, debug=False, plot=True):
         """
         Dark subtraction of science, sky and flats using principal component analysis or median subtraction.
         Unsaturated frames are always median dark subtracted.
         All frames are also cropped to a common size.
 
+        Most options are good as default, unless you have an additional bad detector quadrant.
+
         Parameters:
-        ***********
-        bad_quadrant : list, optional
-            list of bad quadrants to ignore. quadrants are in format  2 | 1  Default = 3 (inherently bad NaCO quadrant)
-                                                                      3 | 4
+        ----------
         method : str, default = 'pca'
             'pca' for dark subtraction via principal component analysis
-            'median' for median subtraction of dark
+            'median' for classical median subtraction of dark
         npc_dark : int, optional
-            number of principal components subtracted during dark subtraction. Default = 1 (most variance in the PCA library)
-        plot: bool, optional
-            Whether to save plots.
+            Number of principal components subtracted during dark subtraction. Default = 1 (most variance in the PCA library)
+        NACO : bool, optional
+            If the NACO detector is being used or not. For masking known bad segments of the detector.
+        bad_quadrant : list, optional
+            List of bad quadrants to ignore. quadrants are in format  2 | 1  Default = 3 (inherently bad NaCO quadrant)
+                                                                      3 | 4
+        plot : bool, optional
+            Whether to save plots to pdf.
+        verbose : bool, optional
+            Prints useful information.
+        debug : bool, optional
+            Prints significantly more information.
         """
         sci_list = []
         with open(self.inpath + "sci_list.txt", "r") as f:
@@ -265,20 +273,7 @@ class raw_dataset:
 
         pixel_scale = self.dataset_dict['pixel_scale']
 
-        tmp = np.zeros([len(flat_dark_list), self.com_sz, self.com_sz])
-
         master_all_darks = []
-
-        # cropping the flat dark cubes to com_sz
-        for fd, fd_name in enumerate(flat_dark_list):
-            tmp_tmp = open_fits(self.inpath + fd_name, verbose=debug)
-            tmp[fd] = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
-            if (fd == 0) and verbose:
-                print('Flat dark dimensions: {}'.format(tmp[fd].shape), flush=True)
-            master_all_darks.append(tmp[fd])
-        write_fits(self.outpath + 'flat_dark_cube.fits', tmp, verbose=debug)
-        if verbose:
-            print('Flat dark cubes have been cropped and saved', flush=True)
 
         tmp = np.zeros([len(sci_dark_list), self.com_sz, self.com_sz])
 
@@ -311,7 +306,7 @@ class raw_dataset:
 
         write_fits(self.outpath + 'sci_dark_cube.fits', tmp, verbose=debug)
         if verbose:
-            print('Sci dark cubes have been cropped and saved', flush=True)
+            print('Science dark cubes have been cropped and saved', flush=True)
 
         tmp = np.zeros([len(unsat_dark_list), self.com_sz, self.com_sz])
 
@@ -366,10 +361,24 @@ class raw_dataset:
                         else:
                             tmp = np.append(tmp, tmp_tmp)
                         master_all_darks.append(np.median(tmp[-nz:], axis=0))
-
         write_fits(self.outpath + 'unsat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
-            print('Unsat dark cubes have been cropped and saved')
+            print('Unsat dark cubes have been cropped and saved', flush=True)
+
+        # flat darks
+        # cropping the flat dark cubes to com_sz
+        tmp = np.zeros([len(flat_dark_list), self.com_sz, self.com_sz])
+        for fd, fd_name in enumerate(flat_dark_list):
+            tmp_tmp = open_fits(self.inpath + fd_name, verbose=debug)
+            tmp[fd] = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
+            if (fd == 0) and verbose:
+                print('Flat dark dimensions: {}'.format(tmp[fd].shape), flush=True)
+            master_all_darks.append(tmp[fd])
+        write_fits(self.outpath + 'flat_dark_cube.fits', tmp, verbose=debug)
+        if verbose:
+            print('Flat dark cubes from file have been cropped and saved', flush=True)
+
+        if verbose:
             print('Total of {} median dark frames. Saving dark cube to fits file...'.format(len(master_all_darks)), flush=True)
 
         # convert master all darks to numpy array here
@@ -1409,11 +1418,6 @@ class raw_dataset:
 
         self.com_sz = int(open_fits(self.outpath + 'common_sz.fits', verbose=debug)[0])
 
-        n_sci = len(sci_list)
-        ndit_sci = self.dataset_dict['ndit_sci']
-        n_sky = len(sky_list)
-        ndit_sky = self.dataset_dict['ndit_sky']
-
         master_flat_frame = open_fits(self.outpath + 'master_flat_field.fits', verbose=debug)
         # Create bpix map
         bpix = np.where(np.abs(master_flat_frame - 1.09) > 0.41)  # i.e. for QE < 0.68 and QE > 1.5
@@ -1549,14 +1553,15 @@ class raw_dataset:
             if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
                 # first with the bp max defined from the flat field (without protecting radius)
                 tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug, nproc=self.nproc)
                 write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # second, residual hot pixels
             if overwrite or not (isfile(self.outpath + '2_bpix_corr2_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_' + fits_name)):
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug,
+                                                       nproc=self.nproc)
                 else:
                     tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
                                                         protect_mask=10, verbose=debug)
@@ -1584,7 +1589,7 @@ class raw_dataset:
             if overwrite or not isfile(self.outpath + '2_bpix_corr_' + fits_name):
                 # first with the bp max defined from the flat field (without protecting radius)
                 tmp = open_fits(self.outpath + '2_crop_' + fits_name, verbose=debug)
-                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug)
+                tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map, correct_only=True, verbose=debug, nproc=self.nproc)
                 write_fits(self.outpath + '2_bpix_corr_' + fits_name, tmp_tmp, verbose=debug)
             # timing(t0)
             # second, residual hot pixels
@@ -1592,7 +1597,8 @@ class raw_dataset:
                 tmp_tmp = open_fits(self.outpath + '2_bpix_corr_' + fits_name, verbose=debug)
                 if tmp_tmp.ndim == 3:
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug,
+                                                       nproc=self.nproc)
                 else:
                     tmp_tmp = frame_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
                                                         protect_mask=10, verbose=debug)
@@ -1621,14 +1627,15 @@ class raw_dataset:
                 if overwrite or not isfile(self.outpath + '2_bpix_corr_unsat_' + fits_name):
                     # first with the bp max defined from the flat field (without protecting radius)
                     tmp = open_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, verbose=debug)
-                    tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, correct_only=True, verbose=debug)
+                    tmp_tmp = cube_fix_badpix_clump(tmp, bpm_mask=bpix_map_unsat, correct_only=True, verbose=debug, nproc=self.nproc)
                     write_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
 
                 if overwrite or not (isfile(self.outpath + '2_bpix_corr2_unsat_' + fits_name) and isfile(self.outpath + '2_bpix_corr2_map_unsat_' + fits_name)):
                     # second, residual hot pixels
                     tmp_tmp = open_fits(self.outpath + '2_bpix_corr_unsat_' + fits_name, verbose=debug)
                     tmp_tmp = cube_fix_badpix_isolated(tmp_tmp, bpm_mask=None, sigma_clip=8, num_neig=5, size=5,
-                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug)
+                                                       protect_mask=10, frame_by_frame=frame_by_frame, verbose=debug,
+                                                       nproc=self.nproc)
                     # create a bpm for the 2nd correction
                     tmp_tmp_tmp = tmp_tmp - tmp
                     tmp_tmp_tmp = np.where(tmp_tmp_tmp != 0, 1, 0)
@@ -1853,22 +1860,18 @@ class raw_dataset:
         if verbose:
             print('The first {} frames were removed and the flux rescaled for SKY cubes'.format(nfr_rm), flush=True)
 
-        if self.new_ndit_sci == 3:
-            # FOR SCI
-            for sc, fits_name in enumerate(sci_list):
-                tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
-                if sc == 0:
-                    cube_meds = np.zeros([n_sci, tmp.shape[-2], tmp.shape[-1]])
+        # Science master cube for identifying dust specks later on
+        for sc, fits_name in enumerate(sci_list):
+            tmp = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
+            if sc == 0:
+                cube_meds = np.zeros([n_sci, tmp.shape[-2], tmp.shape[-1]])
+            if tmp.ndim == 3:
                 cube_meds[sc] = np.median(tmp, axis=0)
-                
-        else:  # if it's a single frame
-            for sc, fits_name in enumerate(sci_list):
-                tmp = open_fits(self.outpath + '2_bpix_corr2_' + fits_name, verbose=debug)
-                if sc == 0:
-                    cube_meds = np.zeros([n_sci, tmp.shape[-2], tmp.shape[-1]])
+            elif tmp.ndim == 2:
                 cube_meds[sc] = tmp.copy()
-
-        write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", np.median(cube_meds, axis=0), verbose=debug)  # USED LATER to identify dust specks
+            else:
+                raise ValueError('A science cube has dimensions outside the expected range.')
+        write_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", np.median(cube_meds, axis=0), verbose=debug)
             
         if len(unsat_list) > 0:
             for un, fits_name in enumerate(unsat_list):
