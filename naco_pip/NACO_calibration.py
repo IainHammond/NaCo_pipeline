@@ -2205,10 +2205,6 @@ class raw_dataset:
         plot : Save relevant plots
         remove options: True, False. Cleans file for unused fits
         """
-
-        # set up a check for necessary files
-        # t0 = time_ini()
-
         sky_list = []
         with open(self.inpath + "sky_list.txt", "r") as f:
             tmp = f.readlines()
@@ -2228,12 +2224,12 @@ class raw_dataset:
             for sci in sci_list:
                 f.write(sci + '\n')
 
-        if isfile(self.outpath + 'fwhm.fits'):
+        if fwhm is None and isfile(self.outpath + 'fwhm.fits'):
             self.fwhm = open_fits(self.outpath + 'fwhm.fits', verbose=debug)[0]
         elif fwhm is not None:
             self.fwhm = fwhm
         elif fwhm is not None:
-            raise NameError('FWHM of the star is not defined. Run: get_stellar_psf()')
+            raise NameError('FWHM of the star is not defined nor provided. Run: get_stellar_psf()')
 
         if not isfile(self.outpath + '3_rmfr_' + sci_list[-1]):
             raise NameError('Missing 3_rmfr_*.fits. Run: first_frame_removal()')
@@ -2376,7 +2372,8 @@ class raw_dataset:
                 except ValueError:
                     xy_cube0[dd, 0], xy_cube0[dd, 1] = dust_xy[dd]
                     print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd), flush=True)
-            print("Note: the shifts should be small if the eye coords of each dust grain were well provided!", flush=True)
+            if verbose:
+                print("Note: the shifts should be small.", flush=True)
     
             # then it finds the centroids in all other frames (SCI+SKY) to determine the relative shifts to be applied to align all frames
             shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
@@ -2564,7 +2561,7 @@ class raw_dataset:
 
             if npc is None or isinstance(npc, list):  # checks whether none or list
                 if npc is None:
-                    nnpc_tmp = np.array([1, 2, 3, 4, 5, 10, 20, 40, 60])  # the number of principle components to test
+                    nnpc_tmp = np.array([1, 2, 3, 4, 5, 10, 20, 40, 60])  # the number of principal components to test
                     # nnpc_tmp = np.array([1,2])
                 else:
                     nnpc_tmp = npc  # takes the list
@@ -2589,9 +2586,9 @@ class raw_dataset:
                         np.sum(self.real_ndit_sky[:idx_sky + 1]))]  # gets the sky cube?
                     med_sky = np.median(pca_lib, axis=0)  # takes median of the sky cubes
                     mean_std = np.zeros(
-                        nnpc.shape[0])  # zeros array with length the number of principle components to test
+                        nnpc.shape[0])  # zeros array with length the number of principal components to test
                     hmean_std = np.zeros(nnpc.shape[0])  # same as above for some reason?
-                    for nn, npc_tmp in enumerate(nnpc):  # iterate over the number of principle components to test
+                    for nn, npc_tmp in enumerate(nnpc):  # iterate over the number of principal components to test
                         tmp_tmp = cube_subtract_sky_pca(tmp - med_sky, all_skies - med_sky,
                                                         mask_AGPM, ref_cube=None,
                                                         ncomp=npc_tmp)  # runs PCA sky subtraction
@@ -2611,7 +2608,7 @@ class raw_dataset:
                         print("***** SCI #{:.0f} - OPTIMAL NPC = {:.0f} *****\n".format(sc, npc_opt[sc]), flush=True)
                 npc = int(np.median(npc_opt))
                 if verbose:
-                    print('##### Optimal number of principle components for sky subtraction:', npc, '#####', flush=True)
+                    print('##### Optimal number of principal components for sky subtraction:', npc, '#####', flush=True)
                 with open(self.outpath + "npc_sky_subtract.txt", "w") as f:
                     f.write('{}'.format(npc))
                 write_fits(self.outpath + "TMP_npc_opt.fits", npc_opt, verbose=debug)
@@ -2719,35 +2716,26 @@ class raw_dataset:
             if plot:
                 if npc is None:
                     # ... IF PCA WITH DIFFERENT NPCs
-                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1]), axis=0)
-                    tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(1) + sci_list[-1]),
-                                    axis=0)
-                    tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(5) + sci_list[-1]),
-                                        axis=0)
-                    tmp_tmp_tmp = np.median(
-                        open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(100) + sci_list[-1]), axis=0)
-                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(1) + sci_list[-1]),
-                                     axis=0)
-                    tmp_tmp2 = np.median(
-                        open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(5) + sci_list[-1]), axis=0)
-                    tmp_tmp_tmp2 = np.median(
-                        open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(100) + sci_list[-1]), axis=0)
+                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1], verbose=debug), axis=0)
+                    tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(1) + sci_list[-1], verbose=debug), axis=0)
+                    tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(5) + sci_list[-1], verbose=debug), axis=0)
+                    tmp_tmp_tmp = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_'.format(100) + sci_list[-1], verbose=debug ), axis=0)
+                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(1) + sci_list[-1], verbose=debug), axis=0)
+                    tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(5) + sci_list[-1], verbose=debug), axis=0)
+                    tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(100) + sci_list[-1]), verbose=debug, axis=0)
 
-                    plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
-                                save=self.outpath + 'SCI_PCA_sky_subtraction')
+                    plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), dpi=300, rows=2,
+                                cmap='inferno', save=self.outpath + 'SCI_PCA_sky_subtraction.pdf')
                 else:
                     # ... IF PCA WITH A SPECIFIC NPC
-                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0]), axis=0)
-                    old_tmp_tmp = np.median(
-                        open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[int(n_sci / 2)]), axis=0)
-                    old_tmp_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1]),
-                                                axis=0)
-                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[0]), axis=0)
-                    tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[int(n_sci / 2)]),
-                                         axis=0)
-                    tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1]), axis=0)
-                    plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
-                                save=self.outpath + 'SCI_PCA_sky_subtraction.pdf')
+                    old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0], verbose=debug), axis=0)
+                    old_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[int(n_sci / 2)], verbose=debug), axis=0)
+                    old_tmp_tmp_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1], verbose=debug), axis=0)
+                    tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[0], verbose=debug), axis=0)
+                    tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[int(n_sci / 2)], verbose=debug), axis=0)
+                    tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1], verbose=debug), axis=0)
+                    plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2), rows=2,
+                                dpi=300, cmap='inferno', save=self.outpath + 'SCI_PCA_sky_subtraction.pdf')
 
         # time_fin(t0)
 
@@ -2759,7 +2747,6 @@ class raw_dataset:
         # os.system("rm "+self.outpath+'common_sz.fits')
         # os.system("rm "+self.outpath+'real_ndit_sci_sky.fits')
         # os.system("rm "+self.outpath+'new_ndit_sci_sky_unsat.fits')
-        # #os.system("rm "+self.outpath+'fwhm.fits') # not removing this as sometimes we'll need to open the fwhm.fits file in preproc
         # #os.system("rm "+self.outpath+'final_sz.fits')
         # os.system("rm "+self.outpath+'flat_dark_cube.fits')
         # os.system("rm "+self.outpath+'master_bpix_map.fits')
