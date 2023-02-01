@@ -29,7 +29,6 @@ Capability
 Known Issues:
 ------------
 - occasional imperfect horizontal bar correction with PCA dark subtraction
-- slow correction of bad pixels
 
 Installation
 ------------
