@@ -2202,7 +2202,7 @@ class raw_dataset:
         npc : list, None, integer
         mode : string: 'PCA', 'median'
         fwhm : float or None. If not None, supersedes value from get_stellar_psf
-        plot options: 'save', 'show', None. Show or save relevant plots for debugging
+        plot : Save relevant plots
         remove options: True, False. Cleans file for unused fits
         """
 
@@ -2283,10 +2283,8 @@ class raw_dataset:
                 hpf_sz += 1
             tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
                                         kernel_size=hpf_sz, fwhm_size=self.fwhm)
-            if plot == 'show':
-                plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
-                            dpi=300)
-            if plot == 'save':
+
+            if plot:
                 plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
                             dpi=300, save=self.outpath + 'Isolated_grains.pdf')
             # then use the automatic detection tool
@@ -2520,9 +2518,6 @@ class raw_dataset:
                     old_tmp_tmp = np.median(old_tmp_tmp, axis=0)
                     tmp = np.median(tmp, axis=0)
                     tmp_tmp = np.median(tmp_tmp, axis=0)
-            if plot == 'show':
-                plot_frames((old_tmp, old_tmp_tmp, tmp, tmp_tmp))
-            if plot == 'save':
                 plot_frames((old_tmp, old_tmp_tmp, tmp, tmp_tmp), save=self.outpath + 'SCI_median_sky_subtraction')
 
         ############## PCA ##############
@@ -2559,11 +2554,6 @@ class raw_dataset:
                 if tmp.ndim == 3:
                     tmp = np.median(tmp, axis=0)
                     tmp_tmp = np.median(tmp_tmp, axis=0)
-            if plot == 'show':
-                plot_frames((tmp_tmp, tmp, mask_AGPM), vmin=(np.percentile(tmp_tmp, 0.1), np.percentile(tmp, 0.1), 0),
-                            vmax=(np.percentile(tmp_tmp, 99.9), np.percentile(tmp, 99.9), 1),
-                            label=('Science frame', 'Sky frame', 'Mask'), dpi=300, title='PCA Sky Subtract Mask')
-            if plot == 'save':
                 plot_frames((tmp_tmp, tmp, mask_AGPM), vmin=(np.percentile(tmp_tmp, 0.1), np.percentile(tmp, 0.1), 0),
                             vmax=(np.percentile(tmp_tmp, 99.9), np.percentile(tmp, 99.9), 1),
                             label=('Science frame', 'Sky frame', 'Mask'), dpi=300,
@@ -2742,11 +2732,9 @@ class raw_dataset:
                         open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(5) + sci_list[-1]), axis=0)
                     tmp_tmp_tmp2 = np.median(
                         open_fits(self.outpath + '4_sky_subtr_npc{}_no_shift_'.format(100) + sci_list[-1]), axis=0)
-                    if plot == 'show':
-                        plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2))
-                    if plot == 'save':
-                        plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
-                                    save=self.outpath + 'SCI_PCA_sky_subtraction')
+
+                    plot_frames((tmp, tmp_tmp, tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
+                                save=self.outpath + 'SCI_PCA_sky_subtraction')
                 else:
                     # ... IF PCA WITH A SPECIFIC NPC
                     old_tmp = np.median(open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0]), axis=0)
@@ -2758,11 +2746,8 @@ class raw_dataset:
                     tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[int(n_sci / 2)]),
                                          axis=0)
                     tmp_tmp_tmp2 = np.median(open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1]), axis=0)
-                    if plot == 'show':
-                        plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2))
-                    if plot == 'save':
-                        plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
-                                    save=self.outpath + 'SCI_PCA_sky_subtraction.pdf')
+                    plot_frames((old_tmp, old_tmp_tmp, old_tmp_tmp_tmp, tmp2, tmp_tmp2, tmp_tmp_tmp2),
+                                save=self.outpath + 'SCI_PCA_sky_subtraction.pdf')
 
         # time_fin(t0)
 

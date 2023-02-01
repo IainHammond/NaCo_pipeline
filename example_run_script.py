@@ -57,7 +57,7 @@ calib.correct_nan(debug=False)
 calib.correct_bad_pixels(verbose=True, plot=True, overwrite=False, debug=False)
 calib.first_frames_removal(nrm='auto', verbose=True, plot=True, debug=False)
 calib.get_stellar_psf(nd_filter=False, plot=True, verbose=True, debug=False)
-calib.subtract_sky(npc=1, debug=False, plot='save')
+calib.subtract_sky(npc=1, debug=False, plot=True)
 
 preproc = calib_dataset(inpath=path+'calibrated/', outpath=path+'preproc/', dataset_dict=dataset_dict,
                         recenter_method='speckle', recenter_model='gauss', coro=True)
