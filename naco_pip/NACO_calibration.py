@@ -2277,12 +2277,8 @@ class raw_dataset:
             hpf_sz = int(2 * self.fwhm)
             if not hpf_sz % 2:
                 hpf_sz += 1
-            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
-                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz)
 
-            if plot:
-                plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
-                            dpi=300, save=self.outpath + 'Isolated_grains.pdf')
             # then use the automatic detection tool
             snr_thr = 10
             snr_thr_all = 30
@@ -2317,12 +2313,11 @@ class raw_dataset:
             test_xy = np.zeros([ndust, 2])
             fwhm_xy = np.zeros([ndust, 2])
             tmp = open_fits(self.outpath + "TMP_med_bef_SKY_subtr.fits", verbose=debug)
-            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz,
-                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            tmp = frame_filter_highpass(tmp, mode='median-subt', median_size=hpf_sz)
             bad_dust = []
             crop_sz = int(5 * self.resel_ori)
             if crop_sz % 2 == 0:
-                crop_sz = crop_sz - 1
+                crop_sz -= 1
     
             for dd in range(ndust):
                 table_gaus = fit_2dgaussian(tmp, crop=True, cent=dust_xy_tmp[dd],
@@ -2333,7 +2328,6 @@ class raw_dataset:
                 test_xy[dd, 0] = table_gaus['centroid_x'][0]
                 fwhm_xy[dd, 1] = table_gaus['fwhm_y'][0]
                 fwhm_xy[dd, 0] = table_gaus['fwhm_x'][0]
-                amplitude = table_gaus['amplitude'][0]
                 if fwhm_xy[dd, 1] / fwhm_xy[dd, 0] < 0.8 or fwhm_xy[dd, 1] / fwhm_xy[dd, 0] > 1.2:
                     bad_dust.append(dd)
     
@@ -2348,8 +2342,7 @@ class raw_dataset:
             crop_sz = int(3 * self.resel_ori)
             tmp_cube = open_fits(self.outpath + '3_rmfr_' + sci_list[0], verbose=debug)
             tmp_med = np.median(tmp_cube, axis=0)
-            tmp = frame_filter_highpass(tmp_med, mode='median-subt', median_size=hpf_sz,
-                                        kernel_size=hpf_sz, fwhm_size=self.fwhm)
+            tmp = frame_filter_highpass(tmp_med, mode='median-subt', median_size=hpf_sz)
             for dd in range(ndust):
                 try:
                     df = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz, fwhmx=self.resel_ori,
@@ -2374,7 +2367,12 @@ class raw_dataset:
                     print("!!! Gaussian fit failed for dd = {}. We set position to first (eye-)guess position.".format(dd), flush=True)
             if verbose:
                 print("Note: the shifts should be small.", flush=True)
-    
+
+            if plot:
+                plot_frames(tmp, title='Isolated dust grains', vmax=np.percentile(tmp, 99.9), vmin=np.percentile(tmp, 0.1),
+                            dpi=300, cmap='inferno', label=sci_list[0] + '\nHighpass Filtered',
+                            circle=tuple(dust_xy), save=self.outpath + 'Isolated_grains.pdf')
+
             # then it finds the centroids in all other frames (SCI+SKY) to determine the relative shifts to be applied to align all frames
             shifts_xy_sci = np.zeros([ndust, n_sci, self.new_ndit_sci, 2])
             shifts_xy_sky = np.zeros([ndust, n_sky, self.new_ndit_sky, 2])
@@ -2382,16 +2380,13 @@ class raw_dataset:
             # to ensure crop size is odd. if its even, +1 to crop_sz
             if crop_sz % 2 == 0:
                 crop_sz += 1
-    
-            # t0 = time_ini()
-    
+
             # SCI frames
             bar = pyprind.ProgBar(n_sci, stream=1, title='Finding shifts to be applied to the SCI frames')
             for sc, fits_name in enumerate(sci_list):
                 tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
                 for zz in range(tmp_cube.shape[0]):
-                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
-                                                kernel_size=hpf_sz, fwhm_size=self.fwhm)
+                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz)
                     for dd in range(ndust):
                         try:  # note we have to do try, because for some (rare) channels the gaussian fit fails
                             y_tmp, x_tmp = fit_2dgaussian(tmp, crop=True, cent=dust_xy[dd], cropsize=crop_sz,
@@ -2412,8 +2407,7 @@ class raw_dataset:
             for sk, fits_name in enumerate(sky_list):
                 tmp_cube = open_fits(self.outpath + '3_rmfr_' + fits_name, verbose=debug)
                 for zz in range(tmp_cube.shape[0]):
-                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz,
-                                                kernel_size=hpf_sz, fwhm_size=self.fwhm)
+                    tmp = frame_filter_highpass(tmp_cube[zz], mode='median-subt', median_size=hpf_sz)
                     # check tmp after highpass filter
                     for dd in range(ndust):
                         try:
@@ -2498,24 +2492,24 @@ class raw_dataset:
             bar = pyprind.ProgBar(n_sci, stream=1, title='Subtracting sky with closest frame in time')
             for sc, fits_name in enumerate(sci_list_test):
                 tmp_tmp_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + fits_name, verbose=debug)
-                tmpSKY2 = np.zeros_like(tmp_tmp_tmp_tmp)  ###
                 _, head_tmp = open_fits(self.inpath + fits_name, header=True, verbose=debug)
                 sc_time = head_tmp['MJD-OBS']
                 idx_sky = find_nearest(master_sky_times, sc_time)
                 tmpSKY2 = tmp_tmp_tmp_tmp - master_skies2[idx_sky]
-                write_fits(self.outpath + '4_sky_subtr_' + fits_name, tmpSKY2, verbose=debug)  ###
+                write_fits(self.outpath + '4_sky_subtr_' + fits_name, tmpSKY2, verbose=debug)
             bar.update()
             if plot:
-                old_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0])
-                old_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1])
-                tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[0])
-                tmp_tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1])
+                old_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[0], verbose=debug)
+                old_tmp_tmp = open_fits(self.outpath + '3_AGPM_aligned_' + sci_list[-1], verbose=debug)
+                tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[0], verbose=debug)
+                tmp_tmp = open_fits(self.outpath + '4_sky_subtr_' + sci_list[-1], verbose=debug)
                 if old_tmp.ndim == 3:
                     old_tmp = np.median(old_tmp, axis=0)
                     old_tmp_tmp = np.median(old_tmp_tmp, axis=0)
                     tmp = np.median(tmp, axis=0)
                     tmp_tmp = np.median(tmp_tmp, axis=0)
-                plot_frames((old_tmp, old_tmp_tmp, tmp, tmp_tmp), save=self.outpath + 'SCI_median_sky_subtraction')
+                plot_frames((old_tmp, old_tmp_tmp, tmp, tmp_tmp), dpi=300, cmap='inferno',
+                            save=self.outpath + 'SCI_median_sky_subtraction.pdf')
 
         ############## PCA ##############
 
