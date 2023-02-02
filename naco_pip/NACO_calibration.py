@@ -2096,7 +2096,7 @@ class raw_dataset:
         write_fits(self.outpath + 'tmp_master_unsat_psf.fits', psf_tmp, verbose=debug)
 
         good_unsat_idx, bad_unsat_list = cube_detect_badfr_pxstats(psf_tmp, mode='circle', in_radius=5, top_sigma=1,
-                                                                   low_sigma=0.2, window=10, plot=True, verbose=verbose)
+                                                                   low_sigma=0.8, window=10, plot=True, verbose=verbose)
         if plot:
             plt.savefig(self.outpath + 'unsat_bad_frame_detection.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
