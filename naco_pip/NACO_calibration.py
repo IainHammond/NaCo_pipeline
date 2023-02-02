@@ -2159,7 +2159,7 @@ class raw_dataset:
         data_frame = fit_2dgaussian(psf_med, crop=False, cent=None, fwhmx=self.resel_ori, fwhmy=self.resel_ori, theta=0,
                                     threshold=False, sigfactor=6, full_output=True, debug=plot)
         if plot:  # saves the model
-            plt.savefig(self.outpath + 'PSF_fitting.pdf')
+            plt.savefig(self.outpath + 'PSF_fitting.pdf', bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
 
         data_frame = data_frame.astype('float64')
