@@ -70,7 +70,7 @@ postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dat
                                                                                                                              # Components), tuple or list for a range and step
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                         first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], do_snr_map=True,
-                        do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, coronagraph=True,
+                        do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
                         overwrite=True, verbose=True, debug=False)
 # only to be run if there is a source/blob detected by running post-processing
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,

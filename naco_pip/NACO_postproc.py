@@ -48,7 +48,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], do_snr_map=True,
-                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA=1, coronagraph=True,
+                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
                        overwrite=True, verbose=True, debug=False):
         """ 
         For post-processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
@@ -97,8 +97,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             See description of pca_annular() for more details. Applied to full frame PCA-ADI in the case of a planet.
             Reduces the number of frames used to build the PCA library and increases run time but reduces companion
             self-subtraction, especially at close separations
-        mask_IWA : int, default 1
-            Size of the numerical mask that hides the inner part of post-processed images. Provided in terms of FWHM.
+        mask_IWA_px : int, default 5
+            Size of the numerical mask that hides the inner part of post-processed images, in pixels.
         coronagraph : bool, default is True
             Set to True if the observation used an AGPM coronagraph
         overwrite : bool, default True
@@ -140,6 +140,9 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         derot_angles = open_fits(self.inpath + derot_ang_name, verbose=verbose) + tn_shift
         cy, cx = frame_center(ADI_cube[0], verbose=debug)
         svd_mode = 'lapack'  # can be changed to a different method for SVD. Note randsvd is not really supported
+        if verbose:
+            print("Adopted mask size: {:.0f} px".format(mask_IWA_px), flush=True)
+        mask_IWA = mask_IWA_px / self.fwhm  # for functions that take the mask in units of FWHM
 
         rot_options = {"mask_val": 0, "edge_blend": 'interp', "interp_zeros": True}
         algo_dict = {"mask_val": 0, "edge_blend": 'interp', "interp_zeros": True}
@@ -188,9 +191,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                          9.9917012e-01, 9.9915260e-01, 9.9922234e-01]])
         else:
             transmission = None
-        mask_IWA_px = mask_IWA * self.fwhm
-        if verbose:
-            print("adopted mask size: {:.0f} px".format(mask_IWA_px), flush=True)
 
         ann_sz = 3  # if PCA-ADI in concentric annuli, this is the size of the annulus/i in FWHM
         ref_cube = None  # if any, load here a centered calibrated cube of reference star observations - would then be
@@ -331,7 +331,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 for nn, npc in enumerate(test_pcs_full):
                     if not isfile(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits') or overwrite:
                         tmp_tmp[nn] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, ncomp=int(npc),
-                                          svd_mode=svd_mode, scaling=None, mask_center_px=0,
+                                          svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
                                           source_xy=planet_pos, delta_rot=delta_rot, fwhm=self.fwhm, collapse='median',
                                           verbose=verbose, nproc=self.nproc, **rot_options)
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
