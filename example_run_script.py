@@ -45,26 +45,26 @@ dataset_dict = {'wavelength': wavelength, 'size_telescope': size_telescope, 'pix
 path = '/your/common/path/to/data/'
 
 clas = input_dataset(inpath=path + 'raw/', outpath=path + 'classified/', dataset_dict=dataset_dict, coro=True)
-clas.bad_columns(correct=True, overwrite=False, sat_val=32768, plot=True, verbose=True, debug=False)
+clas.bad_columns(correct=True, sat_val=32768, overwrite=False, plot=True, verbose=True, debug=False)
 clas.mk_dico(plot=True, verbose=True, debug=False)
 clas.find_sky_in_sci_cube(nres=3, coro=True, plot=True, verbose=True, debug=False)
 clas.find_derot_angles(plot=True, verbose=True, debug=False)
 
 calib = raw_dataset(inpath=path+'classified/', outpath=path+'calibrated/', dataset_dict=dataset_dict, final_sz=None)
 calib.dark_subtract(method='median', bad_quadrant=[3], plot=True, verbose=True, debug=False)
-calib.flat_field_correction(plot=True, debug=False)
+calib.flat_field_correction(plot=True, verbose=True, debug=False)
 calib.correct_nan(overwrite=False, verbose=True, debug=False)
-calib.correct_bad_pixels(verbose=True, plot=True, overwrite=False, debug=False)
-calib.first_frames_removal(nrm='auto', verbose=True, plot=True, debug=False)
+calib.correct_bad_pixels(overwrite=False, plot=True, verbose=True, debug=False)
+calib.first_frames_removal(nrm='auto', plot=True, verbose=True, debug=False)
 calib.get_stellar_psf(nd_filter=False, plot=True, verbose=True, debug=False)
-calib.subtract_sky(mode='pca', npc=1, debug=False, plot=True)
+calib.subtract_sky(mode='pca', npc=1, plot=True, verbose=True, debug=False)
 
 preproc = calib_dataset(inpath=path+'calibrated/', outpath=path+'preproc/', dataset_dict=dataset_dict,
                         recenter_method='speckle', recenter_model='gauss', coro=True)
-preproc.recenter(sigfactor=4, subi_size=41, crop_sz=251, verbose=True, debug=False, plot=True, coro=True)
-preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, debug=False, plot=True)
+preproc.recenter(sigfactor=4, subi_size=41, crop_sz=251, coro=True, plot=True, verbose=True, debug=False)
+preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, plot=True, verbose=True, debug=False)
 preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
-preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annular and contrast curves, reduces S/N
+preproc.median_binning(binning_factor=1, verbose=True, debug=False)  # speeds up PCA-ADI annular and contrast curves, reduces S/N
 
 postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dataset_dict=dataset_dict, nproc=nproc,
                            npc=(1, 15)) # npc can be int (for a single number of Principal Components), tuple or list for a range and step
