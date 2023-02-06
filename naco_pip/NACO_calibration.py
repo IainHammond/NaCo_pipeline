@@ -2509,6 +2509,7 @@ class raw_dataset:
 
         # Finally, perform sky subtraction:
         ################## MEDIAN ##################################
+
         if mode == 'median':
             sci_list_test = [sci_list[0], sci_list[int(n_sci / 2)],
                              sci_list[-1]]  # first test then do with all sci_list
@@ -2589,17 +2590,15 @@ class raw_dataset:
                             save=self.outpath + 'PCA_sky_subtract_mask.pdf')
 
             if verbose:
-                print('Beginning PCA subtraction', flush=True)
+                print('Beginning PCA sky subtraction', flush=True)
 
             if npc is None or isinstance(npc, list):  # checks whether none or list
                 if npc is None:
                     nnpc_tmp = np.array([1, 2, 3, 4, 5, 10, 20, 40, 60])  # the number of principal components to test
                     # nnpc_tmp = np.array([1,2])
                 else:
-                    nnpc_tmp = npc  # takes the list
-                nnpc = np.array([pc for pc in nnpc_tmp if pc < n_sky * self.new_ndit_sky])  # no idea
-
-                ################### start new stuff
+                    nnpc_tmp = npc  # takes the list provided
+                nnpc = np.array([pc for pc in nnpc_tmp if pc < n_sky * self.new_ndit_sky])
 
                 test_idx = [0, int(len(sci_list) / 2),
                             len(sci_list) - 1]  # first, middle and last index in science list
@@ -2744,7 +2743,7 @@ class raw_dataset:
                     system("rm " + self.outpath + '3_AGPM_aligned_' + fits_name)
 
             if verbose:
-                print('Finished PCA dark subtraction', flush=True)
+                print('Finished PCA sky subtraction', flush=True)
             if plot:
                 if npc is None:
                     # ... IF PCA WITH DIFFERENT NPCs
