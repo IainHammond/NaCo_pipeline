@@ -66,8 +66,8 @@ preproc.bad_frame_removal(pxl_shift_thres=0.4, sub_frame_sz=31, verbose=True, de
 preproc.crop_cube(arcsecond_diameter=3, verbose=True, debug=False)  # required for PCA-ADI annular and contrast curves
 preproc.median_binning(binning_factor=1, verbose=True)  # speeds up PCA-ADI annular and contrast curves, reduces S/N
 
-postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dataset_dict=dataset_dict, nproc=nproc, npc=20) # npc can be int (for a single number of Principal
-                                                                                                                             # Components), tuple or list for a range and step
+postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dataset_dict=dataset_dict, nproc=nproc,
+                           npc=(1, 15)) # npc can be int (for a single number of Principal Components), tuple or list for a range and step
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                         first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], do_snr_map=True,
                         do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
