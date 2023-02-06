@@ -34,6 +34,7 @@ from naco_pip.NACO_classification import find_AGPM
 
 matplotlib.use('Agg')  # show option for plot is unavailable with this option
 
+
 def find_shadow_list(self, file_list, threshold=None, plot=True, verbose=True, debug=False):
     """
     In coronographic NACO data there is a Lyot stop causing an outer shadow on the detector.
@@ -109,6 +110,7 @@ def find_filtered_max(frame):
     ycom, xcom = np.unravel_index(np.argmax(frame), frame.shape)
     return [ycom, xcom]
 
+
 class raw_dataset:
     """
     In order to successfully run the pipeline you must run the methods in following order:
@@ -163,9 +165,16 @@ class raw_dataset:
 
     def get_final_sz(self, final_sz=None, verbose=True, debug=False):
         """
-        Update the cropping size as you wish.
+        Updates the cropping size to a provided interger or finds the appropriate cropping size.
 
-        debug: enters Python debugger after finding the size
+        Parameters
+        ----------
+        final_sz : int or None
+            Either the final dimensions as an integer, or None to automatically find the common size of all frames.
+        verbose : bool, optional
+            Prints final size.
+        debug: bool, optional
+            Enters Python debugger after finding the size.
         """
         if final_sz is None:
             final_sz_ori = min(2 * self.crop_cen[0] - 1, 2 * self.crop_cen[1] - 1, 2 * \
@@ -194,7 +203,7 @@ class raw_dataset:
 
         Most options are good as default, unless you have an additional bad detector quadrant.
 
-        Parameters:
+        Parameters
         ----------
         method : str, default = 'pca'
             'pca' for dark subtraction via principal component analysis
@@ -211,7 +220,7 @@ class raw_dataset:
         verbose : bool, optional
             Prints useful information.
         debug : bool, optional
-            Prints significantly more information.
+            Prints all output from VIP functions.
         """
         sci_list = []
         with open(self.inpath + "sci_list.txt", "r") as f:
@@ -1082,6 +1091,8 @@ class raw_dataset:
         Scaling of the cubes according to the FLATS, in order to minimise any bias in the pixels.
         Can handle the case when there is no airmass in the FITS header.
 
+        Parameters
+        ----------
         verbose: bool, optional
             Prints completion messages.
         plot: bool, optional
@@ -1314,10 +1325,14 @@ class raw_dataset:
             if plot:
                 _plot_flat(fits_name, master_flat_unsat, tmp, tmp_tmp, 'Unsat', self.outpath)
 
-    def correct_nan(self, verbose=True, debug=False, remove=False):
+    def correct_nan(self, overwrite=False, verbose=True, debug=False, remove=False):
         """
-        Corrects NAN pixels in cubes, if present.
+        Corrects NaN pixels in cubes, if present.
 
+        Parameters
+        ----------
+        overwrite : bool, optional
+            Whether to overwrite existing calibrated files.
         verbose: bool, optional
             Prints completion messages.
         debug: bool, optional
@@ -1332,7 +1347,7 @@ class raw_dataset:
                 sci_list.append(line.split('\n')[0])
 
         if not isfile(self.outpath + '2_ff_' + sci_list[-1]):
-            raise NameError('Missing 2_ff_*.fits. Run: flat_field_correction()')
+            raise NameError('Missing 2_ff_*.fits from flat fielding. Run: flat_field_correction()')
 
         sky_list = []
         with open(self.inpath + "sky_list.txt", "r") as f:
@@ -1352,43 +1367,48 @@ class raw_dataset:
 
         bar = pyprind.ProgBar(n_sci, stream=1, title='Correcting NaN pixels in SCI frames')
         for sc, fits_name in enumerate(sci_list):
-            tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
-            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
-            write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
+            if overwrite or not isfile(self.outpath + '2_nan_corr_' + fits_name):
+                tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
+                tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
+                write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
-            if remove:
-                system("rm " + self.outpath + '2_ff_' + fits_name)
+
         if verbose:
             print('Done correcting NaN pixels in SCI frames', flush=True)
 
         bar = pyprind.ProgBar(n_sky, stream=1, title='Correcting NaN pixels in SKY frames')
         for sk, fits_name in enumerate(sky_list):
-            tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
-            tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
-            write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
+            if overwrite or not isfile(self.outpath + '2_nan_corr_' + fits_name):
+                tmp = open_fits(self.outpath + '2_ff_' + fits_name, verbose=debug)
+                tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
+                write_fits(self.outpath + '2_nan_corr_' + fits_name, tmp_tmp, verbose=debug)
             bar.update()
-            if remove:
-                system("rm " + self.outpath + '2_ff_' + fits_name)
+
         if verbose:
             print('Done correcting NaN pixels in SKY frames', flush=True)
 
         if len(unsat_list) > 0:
             bar = pyprind.ProgBar(n_unsat, stream=1, title='Correcting NaN pixels in UNSAT frames')
-            for un, fits_name in enumerate(unsat_list):
-                tmp = open_fits(self.outpath + '2_ff_unsat_' + fits_name, verbose=debug)
-                tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
-                write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
-                bar.update()
-                if remove:
-                    system("rm " + self.outpath + '2_ff_unsat_' + fits_name)
+            if overwrite or not isfile(self.outpath + '2_nan_corr_' + fits_name):
+                for un, fits_name in enumerate(unsat_list):
+                    tmp = open_fits(self.outpath + '2_ff_unsat_' + fits_name, verbose=debug)
+                    tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
+                    write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
+            bar.update()
+
             if verbose:
                 print('Done correcting NaN pixels in UNSAT frames', flush=True)
+
+        if remove:
+            system("rm " + self.outpath + '2_ff_*')
 
     def correct_bad_pixels(self, verbose=True,  plot=True, overwrite=False, debug=False, remove=False):
         """
         Correct bad pixels twice. First correction is for the bad pixels determined from the flat fields.
         Another correction is needed to correct bad pixels in each frame caused by residuals, hot pixels and gamma-rays.
 
+        Parameters
+        ----------
         plot: bool, optional
             Save relevant plots.
         remove: bool, optional
@@ -1666,6 +1686,8 @@ class raw_dataset:
         Corrects for the inconsistent DIT times within NACO cubes.
         The first few frames are removed and the rest rescaled such that the flux is constant.
 
+        Parameters
+        ----------
         nrm: 'auto' or int, optional
             Number of frames to remove (nrm) at the start of each cube.
             If 'auto', the pipeline determines the number of frames to remove automatically
@@ -1907,15 +1929,18 @@ class raw_dataset:
 
         Should be improved to handle the case of no dithering.
 
+        Parameters
+        ----------
         nd_filter : bool, default: None
             when a ND filter is used in L' the transmission is ~0.01777. Used for scaling
         plot : bool, optional
             Save relevant plots to the outpath as PDF.
-        verbose and debug : bool
-            prints more info, if debug it prints when files are opened and gives some additional info.
-            verbose is on by default.
-        remove options : bool, False by default
-            Cleans previous calibration files
+        verbose : bool, optional
+            Prints useful information.
+        debug : bool, optional
+            Prints all output from VIP functions.
+        remove : bool, optional
+            Cleans previous calibration files.
         """
         start_time = time_ini(verbose=False)
         unsat_list = []
@@ -2195,15 +2220,28 @@ class raw_dataset:
             raise ValueError('FWHM is not within expected values!')
 
     def subtract_sky(self, imlib='vip-fft', npc=1, mode='PCA', fwhm=None, 
-                     verbose=True, debug=False, plot=None, remove=False):
+                     verbose=True, plot=True, debug=False, remove=False):
         """
-        Sky subtraction of the science cubes
-        imlib : string: 'ndimage-interp', 'opencv', 'vip-fft'
-        npc : list, None, integer
-        mode : string: 'PCA', 'median'
-        fwhm : float or None. If not None, supersedes value from get_stellar_psf
-        plot : Save relevant plots
-        remove options: True, False. Cleans file for unused fits
+        Sky subtraction of the science cubes using either PCA or classical median subtraction.
+
+        Parameters
+        ----------
+        imlib : string
+            Image library to use for interpolations, either 'opencv' or 'vip-fft'.
+        mode : string, 'PCA' or 'median'
+            Either PCA or classical median subtraction. Recommended to use PCA.
+        npc : int, list or None
+            In the case mode='PCA', this is the number of principal components. Recommended = 1.
+        fwhm : float or None
+            Used to overwrite the FWHM found earlier in the pipeline, if needed. Recommended to use None.
+        verbose : bool, optional
+            Prints useful information.
+        plot : bool, optional
+            Save relevant plots
+        debug : bool, optional
+            Prints all output from VIP functions.
+        remove : bool, optional
+            Cleans for FITS files that no longer need to be kept.
         """
         sky_list = []
         with open(self.inpath + "sky_list.txt", "r") as f:
