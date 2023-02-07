@@ -96,12 +96,12 @@ def find_filtered_max(frame):
     Parameters
     ----------
     frame : numpy array
-        the frame in which to find the location of the star
+        The frame in which to find the location of the star.
 
     Returns
     ----------
     [ycom, xcom] : list
-        location of AGPM or star
+        Location of AGPM or star.
     """
     # apply low pass filter to help mind the brightest source
     frame = frame_filter_lowpass(frame, median_size=7, mode='median')
@@ -138,7 +138,7 @@ class raw_dataset:
             for line in tmp:
                 sci_list.append(line.split('\n')[0])
         nx = open_fits(self.inpath + sci_list[0], verbose=False).shape[-1]
-        self.com_sz = np.array([int(nx - 1)])
+        self.com_sz = np.array([int(nx)])  # from 2018 manual page 58, x is always shorter axis (Aladdin2 and 3)
         write_fits(self.outpath + 'common_sz.fits', self.com_sz, verbose=False)
         # the size of the shadow in NACO data should be constant.
         # will differ for NACO data where the coronagraph has been adjusted
@@ -165,7 +165,7 @@ class raw_dataset:
 
     def get_final_sz(self, final_sz=None, verbose=True, debug=False):
         """
-        Updates the cropping size to a provided interger or finds the appropriate cropping size.
+        Updates the cropping size to a provided integer or finds the appropriate cropping size.
 
         Parameters
         ----------
@@ -187,7 +187,7 @@ class raw_dataset:
                                int(2 * self.shadow_r), final_sz)
         if final_sz_ori % 2 == 0:
             final_sz_ori -= 1
-        final_sz = int(final_sz_ori)  # iain: added int() around final_sz_ori as cropping requires an integer
+        final_sz = int(final_sz_ori)  # cropping requires an integer
         if verbose:
             print('The final crop size is {} px'.format(final_sz), flush=True)
         if debug:
@@ -199,7 +199,10 @@ class raw_dataset:
         """
         Dark subtraction of science, sky and flats using principal component analysis or median subtraction.
         Unsaturated frames are always median dark subtracted.
-        All frames are also cropped to a common size.
+
+        All science, sky and flat frames (and respective darks) are cropped to a common size. The common, square size is
+        set by the number of pixels in x-axis of the science frames. This is consistent across the Aladdin 2 & 3, and
+        all possibilities of windowing.
 
         Most options are good as default, unless you have an additional bad detector quadrant.
 
@@ -292,24 +295,25 @@ class raw_dataset:
             n_dim = tmp_tmp.ndim
             if sd == 0:
                 if n_dim == 2:
-                    tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, 
-                                         verbose=debug)
+                    tmp_tmp = frame_crop(tmp_tmp, self.com_sz, cenxy=(tmp_tmp.shape[-1]/2, tmp_tmp.shape[-1]/2), verbose=debug)
                     tmp = np.array([tmp_tmp])
                     master_all_darks.append(tmp_tmp)
                     if verbose:
                         print('Science dark dimensions: {}'.format(tmp_tmp.shape), flush=True)
                 else:
-                    tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = cube_crop_frames(tmp_tmp, self.com_sz, xy=(tmp_tmp.shape[-1]/2, tmp_tmp.shape[-1]/2), verbose=debug)
                     for i in range(tmp.shape[0]):
                         master_all_darks.append(tmp[i])
                     if verbose:
                         print('Science dark dimensions: {}'.format(tmp[0].shape), flush=True)
             else:
                 if n_dim == 2:
-                    tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
+                    tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, cenxy=(tmp_tmp.shape[-1]/2, tmp_tmp.shape[-1]/2),
+                                                     verbose=debug)], axis=0)
                     master_all_darks.append(tmp[-1])
                 else:
-                    tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug), axis=0)
+                    tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, xy=(tmp_tmp.shape[-1]/2, tmp_tmp.shape[-1]/2),
+                                                          verbose=debug), axis=0)
                     for i in range(tmp_tmp.shape[0]):
                         master_all_darks.append(tmp[-tmp_tmp.shape[0]+i])
 
@@ -319,7 +323,7 @@ class raw_dataset:
 
         tmp = np.zeros([len(unsat_dark_list), self.com_sz, self.com_sz])
 
-        # cropping of UNSAT dark frames to the common size or less
+        # cropping of UNSAT dark frames to the common size, or making them square if they are smaller
         # will only add to the master dark cube if it is the same size as the SKY and SCI darks
         for sd, sd_name in enumerate(unsat_dark_list):
             tmp_tmp = open_fits(self.inpath + sd_name, verbose=debug)
@@ -328,48 +332,41 @@ class raw_dataset:
                 if n_dim == 2:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
-                        tmp = np.array([frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)])
-                    else:
-                        if nx > self.com_sz:
-                            tmp_tmp = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
+                        tmp_tmp = frame_crop(tmp_tmp, nx, cenxy=(nx/2, nx/2), verbose=debug)
                         tmp = np.array([tmp_tmp])
-                        master_all_darks.append(tmp_tmp)
+                    else:
+                        tmp_tmp = frame_crop(tmp_tmp, self.com_sz, cenxy=(nx/2, nx/2), verbose=debug)
+                        tmp = np.array([tmp_tmp])
+                        master_all_darks.append(tmp)
                     if verbose:
                         print('Unsat dark dimensions: {}'.format(tmp_tmp.shape), flush=True)
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
-                        tmp = cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug)
+                        tmp = cube_crop_frames(tmp_tmp, nx, xy=(nx/2, nx/2), verbose=debug)
                     else:
-                        if nx > self.com_sz:
-                            tmp = cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug)
-                        else:
-                            tmp = tmp_tmp
-                        master_all_darks.append(np.median(tmp[-nz:], axis=0))
+                        tmp = cube_crop_frames(tmp_tmp, self.com_sz, xy=(nx/2, nx/2), verbose=debug)
+                        for i in range(tmp.shape[0]):
+                            master_all_darks.append(tmp[i])
                     if verbose:
-                        print('Unsat dark dimensions: {}'.format(tmp[-1].shape), flush=True)
+                        print('Unsat dark dimensions: {}'.format(tmp[0].shape), flush=True)
             else:
                 if n_dim == 2:
                     ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
-                        tmp = np.append(tmp, [frame_crop(tmp_tmp, nx - 1, force=True, verbose=debug)], axis=0)
+                        tmp = np.append(tmp, [frame_crop(tmp_tmp, nx, cenxy=(nx/2, nx/2), verbose=debug)], axis=0)
                     else:
-                        if nx > self.com_sz:
-                            tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)], axis=0)
-                        else:
-                            tmp = np.append(tmp, [tmp_tmp])
+                        tmp = np.append(tmp, [frame_crop(tmp_tmp, self.com_sz, cenxy=(nx/2, nx/2), verbose=debug)], axis=0)
                         master_all_darks.append(tmp[-1])
                 else:
                     nz, ny, nx = tmp_tmp.shape
                     if nx < self.com_sz:
-                        tmp = np.append(tmp, cube_crop_frames(tmp_tmp, nx - 1, force=True, verbose=debug), axis=0)
+                        tmp = np.append(tmp, cube_crop_frames(tmp_tmp, nx, xy=(nx/2, nx/2), verbose=debug), axis=0)
                     else:
-                        if nx > self.com_sz:
-                            tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, force=True, verbose=debug),
-                                            axis=0)
-                        else:
-                            tmp = np.append(tmp, tmp_tmp)
-                        master_all_darks.append(np.median(tmp[-nz:], axis=0))
+                        tmp = np.append(tmp, cube_crop_frames(tmp_tmp, self.com_sz, xy=(nx/2, nx/2), verbose=debug), axis=0)
+                        for i in range(tmp_tmp.shape[0]):
+                            master_all_darks.append(tmp[-tmp_tmp.shape[0] + i])
+
         write_fits(self.outpath + 'unsat_dark_cube.fits', tmp, verbose=debug)
         if verbose:
             print('Unsat dark cubes have been cropped and saved', flush=True)
@@ -379,7 +376,7 @@ class raw_dataset:
         tmp = np.zeros([len(flat_dark_list), self.com_sz, self.com_sz])
         for fd, fd_name in enumerate(flat_dark_list):
             tmp_tmp = open_fits(self.inpath + fd_name, verbose=debug)
-            tmp[fd] = frame_crop(tmp_tmp, self.com_sz, force=True, verbose=debug)
+            tmp[fd] = frame_crop(tmp_tmp, self.com_sz, cenxy=(tmp_tmp.shape[-1]/2, tmp_tmp.shape[-1]/2), verbose=debug)
             if (fd == 0) and verbose:
                 print('Flat dark dimensions: {}'.format(tmp[fd].shape), flush=True)
             master_all_darks.append(tmp[fd])
@@ -505,12 +502,12 @@ class raw_dataset:
             for sc, fits_name in enumerate(sci_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.ndim == 3:
-                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp.copy()
                     for i in range(tmp_tmp.shape[0]):
                         tmp_tmp[i] = tmp[i] - tmp_tmp_tmp_median
                 else:
-                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = frame_crop(tmp, self.com_sz, cenxy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp, verbose=debug)
             if verbose:
@@ -526,12 +523,12 @@ class raw_dataset:
             for sc, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.ndim == 3:
-                    tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp.copy()
                     for i in range(tmp_tmp.shape[0]):
                         tmp_tmp[i] = tmp[i] - tmp_tmp_tmp_median
                 else:
-                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = frame_crop(tmp, self.com_sz, cenxy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp_median
                 write_fits(self.outpath + '1_crop_' + fits_name, tmp_tmp, verbose=debug)
             if verbose:
@@ -548,9 +545,9 @@ class raw_dataset:
             for sc, fits_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
                 if tmp.ndim == 2:
-                    tmp = frame_crop(tmp, self.com_sz, force=True, verbose=debug)
+                    tmp = frame_crop(tmp, self.com_sz, cenxy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                 else:
-                    tmp = np.median(cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug), axis=0)
+                    tmp = np.median(cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug), axis=0)
                 tmp_tmp[sc] = tmp - tmp_tmp_tmp_median
             write_fits(self.outpath + '1_crop_flat_cube.fits', tmp_tmp, verbose=debug)
             if verbose:
@@ -670,7 +667,7 @@ class raw_dataset:
             bar = pyprind.ProgBar(len(flat_list), stream=1, title='Finding difference between DARKS and FLATS')
             for fl, flat_name in enumerate(flat_list):
                 tmp = open_fits(self.inpath + flat_name, verbose=False)
-                tmp_tmp[fl] = frame_crop(tmp, self.com_sz, force=True, verbose=False)  # added force = True
+                tmp_tmp[fl] = frame_crop(tmp, self.com_sz, cenxy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=False)  # added force = True
                 diff[fl] = np.median(tmp_tmp_tmp) - np.median(
                     tmp_tmp[fl])  # median of pixels in all darks - median of all pixels in flat frame
                 tmp_tmp[fl] += diff[fl]  # subtracting median of flat from the flat and adding the median of the dark
@@ -790,7 +787,7 @@ class raw_dataset:
                                   title='Finding difference between DARKS and SCI cubes. This may take some time.')
             for sc, fits_name in enumerate(sci_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)  # open science
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)  # crop science to common size
+                tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)  # crop science to common size
                 # PCA works best when the considering the difference
                 tmp_median = np.median(tmp, axis=0)  # make median frame from all frames in cube
                 # tmp_median = tmp_median[np.where(mask_AGPM_com)]
@@ -891,7 +888,7 @@ class raw_dataset:
             bar = pyprind.ProgBar(len(sci_list), stream=1, title='Correcting SCI cubes via PCA dark subtraction')
             for sc, fits_name in enumerate(sci_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
 
                 tmp_tmp_pca = cube_subtract_sky_pca(tmp + diff[sc] + best_test_diff, tmp_tmp_tmp,
                                                     mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
@@ -949,7 +946,7 @@ class raw_dataset:
             bar = pyprind.ProgBar(len(sky_list), stream=1, title='Finding difference between darks and sky cubes')
             for sc, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)  # open sky
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)  # crop sky to common size
+                tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)  # crop sky to common size
                 # PCA works best when the considering the difference
                 tmp_median = np.median(tmp, axis=0)  # make median frame from all frames in cube
                 # tmp_median = tmp_median[np.where(mask_AGPM_com)]
@@ -1046,7 +1043,7 @@ class raw_dataset:
             bar = pyprind.ProgBar(len(sky_list), stream=1, title='Correcting SKY cubes via PCA dark subtraction')
             for sc, fits_name in enumerate(sky_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
-                tmp = cube_crop_frames(tmp, self.com_sz, force=True, verbose=debug)
+                tmp = cube_crop_frames(tmp, self.com_sz, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
 
                 tmp_tmp_pca = cube_subtract_sky_pca(tmp + diff[sc] + best_test_diff, tmp_tmp_tmp,
                                                     mask_AGPM_com, ref_cube=None, ncomp=npc_dark)
@@ -1066,16 +1063,13 @@ class raw_dataset:
             bar = pyprind.ProgBar(len(unsat_list), stream=1, title='Correcting dark current in unsaturated cubes')
             for un, fits_name in enumerate(unsat_list):
                 tmp = open_fits(self.inpath + fits_name, verbose=debug)
-                if tmp.shape[2] > self.com_sz:
-                    nx_unsat_crop = self.com_sz
-                    tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
-                    tmp_tmp = tmp - tmp_tmp_tmp
-                elif tmp.shape[2] % 2 == 0:
-                    nx_unsat_crop = tmp.shape[2] - 1
-                    tmp = cube_crop_frames(tmp, nx_unsat_crop, force=True, verbose=debug)
+                if tmp.shape[-1] < self.com_sz:
+                    nx_unsat_crop = tmp.shape[-1]
+                    tmp = cube_crop_frames(tmp, nx_unsat_crop, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp
                 else:
-                    nx_unsat_crop = tmp.shape[2]
+                    nx_unsat_crop = self.com_sz
+                    tmp = cube_crop_frames(tmp, nx_unsat_crop, xy=(tmp.shape[-1]/2, tmp.shape[-1]/2), verbose=debug)
                     tmp_tmp = tmp - tmp_tmp_tmp
                 write_fits(self.outpath + '1_crop_unsat_' + fits_name, tmp_tmp, verbose=debug)
                 bar.update()
@@ -1179,7 +1173,7 @@ class raw_dataset:
                     print('Median FLAT values: {}'.format(flat_X_values))
                     print('The median FLAT values have been sorted into a list', flush=True)
 
-            # There should be 15 twilight flats in total with NACO; 5 at each airmass. BUG SOMETIMES!
+            # There should be 15 twilight flats in total with NACO; 5 at each airmass
             flat_tmp_cube_1 = np.zeros([5, self.com_sz, self.com_sz])
             flat_tmp_cube_2 = np.zeros([5, self.com_sz, self.com_sz])
             flat_tmp_cube_3 = np.zeros([5, self.com_sz, self.com_sz])
@@ -1221,7 +1215,7 @@ class raw_dataset:
             all_flats = np.array(all_flats)
             flat_cube_nX = all_flats[sort_idx]
 
-        # add linear regression to determine dark for each pixel
+        # could add linear regression to determine dark for each pixel here
 
         # create master flat field
         n_fl = flat_cube_nX.shape[0]
@@ -1235,7 +1229,7 @@ class raw_dataset:
         ## create unsat master flat field
         if len(unsat_list) > 0:
             tmp = open_fits(self.outpath + '1_crop_unsat_' + unsat_list[-1], verbose=debug)
-            nx_unsat_crop = tmp.shape[2]
+            nx_unsat_crop = tmp.shape[-1]
             if nx_unsat_crop < master_flat_frame.shape[1]:
                 master_flat_unsat = frame_crop(master_flat_frame, nx_unsat_crop, verbose=debug)
             else:
@@ -1274,7 +1268,7 @@ class raw_dataset:
         bar = pyprind.ProgBar(len(sci_list), stream=1, title='Scaling SCI cubes with respect to the master flat')
         for sc, fits_name in enumerate(sci_list):
             tmp = open_fits(self.outpath + '1_crop_' + fits_name, verbose=debug)
-            if tmp.ndim==3:
+            if tmp.ndim == 3:
                 tmp_tmp = np.zeros_like(tmp)
                 for jj in range(tmp.shape[0]):
                     tmp_tmp[jj] = tmp[jj] / master_flat_frame
@@ -1293,7 +1287,7 @@ class raw_dataset:
         bar = pyprind.ProgBar(len(sky_list), stream=1, title='Scaling SKY cubes with respect to the master flat')
         for sk, fits_name in enumerate(sky_list):
             tmp = open_fits(self.outpath + '1_crop_' + fits_name, verbose=debug)
-            if tmp.ndim==3:
+            if tmp.ndim == 3:
                 tmp_tmp = np.zeros_like(tmp)
                 for jj in range(tmp.shape[0]):
                     tmp_tmp[jj] = tmp[jj] / master_flat_frame
