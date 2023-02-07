@@ -28,6 +28,7 @@ from vip_hci.var import mask_circle, frame_filter_lowpass, frame_center
 
 matplotlib.use('Agg')
 
+
 class preproc_dataset:  # this class is for post-processing of the pre-processed data
     def __init__(self, inpath, outpath, dataset_dict, nproc, npc):
         self.inpath = inpath
@@ -49,7 +50,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], do_snr_map=True,
                        do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
-                       overwrite=True, verbose=True, debug=False):
+                       imlib='opencv', overwrite=True, verbose=True, debug=False):
         """ 
         For post-processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
         curves, SNR maps and fake planet injection for optimizing the number of principal components.
@@ -63,50 +64,53 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         Parameters:
         ----------
         do_adi : bool
-            Whether to do a median-ADI processing
+            Whether to do a median-ADI processing.
         do_adi_contrast : bool
-            Whether to compute a simple contrast curve associated to median-ADI, saved as PDF (print quality)
+            Whether to compute a simple contrast curve associated to median-ADI, saved as PDF.
         do_pca_full : bool
-            Whether to apply PCA-ADI on full frame
+            Whether to apply PCA-ADI on full frame.
         do_pca_ann : bool, default is False
             Whether to apply annular PCA-ADI (more computer intensive).
         fake_planet : bool
             Will inject fake planets into the cube to optimize number of principal components and produce contrast
             curves for PCA-ADI and/or PCA-ADI annular, depending on above. Increases run time - use a binned cube for a
-            faster reduction, or non-binned for better contrast
+            faster reduction, or non-binned for better contrast.
         first_guess_skip : bool
             Will not complete a first contrast curve to determine the sensitivity required when injecting fake
             companions, but will still make a final contrast curve. For the purpose of decreasing run time, mostly
             relevant for non-binned data. Best contrast at each separation is a single loop over principal components.
         firstguess_pcs : list of 3 elements
             If fake planet is True and first guess is not skipped, this is the guess principal components to
-            explore [start, stop, step] (zero based indexing)
+            explore [start, stop, step] (zero based indexing).
         fcp_pos : list or 1D array, default [0.3]
             If fake planet is True and first guess is not skipped, this is the arcsecond separation for determine the
-            optimal principal components
+            optimal principal components.
         do_snr_map : bool
             Whether to compute an SNR map (warning: computer intensive); useful only when point-like features are seen
-            in the image
+            in the image.
         do_snr_map_opt : bool
-            Whether to compute a non-conventional (more realistic) SNR map
+            Whether to compute a non-conventional (more realistic) SNR map.
         planet_pos : tuple, default None
             If there is a known (or suspected) companion/giant planet in the data, set this as its x-y coordinates in
-            the post-processed data
+            the post-processed data.
         delta_rot : tuple
             Threshold in rotation angle used in pca_annular to include frames in the PCA library (in terms of FWHM).
             See description of pca_annular() for more details. Applied to full frame PCA-ADI in the case of a planet.
             Reduces the number of frames used to build the PCA library and increases run time but reduces companion
-            self-subtraction, especially at close separations
+            self-subtraction, especially at close separations.
         mask_IWA_px : int, default 5
             Size of the numerical mask that hides the inner part of post-processed images, in pixels.
         coronagraph : bool, default is True
-            Set to True if the observation used an AGPM coronagraph
+            Set to True if the observation used an AGPM coronagraph.
+        imlib : str, default 'opencv'
+            Library or method for rotation and sub-px shifts. `opencv` is faster and has no Gibbs artefacts,
+            but `vip-fft` preserves flux better.
         overwrite : bool, default True
-            Whether to overwrite pre-existing output files from previous reductions
+            Whether to overwrite pre-existing output files from previous reductions.
         verbose : bool
-            Prints more output when True
+            Prints more output when True.
         debug : bool, default is False
-            Saves extra output files
+            Saves extra output files.
         """
         print("======= Starting post-processing....=======", flush=True)
 
@@ -139,7 +143,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         ADI_cube = open_fits(self.inpath + ADI_cube_name.format(self.source), verbose=verbose)
         derot_angles = open_fits(self.inpath + derot_ang_name, verbose=verbose) + tn_shift
         cy, cx = frame_center(ADI_cube[0], verbose=debug)
-        svd_mode = 'lapack'  # can be changed to a different method for SVD. Note randsvd is not really supported
+        svd_mode = 'lapack'  # can be changed to a different method for SVD. Note randsvd is not supported
         if verbose:
             print("Adopted mask size: {:.0f} px".format(mask_IWA_px), flush=True)
         mask_IWA = mask_IWA_px / self.fwhm  # for functions that take the mask in units of FWHM
@@ -153,7 +157,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             psfn = open_fits(self.inpath + psfn_name, verbose=verbose)
             starphot = open_fits(self.inpath+flux_psf_name, verbose=verbose)[1]  # scaled fwhm flux is the second entry
             nbranch = 6
-            nspi = 6  # number of fake companion spirals, or just number of PAs to test if only one radii
+            nspi = 6  # number of fake companion spirals, or just number of PAs to test if only one radius
             fc_snr = 10  # SNR of injected companions
             injection_fac = 1  # * 3 sigma contrast
             th_step = 360 / nspi  # PA separation between companions determined by number of companions
@@ -214,15 +218,14 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if not isfile(outpath_sub + 'final_ADI_simple.fits') or overwrite:
                 if debug:  # saves the residuals
                     tmp, _, _ = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm, delta_rot=delta_rot,
-                                           full_output=debug, verbose=verbose, nproc=self.nproc,
+                                           full_output=debug, verbose=verbose, imlib=imlib, nproc=self.nproc,
                                            **rot_options)
                     tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'TMP_ADI_simple_cube_der.fits', tmp, verbose=verbose)
 
                 # make median combination of the de-rotated cube.
                 tmp_tmp = median_sub(ADI_cube, derot_angles, fwhm=self.fwhm, delta_rot=delta_rot, full_output=False,
-                                     verbose=verbose, nproc=self.nproc,
-                                     **rot_options)
+                                     verbose=verbose, imlib=imlib, nproc=self.nproc, **rot_options)
                 tmp_tmp = mask_circle(tmp_tmp, mask_IWA_px)  # we mask the IWA
                 write_fits(outpath_sub + 'final_ADI_simple.fits', tmp_tmp, verbose=verbose)
 
@@ -239,7 +242,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                    algo=median_sub, sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
                                    wedge=(0, 360), fc_snr=fc_snr, student=True, transmission=transmission, smooth=True,
                                    plot=True, dpi=300, debug=debug, save_plot=outpath_sub + 'contrast_simple_madi.pdf',
-                                   verbose=verbose, nproc=self.nproc,
+                                   verbose=verbose, nproc=self.nproc, imlib=imlib,
                                    **algo_dict)
                 plt.close('all')
             if verbose:
@@ -259,7 +262,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                         inner_rad=mask_IWA, wedge=(0, 360), fc_snr=fc_snr,
                                                         cube_ref=ref_cube, student=True, transmission=transmission,
                                                         plot=False, verbose=verbose, ncomp=int(npc),
-                                                        svd_mode=svd_mode, nproc=self.nproc,
+                                                        svd_mode=svd_mode, nproc=self.nproc, imlib=imlib,
                                                         **algo_dict)
                 df_list.append(pn_contr_curve_full_rr)
             pn_contr_curve_full_first_opt = pn_contr_curve_full_rr.copy()
@@ -298,7 +301,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     # inject the companions
                     flevel = np.median(starphot) * sensitivity_3sig_full_df[ff] * injection_fac
                     PCA_ADI_cube = cube_inject_companions(PCA_ADI_cube, psfn, derot_angles, flevel, self.pixel_scale,
-                                                          rad_dists=rad_arr[ff:ff + 1], n_branches=1,
+                                                          rad_dists=rad_arr[ff:ff + 1], n_branches=1, imlib=imlib,
                                                           theta=(theta0 + ff * th_step) % 360, verbose=verbose)
                 write_fits(outpath_sub + 'PCA_cube_fcp_spi{:.0f}.fits'.format(ns), PCA_ADI_cube, verbose=debug)
 
@@ -333,7 +336,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp_tmp[nn] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, ncomp=int(npc),
                                           svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
                                           source_xy=planet_pos, delta_rot=delta_rot, fwhm=self.fwhm, collapse='median',
-                                          verbose=verbose, nproc=self.nproc, **rot_options)
+                                          verbose=verbose, nproc=self.nproc, imlib=imlib, **rot_options)
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
                         contr_curve_full = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
@@ -341,7 +344,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                           nbranch=nbranch, theta=0, inner_rad=mask_IWA, wedge=(0, 360),
                                                           fc_snr=fc_snr, student=True, transmission=transmission,
                                                           plot=False, cube_ref=ref_cube, scaling=None, verbose=verbose,
-                                                          ncomp=int(npc), svd_mode=svd_mode, nproc=self.nproc,
+                                                          ncomp=int(npc), svd_mode=svd_mode, nproc=self.nproc, imlib=imlib,
                                                           **algo_dict)
                         df_full_fgs.append(contr_curve_full)  # save data frame from each contrast curve
                     if (not isfile(
@@ -350,7 +353,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp_tmp_tmp_tmp[nn] = pca(PCA_ADI_cube, angle_list=-derot_angles, cube_ref=ref_cube, ncomp=int(npc),
                                                   svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px,
                                                   source_xy=planet_pos, delta_rot=delta_rot, fwhm=self.fwhm,
-                                                  collapse='median', verbose=verbose, nproc=self.nproc,
+                                                  collapse='median', verbose=verbose, nproc=self.nproc, imlib=imlib,
                                                   **rot_options)
                 if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-full.csv') or overwrite) and \
                         (fake_planet and first_guess_skip):
@@ -416,7 +419,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                         tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube,
                                           mask_center_px=mask_IWA_px, ncomp=int(npc), scaling=None, fwhm=self.fwhm,
                                           collapse='median', full_output=False, verbose=verbose, nproc=self.nproc,
-                                          svd_mode=svd_mode, **rot_options)
+                                          svd_mode=svd_mode, imlib=imlib, **rot_options)
                         for ff in range(nfcp):  # determine SNR for each companion
                             xx_fcp = cx + rad_arr[ff] * np.cos(np.deg2rad(theta0 + ff * th_step))
                             yy_fcp = cy + rad_arr[ff] * np.sin(np.deg2rad(theta0 + ff * th_step))
@@ -443,7 +446,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp_tmp[pp] = pca(PCA_ADI_cube, angle_list=derot_angles, cube_ref=ref_cube, ncomp=int(npc),
                                       svd_mode=svd_mode, scaling=None, mask_center_px=mask_IWA_px, fwhm=self.fwhm,
                                       collapse='median', full_output=False, verbose=verbose, nproc=self.nproc,
-                                      **rot_options)
+                                      imlib=imlib, **rot_options)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
                            tmp_tmp, verbose=debug)
                 write_fits(outpath_sub + 'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
@@ -505,7 +508,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                                                 max_frames_lib=200, tol=1e-1,
                                                                                 scaling=None, collapse='median',
                                                                                 full_output=debug, verbose=verbose,
-                                                                                **rot_options)
+                                                                                imlib=imlib, **rot_options)
                     else:
                         if not isfile(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits') or overwrite:
                             tmp_tmp[nn] = pca_annular(PCA_ADI_cube, derot_angles, cube_ref=ref_cube,
@@ -513,23 +516,20 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                       n_segments=1, delta_rot=delta_rot, ncomp=int(npc),
                                                       svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                       max_frames_lib=200, tol=1e-1, scaling=None, collapse='median',
-                                                      full_output=False, verbose=verbose,
+                                                      full_output=False, verbose=verbose, imlib=imlib,
                                                       **rot_options)
 
                     if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
                             (fake_planet and first_guess_skip):
-                        contr_curve_ann = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm,
-                                                         self.pixel_scale, starphot=starphot, algo=pca_annular,
-                                                         sigma=5, nbranch=nbranch, theta=0, inner_rad=mask_IWA,
-                                                         wedge=(0, 360), fc_snr=fc_snr, student=True,
-                                                         transmission=transmission, plot=False,
-                                                         verbose=verbose, ncomp=int(npc),
-                                                         svd_mode=svd_mode, radius_int=mask_IWA_px,
-                                                         asize=ann_sz * self.fwhm, delta_rot=delta_rot,
-                                                         cube_ref=ref_cube, scaling=None,
-                                                         min_frames_lib=max(int(npc), 10),
-                                                         max_frames_lib=200, nproc=self.nproc,
-                                                         **algo_dict)
+                        contr_curve_ann = contrast_curve(PCA_ADI_cube, derot_angles, psfn, self.fwhm, self.pixel_scale,
+                                                         starphot=starphot, algo=pca_annular, sigma=5, nbranch=nbranch,
+                                                         theta=0, inner_rad=mask_IWA, wedge=(0, 360), fc_snr=fc_snr,
+                                                         student=True, transmission=transmission, plot=False,
+                                                         verbose=verbose, ncomp=int(npc), svd_mode=svd_mode,
+                                                         radius_int=mask_IWA_px, asize=ann_sz * self.fwhm,
+                                                         delta_rot=delta_rot, cube_ref=ref_cube, scaling=None,
+                                                         min_frames_lib=max(int(npc), 10), max_frames_lib=200,
+                                                         nproc=self.nproc, imlib=imlib, **algo_dict)
                         df_ann_fgs.append(contr_curve_ann)  # save data frame from each contrast curve
 
                     if (not isfile(
@@ -540,7 +540,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                           ncomp=int(npc), svd_mode=svd_mode, nproc=self.nproc,
                                                           min_frames_lib=max(npc, 10), max_frames_lib=200, tol=1e-1,
                                                           scaling=None, collapse='median', full_output=False,
-                                                          verbose=verbose,
+                                                          verbose=verbose, imlib=imlib,
                                                           **rot_options)
 
                 if (not isfile(outpath_sub + 'final_skip-fcp_contrast_curve_PCA-ADI-ann.csv') or overwrite) and \
@@ -615,7 +615,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                   n_segments=1, delta_rot=delta_rot, ncomp=int(npc),
                                                   svd_mode=svd_mode, nproc=self.nproc, min_frames_lib=max(npc, 10),
                                                   max_frames_lib=200, tol=1e-1, scaling=None, collapse='median',
-                                                  full_output=False, verbose=verbose,
+                                                  full_output=False, verbose=verbose, imlib=imlib,
                                                   **rot_options)
                         for ff in range(nfcp):
                             xx_fcp = cx + rad_arr[ff] * np.cos(np.deg2rad(theta0 + ff * th_step))
@@ -644,7 +644,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                               asize=ann_sz * self.fwhm, delta_rot=delta_rot, ncomp=int(npc),
                                               svd_mode=svd_mode, max_frames_lib=200, cube_ref=ref_cube, scaling=None,
                                               min_frames_lib=max(npc, 10), collapse='median', full_output=False,
-                                              verbose=verbose, nproc=self.nproc,
+                                              verbose=verbose, nproc=self.nproc, imlib=imlib,
                                               **rot_options)
                 write_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '.fits',
                            tmp_tmp, verbose=debug)
@@ -689,7 +689,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                             fc_snr=fc_snr, student=True, transmission=transmission,
                                                             plot=False, cube_ref=ref_cube, scaling=None,
                                                             verbose=verbose, ncomp=int(id_npc_full_df[rr]),
-                                                            svd_mode=svd_mode, nproc=self.nproc,
+                                                            svd_mode=svd_mode, nproc=self.nproc, imlib=imlib,
                                                             **algo_dict)
                     Df.to_csv(pn_contr_curve_full_rr,
                               path_or_buf=outpath_sub + 'contrast_curve_PCA-ADI-full_optimal_at_{:.1f}as.csv'.format(
@@ -732,7 +732,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                                            asize=ann_sz * self.fwhm, delta_rot=delta_rot,
                                                            cube_ref=ref_cube, scaling=None,
                                                            min_frames_lib=max(id_npc_ann_df[rr], 10),
-                                                           max_frames_lib=200, nproc=self.nproc,
+                                                           max_frames_lib=200, nproc=self.nproc, imlib=imlib,
                                                            **algo_dict)
                     Df.to_csv(pn_contr_curve_ann_rr,
                               path_or_buf=outpath_sub + 'contrast_curve_PCA-ADI-ann_optimal_at_{:.1f}as.csv'.format(
@@ -843,7 +843,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def do_negfc(self, do_firstguess=True, guess_xy=None, mcmc_negfc=True, inject_neg=True, ncomp=1, algo='pca_annular',
                  nwalkers_ini=120, niteration_min=25, niteration_limit=10000, delta_rot=(0.5, 3), weights=False,
-                 coronagraph=False, overwrite=True, save_plot=True, verbose=True):
+                 coronagraph=False, imlib='opencv', overwrite=True, save_plot=True, verbose=True):
         """
         Module for estimating the location and flux of a planet. A sub-folder 'negfc' is created for storing all
         output files.
@@ -861,40 +861,43 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         Parameters:
         ----------
         do_firstguess : bool
-            whether to determine a first guess for the position and the flux of a planet (not NEGFC)
+            whether to determine a first guess for the position and the flux of a planet (not NEGFC).
         guess_xy : tuple
             if do_firstguess=True, this estimate of the source (x,y) location to be provided to firstguess(). Note
-            Python's zero-based indexing
+            Python's zero-based indexing.
         mcmc_negfc : bool
-            whether to run MCMC NEGFC sampling (computationally intensive)
+            whether to run MCMC NEGFC sampling (computationally intensive).
         inject_neg : bool
-            whether to inject negative flux of the planet and post process the data without signal from the planet
+            whether to inject negative flux of the planet and post process the data without signal from the planet.
         ncomp : int, default 1
-            number of prinicpal components to subtract
+            number of prinicpal components to subtract.
         algo : 'pca_annulus', 'pca_annular', 'pca'. default 'pca_annular'
-            select which routine to be used to model and subtract the stellar PSF
+            select which routine to be used to model and subtract the stellar PSF.
         nwalkers_ini : int, default 120
-            for MCMC, the number of Goodman & Weare 'walkers'
+            for MCMC, the number of Goodman & Weare 'walkers'.
         niteration_min : int, default 25
-            for MCMC, the simulation will run at least this number of steps per walker
+            for MCMC, the simulation will run at least this number of steps per walker.
         niteration_limit : int, default 10000
-            for MCMC, stops simulation if this many steps run without having reached the convergence criterion
+            for MCMC, stops simulation if this many steps run without having reached the convergence criterion.
         delta_rot : tuple
-            same as for postprocessing module. Threshold rotation angle for PCA annular
+            same as for postprocessing module. Threshold rotation angle for PCA annular.
         weights : bool
             should only be used on unsaturated datasets, where the flux of the star can be measured in each image of
             the cube. Applies a correction to each frame to account for variability of the adaptive optics, and hence
-            flux from the star (reference Christiaens et al. 2021 2021MNRAS.502.6117C)
+            flux from the star (reference Christiaens et al. 2021 2021MNRAS.502.6117C).
         coronagraph : bool
             for MCMC and injecting a negative companion, True if the observation utilised a coronagraph (AGPM).
-            The known radial transmission of the NACO+AGPM coronagraph will be used
+            The known radial transmission of the NACO+AGPM coronagraph will be used.
+        imlib : str, default 'opencv'
+            Library or method for rotation and sub-px shifts. `opencv` is faster and has no Gibbs artefacts,
+            but `vip-fft` preserves flux better.
         overwrite : bool, default True
-            whether to run a module and overwrite results if they already exist
+            whether to run a module and overwrite results if they already exist.
         save_plot : bool, default True
             for firstguess the chi2 vs. flux plot is saved. For MCMC results are pickled and saved to the outpath
-            along with corner plots
+            along with corner plots.
         verbose : bool
-            prints more output and intermediate files when True
+            prints more output and intermediate files when True.
         """
 
         print("======= Starting NEGFC....=======", flush=True)
@@ -953,7 +956,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             if crop_sz_tmp % 2 == 0:  # if it's not even, crop
                 crop_sz_tmp -= 1
             for ii in range(nfr):
-                _, star_flux[ii], _ = normalize_psf(ADI_cube[ii], fwhm=self.fwhm, size=crop_sz_tmp,
+                _, star_flux[ii], _ = normalize_psf(ADI_cube[ii], fwhm=self.fwhm, size=crop_sz_tmp, imlib=imlib,
                                                     full_output=True)  # get star flux in 1*FWHM
             weights = star_flux / np.median(star_flux)
             star_flux = np.median(star_flux)  # for use after MCMC when turning the chain into contrast
@@ -1006,7 +1009,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                    cube_ref=ref_cube, svd_mode=svd_mode, scaling=None, fmerit='stddev',
                                    collapse='median', p_ini=None, transmission=transmission, weights=weights, algo=algo,
                                    f_range=f_range, simplex=True, simplex_options=None, plot=save_plot,
-                                   verbose=verbose, save=save_plot,
+                                   verbose=verbose, save=save_plot, imlib=imlib,
                                    algo_options={"nproc": self.nproc, "mask_val": 0, "edge_blend": 'interp', "interp_zeros": True})
             # when p_ini is set to None, it gets the value of planets_xy_coord
             ini_state = np.array([ini_state[0][0], ini_state[1][0], ini_state[2][0]])
@@ -1039,7 +1042,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                               initial_state=ini_state, fwhm=self.fwhm, weights=weights,
                                               annulus_width=12, aperture_radius=ap_rad, cube_ref=ref_cube,
                                               svd_mode=svd_mode, scaling=None, fmerit='stddev',
-                                              imlib='opencv', interpolation='lanczos4', transmission=transmission,
+                                              imlib=imlib, transmission=transmission,
                                               collapse='median', nwalkers=nwalkers_ini, bounds=bounds, a=2.0,
                                               ac_c=50, mu_sigma=(0, 1),
                                               burnin=0.3, rhat_threshold=1.01, rhat_count_threshold=1, conv_test='ac',
@@ -1090,11 +1093,10 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             flux_psf_name = "master_unsat-stellarpsf_fluxes.fits"
             star_flux = open_fits(self.inpath + flux_psf_name, verbose=verbose)[1]
 
-            ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles,
-                                                  flevel=-planet_params[2, 0] * star_flux, plsc=self.pixel_scale,
-                                                  rad_dists=[planet_params[0, 0]],
-                                                  n_branches=1, theta=planet_params[1, 0],
-                                                  verbose=verbose, transmission=transmission)
+            ADI_cube_emp = cube_inject_companions(ADI_cube, psfn, derot_angles, flevel=-planet_params[2, 0] * star_flux,
+                                                  plsc=self.pixel_scale, rad_dists=[planet_params[0, 0]],
+                                                  n_branches=1, theta=planet_params[1, 0], verbose=verbose,
+                                                  transmission=transmission, imlib=imlib)
             write_fits(outpath_sub + 'ADI_cube_empty.fits', ADI_cube_emp)  # the cube with the negative flux injected
 
             if algo == pca_annular:
@@ -1113,7 +1115,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                                           fwhm=self.fwhm, asize=asize, delta_rot=delta_rot, ncomp=opt_npc,
                                           svd_mode=svd_mode, scaling=None, nproc=self.nproc,
                                           min_frames_lib=max(opt_npc, 10), verbose=verbose, full_output=False,
-                                          **rot_options)
+                                          imlib=imlib, **rot_options)
 
                 pca_res = np.pad(pca_res_tmp, pad, mode='constant', constant_values=0)
                 write_fits(outpath_sub + 'pca_annular_res_npc{}.fits'.format(opt_npc), pca_res)
@@ -1130,7 +1132,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 pca_res_tmp = pca_annular(crop_cube, derot_angles, cube_ref=ref_cube, radius_int=radius_int,
                                           fwhm=self.fwhm, asize=asize, delta_rot=delta_rot, ncomp=opt_npc,
                                           svd_mode=svd_mode, scaling=None, nproc=self.nproc,
-                                          min_frames_lib=max(opt_npc, 10), verbose=verbose,
+                                          min_frames_lib=max(opt_npc, 10), verbose=verbose, imlib=imlib,
                                           **rot_options)
 
                 # pad again now

@@ -71,8 +71,8 @@ postproc = preproc_dataset(inpath=path+'preproc/', outpath=path+'postproc/', dat
 postproc.postprocessing(do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                         first_guess_skip=True, fcp_pos=[0.3], firstguess_pcs=[1, 5, 1], do_snr_map=True,
                         do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
-                        overwrite=True, verbose=True, debug=False)
+                        imlib='opencv', overwrite=True, verbose=True, debug=False)
 # only to be run if there is a source/blob detected by running post-processing
 # postproc.do_negfc(do_firstguess=True, guess_xy=[(63,56)], mcmc_negfc=True, inject_neg=True, ncomp=20,
 #                   algo='pca_annular', nwalkers_ini=120, niteration_min = 25, niteration_limit=10000, delta_rot=(0.5,3),
-#                   weights=False, coronagraph=False, overwrite=True, save_plot=True, verbose=True)
+#                   weights=False, coronagraph=False, imlib='opencv', overwrite=True, save_plot=True, verbose=True)
