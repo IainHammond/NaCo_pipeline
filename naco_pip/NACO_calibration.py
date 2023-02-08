@@ -1384,7 +1384,7 @@ class raw_dataset:
         if len(unsat_list) > 0:
             bar = pyprind.ProgBar(n_unsat, stream=1, title='Correcting NaN pixels in UNSAT frames')
             for un, fits_name in enumerate(unsat_list):
-                if overwrite or not isfile(self.outpath + '2_nan_corr_unsat' + fits_name):
+                if overwrite or not isfile(self.outpath + '2_nan_corr_unsat_' + fits_name):
                     tmp = open_fits(self.outpath + '2_ff_unsat_' + fits_name, verbose=debug)
                     tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
                     write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
