@@ -1233,7 +1233,7 @@ class raw_dataset:
             if nx_unsat_crop < master_flat_frame.shape[1]:
                 master_flat_unsat = frame_crop(master_flat_frame, nx_unsat_crop, verbose=debug)
             else:
-                master_flat_unsat = master_flat_frame
+                master_flat_unsat = master_flat_frame.copy()
             write_fits(self.outpath + 'master_flat_field_unsat.fits', master_flat_unsat, verbose=debug)
         if verbose:
             print('Master flat frames has been saved', flush=True)
@@ -1383,12 +1383,12 @@ class raw_dataset:
 
         if len(unsat_list) > 0:
             bar = pyprind.ProgBar(n_unsat, stream=1, title='Correcting NaN pixels in UNSAT frames')
-            if overwrite or not isfile(self.outpath + '2_nan_corr_' + fits_name):
-                for un, fits_name in enumerate(unsat_list):
+            for un, fits_name in enumerate(unsat_list):
+                if overwrite or not isfile(self.outpath + '2_nan_corr_unsat' + fits_name):
                     tmp = open_fits(self.outpath + '2_ff_unsat_' + fits_name, verbose=debug)
                     tmp_tmp = cube_correct_nan(tmp, neighbor_box=3, min_neighbors=3, verbose=debug, nproc=self.nproc)
                     write_fits(self.outpath + '2_nan_corr_unsat_' + fits_name, tmp_tmp, verbose=debug)
-            bar.update()
+                bar.update()
 
             if verbose:
                 print('Done correcting NaN pixels in UNSAT frames', flush=True)
