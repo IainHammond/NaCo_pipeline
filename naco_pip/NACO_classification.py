@@ -444,7 +444,7 @@ class input_dataset():
             plt.close('all')
 
         if verbose:
-            print('We found {} science cubes amongst the science cubes'.format(moved), flush=True)
+            print('We found {} sky cubes amongst the science cubes'.format(moved), flush=True)
 
         sci_list.sort()
         with open(self.outpath + "sci_list.txt", "w") as f:
