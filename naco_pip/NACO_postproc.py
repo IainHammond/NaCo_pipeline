@@ -49,7 +49,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
 
     def postprocessing(self, do_adi=True, do_adi_contrast=True, do_pca_full=True, do_pca_ann=True, fake_planet=False,
                        first_guess_skip=False, fcp_pos=[0.3], firstguess_pcs=[1, 21, 1], do_snr_map=True,
-                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), mask_IWA_px=5, coronagraph=True,
+                       do_snr_map_opt=True, planet_pos=None, delta_rot=(0.5, 3), ann_sz=3, mask_IWA_px=5, coronagraph=True,
                        imlib='opencv', overwrite=True, verbose=True, debug=False):
         """ 
         For post-processing the master cube via median ADI, full frame PCA-ADI, or annular PCA-ADI. Includes contrast
@@ -98,6 +98,8 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
             See description of pca_annular() for more details. Applied to full frame PCA-ADI in the case of a planet.
             Reduces the number of frames used to build the PCA library and increases run time but reduces companion
             self-subtraction, especially at close separations.
+        ann_sz : int, optional
+            PCA-ADI in concentric annuli, this is the size of the annulus/i in FWHM.
         mask_IWA_px : int, default 5
             Size of the numerical mask that hides the inner part of post-processed images, in pixels.
         coronagraph : bool, default is True
@@ -196,7 +198,6 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
         else:
             transmission = None
 
-        ann_sz = 3  # if PCA-ADI in concentric annuli, this is the size of the annulus/i in FWHM
         ref_cube = None  # if any, load here a centered calibrated cube of reference star observations - would then be
         # used for PCA instead of the SCI cube itself
 
