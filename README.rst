@@ -11,7 +11,7 @@ Capability
 - correction of bad columns in the lower left quadrant
 - automatic classification of calibration files
 - derotation angle calculation for ADI
-- dark subtraction via PCA
+- dark subtraction via principal component analysis
 - flat fielding (with or without airmass)
 - bad/hot/NaN pixel correction
 - remove sporadic DIT frames + re-scale frames
@@ -29,6 +29,7 @@ Capability
 Known Issues:
 ------------
 - occasional imperfect horizontal bar correction with PCA dark subtraction
+- Gibbs artefacts in sky subtraction step
 
 Installation
 ------------
