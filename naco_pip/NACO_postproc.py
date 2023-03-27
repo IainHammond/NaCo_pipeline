@@ -388,6 +388,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '.fits', verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_full_' + test_pcs_str + '_conv.fits', tmp, verbose=debug)
 
                 ### SNR map
@@ -453,16 +454,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                 write_fits(outpath_sub + 'final_PCA-ADI_full_npc_id_at_{}as.fits'.format(test_rad_str), id_npc_full_df,
                            verbose=debug)
                 ### Convolution
-                if not isfile(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(
-                        test_pcs_str, test_rad_str)) or overwrite:
-                    tmp = open_fits(
-                        outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str),
-                        verbose=debug)
+                if not isfile(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(test_pcs_str, test_rad_str)) or overwrite:
+                    tmp = open_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as.fits'.format(test_pcs_str, test_rad_str), verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
-                    write_fits(
-                        outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(test_pcs_str, test_rad_str)
-                        , tmp, verbose=debug)
+                    tmp = mask_circle(tmp, mask_IWA_px)
+                    write_fits(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_conv.fits'.format(test_pcs_str, test_rad_str), tmp, verbose=debug)
                 ### SNR map
                 if (not isfile(outpath_sub + 'final_PCA-ADI_full_{}_at_{}as_snrmap.fits'.format(
                         test_pcs_str, test_rad_str)) or overwrite) and do_snr_map:
@@ -584,6 +581,7 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                     tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '.fits', verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
+                    tmp = mask_circle(tmp, mask_IWA_px)
                     write_fits(outpath_sub + 'final_PCA-ADI_ann_' + test_pcs_str + '_conv.fits', tmp, verbose=debug)
 
                 ### SNR map
@@ -653,15 +651,12 @@ class preproc_dataset:  # this class is for post-processing of the pre-processed
                            verbose=debug)
 
                 ### Convolution
-                if not isfile(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str)
-                              + '_conv.fits') or overwrite:
-                    tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +
-                                    '.fits', verbose=debug)
+                if not isfile(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '_conv.fits') or overwrite:
+                    tmp = open_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) +'.fits', verbose=debug)
                     for nn in range(tmp.shape[0]):
                         tmp[nn] = frame_filter_lowpass(tmp[nn], mode='gauss', fwhm_size=self.fwhm, conv_mode='convfft')
-                    write_fits(
-                        outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '_conv.fits',
-                        tmp, verbose=debug)
+                    tmp = mask_circle(tmp, mask_IWA_px)
+                    write_fits(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as'.format(test_pcs_str, test_rad_str) + '_conv.fits', tmp, verbose=debug)
                 ### SNR map
                 if (not isfile(outpath_sub + 'final_PCA-ADI_ann_{}_at_{}as_snrmap.fits'.format(
                         test_pcs_str, test_rad_str)) or overwrite) and do_snr_map:
